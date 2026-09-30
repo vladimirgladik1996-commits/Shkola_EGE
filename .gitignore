@@ -14,3 +14,7 @@ tutor.db
 .DS_Store
 .idea/
 .vscode/
+
+# Секреты и данные бота
+.env
+data/
