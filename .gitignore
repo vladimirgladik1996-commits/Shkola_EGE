@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Данные (не коммитить — там живые ученики/платежи)
+tutor.db
+*.db
+*.sqlite3
+
+# Системное
+.DS_Store
+.idea/
+.vscode/
