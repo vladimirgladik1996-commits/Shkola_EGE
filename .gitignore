@@ -10,6 +10,12 @@ tutor.db
 *.db
 *.sqlite3
 
+# Секреты (никогда не коммитить)
+.env
+.env.*
+!.env.example
+!env/
+
 # Системное
 .DS_Store
 .idea/
