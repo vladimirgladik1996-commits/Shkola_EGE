@@ -729,7 +729,7 @@ async def main():
     dp.include_router(r)
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
     app["bot"] = bot
-    app.router.add_get("/", lambda _: web.FileResponse("webapp/index.html"))
+    app.router.add_get("/", lambda _: web.FileResponse("docs/index.html"))
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_post("/api/week/send", api_week_send)

@@ -102,9 +102,25 @@ const API_BASE=(window.__API_BASE__||"").replace(/\/+$/,"");
 async function api(p,b){const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:{"X-Init":tg.initData,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});
   if(r.status==409){toast("Время занято или пересекается с другим занятием");return null}
   if(!r.ok){toast("Не получилось, попробуйте ещё раз");return null}return r.json()}
-async function load(){const d=await api("/api/data");if(!d){$("#app").innerHTML='<p class="empty">Нет доступа. Откройте кабинет из бота.</p>';return}
-  cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id}));
+function demoData(){const w=mon(T),dd=n=>iso(addD(w,n)),now=new Date();
+  const ts=k=>{const d=new Date(now);d.setDate(d.getDate()-k);return iso(d)+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":00"};
+  return{cur:"₽",
+    students:[{id:1,name:"Анна Смирнова",price:1500,paid:9000,done:5,balance:1500,photo:null},
+              {id:2,name:"Иван Петров",price:1500,paid:4500,done:4,balance:-1500,photo:null},
+              {id:3,name:"Мария Ким",price:2000,paid:6000,done:3,balance:0,photo:null}],
+    lessons:[{id:1,student_id:1,day:dd(0),time:"15:00",dur:60,regular_id:null},
+             {id:2,student_id:2,day:dd(1),time:"10:00",dur:90,regular_id:null},
+             {id:3,student_id:3,day:dd(2),time:"18:30",dur:60,regular_id:null},
+             {id:4,student_id:1,day:dd(3),time:"15:00",dur:60,regular_id:11},
+             {id:5,student_id:2,day:dd(4),time:"12:00",dur:60,regular_id:null}],
+    payments:[{id:1,student_id:1,amount:3000,created:ts(1),name:"Анна Смирнова"},
+              {id:2,student_id:3,amount:2000,created:ts(2),name:"Мария Ким"},
+              {id:3,student_id:2,amount:1500,created:ts(4),name:"Иван Петров"}]}}
+function ingest(d){cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id}));
   P=d.payments.map(p=>({id:p.id,sid:p.student_id,amt:p.amount,at:new Date(p.created.replace(" ","T"))}));render()}
+async function load(){const d=await api("/api/data");
+  if(!d){ingest(demoData());toast("Демо-режим — данные примерные");return}
+  ingest(d)}
 const bal=s=>s;
 const when=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
 const stName=id=>S.find(s=>s.id==id).name;

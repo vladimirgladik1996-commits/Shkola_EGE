@@ -3,7 +3,7 @@
 ## ⚠️ Главное про архитектуру
 
 Это **одно-доменное приложение**: `bot.py` — это и Telegram-бот, и HTTP-сервер
-(aiohttp), который раздаёт **и страницу** (`/` → `webapp/index.html`), **и API**
+(aiohttp), который раздаёт **и страницу** (`/` → `docs/index.html`), **и API**
 (`/api/*`), и PDF. Мини-апп ходит в API по относительным путям с заголовком
 `X-Init` (Telegram `initData`, проверяется HMAC-ом по токену бота) и работает
 только для владельца (`OWNER_ID`).
@@ -39,7 +39,7 @@ cloudflared tunnel --url http://localhost:8080
 2. в `@BotFather` → `/setmenubutton` (или `/newapp`) → этот URL.
 
 Готово: открываете бота → кнопка «Кабинет» → мини-апп работает.
-`API_BASE` в `webapp/index.html` оставить `""` (всё с одного домена — туннель
+`API_BASE` в `docs/index.html` оставить `""` (всё с одного домена — туннель
 проксирует и страницу, и API).
 
 ---
@@ -53,12 +53,12 @@ cloudflared tunnel --url http://localhost:8080
    ```bash
    export ALLOW_ORIGIN="https://<username>.github.io"
    ```
-2. **Frontend** — в `webapp/index.html` укажите адрес backend:
+2. **Frontend** — в `docs/index.html` укажите адрес backend:
    ```js
    const API_BASE=(window.__API_BASE__||"").replace(/\/+$/,"");
    ```
    задайте `window.__API_BASE__="https://<ваш-backend>"` (или пропишите значение прямо в константу).
-3. Кладёте **содержимое `webapp/`** в репозиторий (чтобы `index.html` был в нужной папке Pages).
+3. Кладёте **содержимое `docs/`** в репозиторий (чтобы `index.html` был в нужной папке Pages).
 4. Settings → Pages → Source: `Deploy from a branch`.
 5. Мини-апп: `https://<username>.github.io/<repo>/` → регистрируете в `@BotFather`.
 
@@ -76,7 +76,7 @@ CORS в боте включается только при заданном `ALLO
 |---|---|
 | 1 | Домен → A-запись на сервер Selectel |
 | 2 | TLS Let's Encrypt (certbot / Caddy / Load Balancer) |
-| 3 | nginx отдаёт `webapp/` (статика) и проксирует `/api/*` на бота `:8080` |
+| 3 | nginx отдаёт `docs/` (статика) и проксирует `/api/*` на бота `:8080` |
 | 4 | Бот как сервис (systemd/Docker), на проде — webhook |
 | 5 | `WEBAPP_URL` = `https://app.вашдомен.ru`, в `BotFather` тот же URL |
 | 6 | Секреты (`BOT_TOKEN`, `OWNER_ID`) — в env, не в коде |
@@ -90,7 +90,7 @@ server {
   ssl_certificate_key /etc/letsencrypt/live/app.вашдомен.ru/privkey.pem;
 
   # можно отдавать статику nginx-ом (быстрее), а API проксировать:
-  root /opt/tutor-app/webapp;
+  root /opt/tutor-app/docs;
   location / { try_files $uri /index.html; }
 
   location /api/ {
@@ -109,7 +109,7 @@ Description=Tutor bot + API
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/tutor-app          # важно: бот читает webapp/index.html от CWD
+WorkingDirectory=/opt/tutor-app          # важно: бот читает docs/index.html от CWD
 Environment=BOT_TOKEN=***
 Environment=OWNER_ID=***
 Environment=WEBAPP_URL=https://app.вашдомен.ru/
