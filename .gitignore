@@ -1,26 +1,6 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-env/
-
-# Данные (не коммитить — там живые ученики/платежи)
-tutor.db
-*.db
-*.sqlite3
-
-# Секреты (никогда не коммитить)
-.env
-.env.*
-!.env.example
-!env/
-
-# Системное
-.DS_Store
-.idea/
-.vscode/
-
-# Секреты и данные бота
 .env
 data/
+tutor.db
+__pycache__/
+*.pyc
+.venv/

@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, KeyboardButton,
+from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
                            MenuButtonWebApp, Message, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
@@ -17,11 +17,20 @@ URL = os.getenv("WEBAPP_URL", "")            # https-адрес мини-апп�
 PORT = int(os.getenv("PORT", "8080"))
 CUR = os.getenv("CURRENCY", "₽")
 WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+WD_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 PER = 6
 WEEKS_AHEAD = 12   # на сколько недель вперёд раскладываются регулярные занятия
 
 # ---------- БД ----------
-db = sqlite3.connect("tutor.db", check_same_thread=False)
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(HERE, "data")            # ./data/tutor.db — см. README и env/*.example
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "tutor.db")
+_legacy_db = os.path.join(HERE, "tutor.db")      # старая база лежала рядом с кодом — переносим
+if not os.path.exists(DB_PATH) and os.path.exists(_legacy_db):
+    os.replace(_legacy_db, DB_PATH)
+
+db = sqlite3.connect(DB_PATH, check_same_thread=False)
 db.row_factory = sqlite3.Row
 db.executescript("""
 create table if not exists students(id integer primary key, name text not null, price integer default 0, photo text);
@@ -36,7 +45,11 @@ create table if not exists skips(regular_id integer, day text, primary key(regul
 for stmt in ("alter table lessons add column regular_id integer",
              "alter table students add column photo text",
              "alter table lessons add column dur integer default 60",
-             "alter table regular add column dur integer default 60"):     # для старых баз
+             "alter table regular add column dur integer default 60",
+             "alter table students add column grade text",
+             "alter table students add column subject text",
+             "alter table lessons add column price integer",
+             "alter table students add column deleted integer default 0"):     # цена, «замороженная» для уже прошедших занятий     # для старых баз
     try:
         db.execute(stmt)
     except sqlite3.OperationalError:
@@ -132,20 +145,36 @@ def stop_series(lid):
     db.commit()
 
 # ---------- баланс ----------
+PAST = "datetime(l.day||' '||l.time) <= datetime('now','localtime')"
+
 def stats():
-    return q("""select s.id, s.name, s.price,
+    """done — проведённые занятия, spent — их стоимость: каждое по своей цене
+    (замороженной при смене цены), а ещё не замороженные — по текущей цене ученика."""
+    return q(f"""select s.id, s.name, s.price, coalesce(s.deleted,0) deleted,
       coalesce((select sum(amount) from payments where student_id=s.id),0) paid,
-      (select count(*) from lessons where student_id=s.id
-         and datetime(day||' '||time) <= datetime('now','localtime')) done
+      (select count(*) from lessons l where l.student_id=s.id and {PAST}) done,
+      (select coalesce(sum(coalesce(l.price, s.price)),0) from lessons l where l.student_id=s.id and {PAST}) spent
       from students s order by s.name""")
+
+def set_price(sid, new):
+    """Меняет цену занятия. Уже прошедшие занятия остаются по прежней цене (замораживаются),
+    новые и будущие считаются по новой. Если раньше цена не была указана (0) — прошлое не замораживается."""
+    new = max(0, int(new))
+    old = q("select price from students where id=?", sid)[0]["price"] or 0
+    if old == new: return
+    if old:
+        db.execute(f"update lessons set price=? where student_id=? and price is null and "
+                   f"datetime(day||' '||time) <= datetime('now','localtime')", (old, sid))
+    db.execute("update students set price=? where id=?", (new, sid))
+    db.commit()
 
 def balance_text(sid):
     s = next(x for x in stats() if x["id"] == sid)
-    spent = s["done"] * s["price"]
+    spent = s["spent"]
     bal = s["paid"] - spent
     lines = [f"Оплачено всего: {money(s['paid'])}"]
     if s["price"]:
-        lines.append(f"Проведено занятий: {s['done']} × {money(s['price'])} = {money(spent)}")
+        lines.append(f"Проведено занятий: {s['done']} на {money(spent)}")
         if bal < 0:
             status = f"🔴 Долг: {money(-bal)}"
         elif bal > 0:
@@ -172,6 +201,105 @@ def delete_payment(pid):
     db.execute("delete from payments where id=?", (pid,))
     db.commit()
 
+# ---------- оплаты по занятиям ----------
+def lesson_pay_status(sid):
+    """Занятия ученика по порядку; оплата закрывает занятия от старых к новым, каждое по своей цене.
+    Возвращает (текущая цена, [(day, time, dur, paid, price)])."""
+    st = q("select price from students where id=?", sid)[0]
+    cur = st["price"] or 0
+    paid_sum = q("select coalesce(sum(amount),0) s from payments where student_id=?", sid)[0]["s"]
+    out = []
+    for l in q("select day,time,coalesce(dur,60) dur, coalesce(price,?) lp from lessons where student_id=? order by day,time", cur, sid):
+        lp = l["lp"] or 0
+        ok = bool(lp) and paid_sum >= lp
+        if ok: paid_sum -= lp
+        out.append((l["day"], l["time"], l["dur"], ok, lp))
+    return cur, out
+
+def debts_prepaid(sid, today):
+    """Долг — неоплаченные занятия раньше сегодня; предоплата — оплаченные позже сегодня.
+    Возвращает (текущая цена, [(day, price)], [(day, price)])."""
+    cur, ls = lesson_pay_status(sid)
+    debts = sorted(((d, lp) for d, t, du, ok, lp in ls if d < today and not ok and lp), reverse=True)
+    pre = sorted((d, lp) for d, t, du, ok, lp in ls if d > today and ok)
+    return cur, debts, pre
+
+from html import escape as esc
+
+def num(n): return f"{n:,}".replace(",", " ")
+def dmy(day): return date.fromisoformat(day).strftime("%d.%m.%Y")
+
+def grade_text(g):
+    g = (g or "").strip()
+    return f"{g} класс" if g.isdigit() else g
+
+def end_time(t, dur):
+    e = mins(t) + dur
+    return f"{e // 60 % 24:02d}:{e % 60:02d}"
+
+def today_report():
+    today = date.today()
+    ds = today.isoformat()
+    head = f"Сегодня:\n{WD_FULL[today.weekday()]} ({today:%d.%m.%Y})"
+    ls = q("""select l.time, coalesce(l.dur,60) dur, s.id sid, s.name, s.grade, s.subject
+              from lessons l join students s on s.id=l.student_id where l.day=? order by l.time""", ds)
+    if not ls:
+        return [head + "\n\nЗанятий сегодня нет."]
+    blocks = []
+    for i, l in enumerate(ls, 1):
+        _, debts, pre = debts_prepaid(l["sid"], ds)
+        _, st = lesson_pay_status(l["sid"])
+        price, paid = next(((lp, ok) for d, t, du, ok, lp in st if d == ds and t == l["time"]), (0, False))
+        rest = ". ".join(esc(x) for x in (grade_text(l["grade"]), (l["subject"] or "").strip()) if x)
+        info = f"<b>{esc(l['name'])}</b>" + (f". {rest}" if rest else "")
+        t = l["time"]
+        lines = [f"<b>{i}. Урок: {t} - {end_time(t, l['dur'])} ({l['dur']} мин)</b>", info]
+        if price:
+            lines.append(f"{num(price)} за урок. " + ("Оплачено" if paid else "Не оплачено"))
+        else:
+            lines.append("Цена занятия не указана")
+        if debts:
+            lines.append("<i>" + "\n".join(["Долги:"] + [f"{num(p_)} за урок {dmy(d)}" for d, p_ in debts]) + "</i>")
+        if pre:
+            lines.append("<i>" + "\n".join(["Предоплата:"] + [f"{num(p_)} за урок {dmy(d)}" for d, p_ in pre]) + "</i>")
+        if not debts and not pre:
+            lines.append("<i>Предоплат и долгов нет.</i>")
+        blocks.append("\n".join(lines))
+    return chunks(head, blocks)
+
+def chunks(head, blocks, limit=3800):
+    msgs, cur = [], head
+    for b in blocks:
+        if len(cur) + len(b) + 2 > limit:
+            msgs.append(cur); cur = b
+        else:
+            cur += "\n\n" + b
+    msgs.append(cur)
+    return msgs
+
+def finance_report():
+    today = date.today(); ds = today.isoformat()
+    month = today.strftime("%Y-%m")
+    got = q("select coalesce(sum(amount),0) s from payments where strftime('%Y-%m',created)=?", month)[0]["s"]
+    held = 0; debt_rows = []; pre_total = 0
+    for s in q("select id,name,price from students where coalesce(deleted,0)=0 order by name"):
+        cur, debts, pre = debts_prepaid(s["id"], ds)
+        held += q("select coalesce(sum(coalesce(price,?)),0) c from lessons where student_id=? and substr(day,1,7)=? and day<=?",
+                  s["price"] or 0, s["id"], month, ds)[0]["c"]
+        pre_total += sum(p_ for _, p_ in pre)
+        if debts: debt_rows.append((s["name"], sum(p_ for _, p_ in debts), len(debts)))
+    debt_total = sum(d[1] for d in debt_rows)
+    lines = [f"Фин. отчет: {today:%m.%Y}", "",
+             f"Получено оплат за месяц: {money(got)}",
+             f"Проведено занятий на сумму: {money(held)}",
+             f"Предоплачено вперёд: {money(pre_total)}",
+             f"Общий долг: {money(debt_total)}"]
+    if debt_rows:
+        lines += ["", "Должники:"] + [f"{n} — {money(a)} ({c} зан.)" for n, a, c in sorted(debt_rows, key=lambda x: -x[1])]
+    else:
+        lines += ["", "Долгов нет."]
+    return "\n".join(lines)
+
 # ---------- PDF расписания ----------
 import io, os
 from reportlab.lib.colors import Color, black
@@ -179,8 +307,6 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as rl_canvas
-
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 def _font(name, fname):
     for p in (f"{HERE}/fonts/{fname}", f"/usr/share/fonts/truetype/dejavu/{fname}"):
@@ -194,116 +320,222 @@ _font("TSB", "DejaVuSans-Bold.ttf")
 
 WDFULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
+def _fit(text, font, size, width):
+    """Обрезает строку с «…», чтобы она точно влезла в ширину."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    if stringWidth(text, font, size) <= width: return text
+    while text and stringWidth(text + "…", font, size) > width: text = text[:-1]
+    return text.rstrip() + "…"
+
 def week_pdf(start):
-    """A4 альбомная: сетка время × 7 дней. Чёрно-белый дизайн — вместо цвета
-    у занятых ячеек белая заливка и жирная левая полоса, у пустых — светло-серая
-    полоса по всей строке (для навигации по часам). Ничего не зависит от цвета."""
+    """A4 альбомная — копия «Предпросмотра печати» из мини-аппа (.bw): шапка дней с датами,
+    слева часы 08–20 (линии часов идут только по колонкам дней, подписи их не пересекают),
+    белые карточки занятий с жирной левой полосой, время, имя и класс в рамке."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     fill_regular()
     days = [start + timedelta(days=i) for i in range(7)]
-    rows = q("""select l.day,l.time,coalesce(l.dur,60) dur,l.student_id,l.regular_id,s.name from lessons l
+    rows = q("""select l.day,l.time,coalesce(l.dur,60) dur,l.regular_id,s.name,s.grade,s.subject from lessons l
                 join students s on s.id=l.student_id where l.day between ? and ? order by l.time""",
              days[0].isoformat(), days[-1].isoformat())
-    cell = {}
-    for x in rows:
-        cell.setdefault((x["day"], int(x["time"][:2])), []).append(x)
 
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=landscape(A4))
     W, H = landscape(A4)
-    M, TC, HEAD = 30, 62, 34
-    TITLE = 46
-    hours = list(range(8, 21))
-    colw = (W - 2 * M - TC) / 7
-    grid_top = H - M - TITLE
-    grid_bottom = M
-    rh = (grid_top - HEAD - grid_bottom) / len(hours)
+    M, TC, HEAD = 14, 46, 33                 # поля, колонка часов, шапка дней
+    # сетка всегда 08:00–21:00; расширяется только если занятие выходит за эти границы
+    H0, H1 = 8, 21
+    if rows:
+        st_ = [int(x["time"][:2]) * 60 + int(x["time"][3:]) for x in rows]
+        H0 = min(H0, max(0, min(st_) // 60))
+        H1 = max(H1, min(24, -(-max(a + x["dur"] for a, x in zip(st_, rows)) // 60)))
+    L, R = M, W - M
+    x0 = L + TC
+    colw = (R - x0) / 7
 
-    band = Color(.91, .91, .91)      # нейтральный серый для пустых строк — не путается с текстом
-    line = Color(.55, .55, .55)
-    x0 = M + TC
+    ink, c555, c333, grey = Color(.07, .07, .07), Color(.33, .33, .33), Color(.2, .2, .2), Color(.27, .27, .27)
+    c999, band, half = Color(.6, .6, .6), Color(.957, .957, .957), Color(.812, .812, .812)
 
-    # заголовок
-    c.setFillColor(black); c.setFont("TSB", 20); c.drawString(M, H - M - 18, "Расписание на неделю")
-    c.setFillColor(Color(.35, .35, .35)); c.setFont("TS", 11)
-    c.drawString(M, H - M - 35, f"{days[0]:%d.%m.%Y} – {days[-1]:%d.%m.%Y}")
+    # заголовок: «Расписание на неделю» слева, даты справа, жирная линия под ним
+    ty = H - M - 17
+    c.setFillColor(ink); c.setFont("TSB", 19); c.drawString(L, ty, "Расписание на неделю")
+    c.setFillColor(c333); c.setFont("TS", 11.5)
+    c.drawRightString(R, ty, f"{days[0]:%d.%m.%Y} – {days[-1]:%d.%m.%Y}")
+    c.setStrokeColor(ink); c.setLineWidth(1.6); c.line(L, ty - 7, R, ty - 7)
+
+    gt, gb = ty - 7 - 8, M                   # верх и низ таблицы
+    top0 = gt - HEAD                         # верх сетки часов
+    n = H1 - H0
+    rh = (top0 - gb) / n                     # высота одного часа
+
+    # фон: чередование часов, получасовые и часовые линии — только по колонкам дней
+    for j in range(n):
+        y = top0 - j * rh
+        if j % 2 == 1:
+            c.setFillColor(band); c.rect(x0, y - rh, R - x0, rh, fill=1, stroke=0)
+        c.setStrokeColor(half); c.setLineWidth(.5); c.line(x0, y - rh / 2, R, y - rh / 2)
+        c.setStrokeColor(c555); c.setLineWidth(.6); c.line(x0, y - rh, R, y - rh)
 
     # шапка дней
-    c.setLineWidth(.7); c.setStrokeColor(line)
     for i, d in enumerate(days):
-        x = x0 + i * colw
-        c.setFillColor(black); c.setFont("TSB", 12.5)
-        c.drawCentredString(x + colw / 2, grid_top - 15, WDFULL[i])
-        c.setFillColor(Color(.4, .4, .4)); c.setFont("TS", 10)
-        c.drawCentredString(x + colw / 2, grid_top - 29, f"{d:%d.%m.%Y}")
-    c.setLineWidth(1.3); c.setStrokeColor(black)
-    c.line(M, grid_top - HEAD, W - M, grid_top - HEAD)
+        cx = x0 + i * colw + colw / 2
+        c.setFillColor(ink); c.setFont("TSB", 11); c.drawCentredString(cx, gt - 13.5, WDFULL[i])
+        c.setFillColor(grey); c.setFont("TS", 9.5); c.drawCentredString(cx, gt - 26, f"{d:%d.%m.%Y}")
+    c.setStrokeColor(ink); c.setLineWidth(1.6); c.line(L, top0, R, top0)
+    c.setStrokeColor(c555); c.setLineWidth(.6)
+    for i in range(7):
+        x = x0 + i * colw; c.line(x, gt, x, gb)
 
-    # сетка: линии часов и блоки занятий по минутам (высота = длительность)
-    from reportlab.lib.utils import simpleSplit
-    top0 = grid_top - HEAD
-    c.setFillColor(band); c.rect(x0, grid_bottom, colw * 7, top0 - grid_bottom, fill=1, stroke=0)
-    for j, h in enumerate(hours):
+    # подписи часов — по центру линии часа, первая прижата к верху
+    c.setFillColor(ink); c.setFont("TSB", 10)
+    for j in range(n):
         y = top0 - j * rh
-        c.setFillColor(black); c.setFont("TSB", 10); c.drawRightString(x0 - 8, y - 8, f"{h:02d}:00")
-        c.setStrokeColor(line); c.setLineWidth(.6); c.line(x0, y, W - M, y)
+        c.drawRightString(x0 - 6, (y - 11) if j == 0 else (y - 3.5), f"{H0 + j:02d}:00")
+
+    # Карточка = две строки: 1) время жирным + (длительность)  2) «Фамилия Имя 9 кл.» жирным.
+    # Кегль — максимальный, при котором обе строки влезают по ширине, а в самой короткой карточке (45 мин)
+    # остаются одинаковые красивые отступы сверху и снизу.
+    minh = 45 / 60 * rh - .8                  # высота самой короткой карточки (45 мин)
+    CAP, DESC, PITCH = .73, .24, 1.3          # высота заглавных, выносные элементы, расстояние между строками (в кеглях)
+    SW = 1.8                                  # ширина левой полосы
+    PAD_X, PAD_R = 4.0, 3.0
+    twid = colw - 4.6 - SW - PAD_X - PAD_R    # ширина текста в карточке
+    DS = .82                                  # длительность в скобках чуть мельче времени
+
+    def tline_w(t, f, dur_txt):
+        return stringWidth(t, "TSB", f) + stringWidth(" " + dur_txt, "TS", f * DS)
+
+    f = 12.0
+    while f > 6 and tline_w("00:00–00:00", f, "(00 мин)") > twid: f -= .05
+    f = min(f, (minh - 8) / (CAP + PITCH + DESC))        # минимум по 4 pt сверху и снизу в карточке на 45 мин
+    block = f * (CAP + PITCH + DESC)
+    GT = (minh - block) / 2                    # отступ сверху (= снизу в карточке на 45 мин)
+    b1 = -(GT + CAP * f); b2 = b1 - PITCH * f
+
+    def name_line(name, cls, f, width):
+        """«Имя Фамилия» + класс в одной строке (в базе имя хранится как «Имя Фамилия»).
+        Если не влезает — имя целиком, а фамилия сокращается до первой буквы с точкой."""
+        parts = name.split()
+        first, last = parts[0], " ".join(parts[1:])
+        cands = [name]
+        if last: cands.append(first + " " + last[0] + ".")
+        cw_ = stringWidth(" " + cls, "TSB", f) if cls else 0
+        for t in cands:
+            if stringWidth(t, "TSB", f) + cw_ <= width: return t, cls
+        return cands[-1], cls
+
+    # карточки занятий
     for x in rows:
         i = (date.fromisoformat(x["day"]) - days[0]).days
         s = int(x["time"][:2]) * 60 + int(x["time"][3:]); e = s + x["dur"]
-        hgt = x["dur"] / 60 * rh; yt = top0 - (s - 480) / 60 * rh; bx = x0 + i * colw
-        c.setFillColor(Color(1, 1, 1)); c.setStrokeColor(black); c.setLineWidth(.6)
-        c.rect(bx, yt - hgt, colw, hgt, fill=1, stroke=1)
-        c.setLineWidth(3.2); c.line(bx, yt - hgt, bx, yt)
-        c.setFillColor(black)
-        if hgt < 28:
-            c.setFont("TSB", 8.5); c.drawString(bx + 6, yt - hgt / 2 - 3, f"{x['time']} {x['name']}"[:int((colw - 10) / 4.4)])
-        else:
-            c.setFont("TS", 8)
-            c.drawString(bx + 6, yt - 10, f"{x['time']}–{e // 60:02d}:{e % 60:02d}" + (" · повтор" if x["regular_id"] else ""))
-            c.setFont("TSB", 9.5)
-            for k, t_ in enumerate(simpleSplit(x["name"], "TSB", 9.5, colw - 12)[:max(1, int((hgt - 14) // 11))]):
-                c.drawString(bx + 6, yt - 22 - k * 11, t_)
-    c.setLineWidth(1); c.setStrokeColor(black)
-    for i in range(8):
-        x = x0 + i * colw
-        c.line(x, grid_top - HEAD, x, grid_bottom)
-    c.line(M, grid_top, M, grid_bottom); c.line(W - M, grid_top, W - M, grid_bottom)
+        bx = x0 + i * colw + 2.6; bwid = colw - 4.6
+        yt = top0 - (s - H0 * 60) / 60 * rh
+        hgt = x["dur"] / 60 * rh - .8
+        ytop, ybot = min(yt, top0), max(yt - hgt, top0 - n * rh)
+        if ybot >= ytop: continue
+        h = ytop - ybot
+        g = (x["grade"] or "").strip()
+        cls = f"{g} кл." if g.isdigit() else g
+        nm = " ".join(x["name"].split())
+        end = f"{e // 60:02d}:{e % 60:02d}"
+        trange = f"{x['time']}–{end}"
+        # регулярные занятия помечены «повтор» (как в предпросмотре печати мини-аппа)
+        dur_txt = f"({x['dur']} мин · повтор)" if x["regular_id"] else f"({x['dur']} мин)"
 
-    c.setFillColor(Color(.5, .5, .5)); c.setFont("TS", 8)
-    c.drawString(M, 14, f"Сформировано {date.today():%d.%m.%Y}")
-    c.drawRightString(W - M, 14, "высота блока = длительность · полоса слева = занято · «повтор» = регулярное")
+        c.saveState()
+        p = c.beginPath(); p.roundRect(bx, ybot, bwid, h, 2.2)
+        c.clipPath(p, stroke=0, fill=0)
+        c.setFillColor(Color(1, 1, 1)); c.rect(bx, ybot, bwid, h, fill=1, stroke=0)
+        c.setFillColor(Color(.35, .35, .35)); c.rect(bx, ybot, SW, h, fill=1, stroke=0)   # узкая тёмно-серая полоса слева
+        tx = bx + SW + PAD_X; tw = bwid - SW - PAD_X - PAD_R
+
+        # строка 1: время жирным + длительность
+        fs = min(f, f * tw / tline_w(trange, f, dur_txt))
+        c.setFillColor(ink); c.setFont("TSB", fs); c.drawString(tx, ytop + b1, trange)
+        c.setFillColor(c333); c.setFont("TS", fs * DS)
+        c.drawString(tx + stringWidth(trange, "TSB", fs) + stringWidth(" ", "TS", fs * DS), ytop + b1, dur_txt)
+        # строка 2: имя + класс
+        t2, k2 = name_line(nm, cls, f, tw)
+        full2 = t2 + (" " + k2 if k2 else "")
+        f2 = max(min(f, f * tw / stringWidth(full2, "TSB", f)), f * .8)   # совсем длинная строка чуть мельче, имя не режем
+        if stringWidth(full2, "TSB", f2) > tw:                               # крайний случай: даже так не влезает
+            t2 = _fit(t2, "TSB", f2, tw - (stringWidth(" " + k2, "TSB", f2) if k2 else 0))
+        c.setFillColor(ink); c.setFont("TSB", f2); c.drawString(tx, ytop + b2, t2)
+        if k2: c.drawString(tx + stringWidth(t2 + " ", "TSB", f2), ytop + b2, k2)
+        c.restoreState()
+        c.setStrokeColor(c333); c.setLineWidth(.6); c.roundRect(bx, ybot, bwid, h, 2.2, fill=0, stroke=1)
+
+    # внешняя рамка таблицы
+    c.setStrokeColor(c999); c.setLineWidth(.8); c.rect(L, gb, R - L, gt - gb, fill=0, stroke=1)
     c.save()
     return buf.getvalue()
 
 # ---------- клавиатуры ----------
 def menu_kb():
     b = ReplyKeyboardBuilder()
-    if URL:
-        b.row(KeyboardButton(text="📱 Открыть кабинет", web_app=WebAppInfo(url=URL)))
-    b.row(KeyboardButton(text="📅 Новое занятие"), KeyboardButton(text="💳 Новая оплата"))
-    b.row(KeyboardButton(text="👤 Новый ученик"))
+    b.row(KeyboardButton(text="Занятия сегодня"), KeyboardButton(text="Новое занятие"))
+    b.row(KeyboardButton(text="Новая оплата"), KeyboardButton(text="Фин. отчет"))
+    b.row(KeyboardButton(text="Расписание"), KeyboardButton(text="Новый ученик"))
     return b.as_markup(resize_keyboard=True)
 
+def pager(b, prefix, page, pages, label=None):
+    """Ряд навигации: ◀️  метка  ▶️ (кнопки только там, где есть куда листать)."""
+    row = []
+    if page > 0: row.append(InlineKeyboardButton(text="◀️", callback_data=f"{prefix}:{page-1}"))
+    row.append(InlineKeyboardButton(text=label or f"{page+1}/{pages}", callback_data="noop"))
+    if page < pages - 1: row.append(InlineKeyboardButton(text="▶️", callback_data=f"{prefix}:{page+1}"))
+    b.row(*row)
+
+MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+
 def dates_kb(off):
+    """Календарь месяца: сверху месяц со стрелками, затем дни недели и сетка дат (прошедшие дни неактивны)."""
+    import calendar
+    today = date.today()
+    y, mo = divmod(today.year * 12 + today.month - 1 + off, 12)
+    y, mo = y, mo + 1
     b = InlineKeyboardBuilder()
-    start = date.today() + timedelta(days=off * 8)
-    for i in range(8):
-        d = start + timedelta(days=i)
-        b.button(text=f"{WD[d.weekday()]} {d:%d.%m}", callback_data=f"lt:{d.isoformat()}")
-    b.adjust(2)
     nav = []
     if off > 0: nav.append(InlineKeyboardButton(text="◀️", callback_data=f"ld:{off-1}"))
+    nav.append(InlineKeyboardButton(text=f"{MONTHS[mo-1]} {y}", callback_data="noop"))
     nav.append(InlineKeyboardButton(text="▶️", callback_data=f"ld:{off+1}"))
     b.row(*nav)
+    b.row(*[InlineKeyboardButton(text=w, callback_data="noop") for w in WD])
+    for week in calendar.Calendar(0).monthdatescalendar(y, mo):
+        row = []
+        for d in week:
+            if d.month != mo or d < today:
+                row.append(InlineKeyboardButton(text="·" if d.month == mo else "\u2800", callback_data="noop"))
+            else:
+                mark = f"[{d.day}]" if d == today else str(d.day)
+                row.append(InlineKeyboardButton(text=mark, callback_data=f"lt:{d.isoformat()}:0"))
+        b.row(*row)
+    if off == 0:
+        tm = today + timedelta(days=1)
+        b.row(InlineKeyboardButton(text=f"Сегодня, {WD[today.weekday()]} {today:%d.%m}", callback_data=f"lt:{today.isoformat()}:0"),
+              InlineKeyboardButton(text=f"Завтра, {WD[tm.weekday()]} {tm:%d.%m}", callback_data=f"lt:{tm.isoformat()}:0"))
+    b.row(InlineKeyboardButton(text="◀️ Назад", callback_data="lb"))      # к списку учеников
     return b.as_markup()
 
-def time_kb(day):
-    busy = {r["time"] for r in q("select time from lessons where day=?", day)}
+SLOTS = [f"{m // 60:02d}:{m % 60:02d}" for m in range(8 * 60, 21 * 60 + 1, 30)]   # 08:00 … 21:00 через 30 мин
+SLOTS_PER = 12
+DURS = list(range(45, 181, 15))                                                       # 45 … 180 мин (минимум 45)
+DURS_PER = 6
+
+def time_kb(day, page=0):
+    """Занятые слоты: точное совпадение ИЛИ пересечение с другим занятием
+    (пересечения запрещены — такие слоты сразу помечаются 🔒)."""
+    rows = q("select time,dur from lessons where day=?", day)
+    busy = {t for t in SLOTS
+            if any(mins(t) < mins(o["time"]) + (o["dur"] or 60) and mins(o["time"]) < mins(t) + DURS[0]
+                   for o in rows)}
+    pages = -(-len(SLOTS) // SLOTS_PER)
+    page = max(0, min(page, pages - 1))
     b = InlineKeyboardBuilder()
-    for h in range(8, 21):
-        t = f"{h:02d}:00"
+    for t in SLOTS[page * SLOTS_PER:(page + 1) * SLOTS_PER]:
         b.button(text=("🔒 " if t in busy else "") + t,
-                 callback_data="busy" if t in busy else f"lm:{day}:{h:02d}00")
+                 callback_data="busy" if t in busy else f"lm:{day}:{t[:2]}{t[3:]}")
     b.adjust(3)
+    pager(b, f"lt:{day}", page, pages)
     b.row(InlineKeyboardButton(text="🕐 Своё время (например 8:25)", callback_data=f"lo:{day}"))
     b.row(InlineKeyboardButton(text="◀️ К датам", callback_data="ld:0"))
     return b.as_markup()
@@ -312,23 +544,27 @@ def mode_kb(day, t):
     b = InlineKeyboardBuilder()
     b.button(text="Разовое занятие", callback_data=f"lc:{day}:{t}:o")
     b.button(text="🔁 Сделать регулярным", callback_data=f"lc:{day}:{t}:r")
-    b.button(text="◀️ К времени", callback_data=f"lt:{day}")
+    b.button(text="◀️ К длительности", callback_data=f"lm:{day}:{t}")
     b.adjust(1)
     return b.as_markup()
 
-def dur_kb(day, t):
+def dur_kb(day, t, page=0):
+    pages = -(-len(DURS) // DURS_PER)
+    page = max(0, min(page, pages - 1))
     b = InlineKeyboardBuilder()
-    for d in (30, 45, 60, 90, 120):
+    for d in DURS[page * DURS_PER:(page + 1) * DURS_PER]:
         b.button(text=f"{d} мин", callback_data=f"lq:{day}:{t}:{d}")
     b.adjust(3)
+    pager(b, f"lw:{day}:{t}", page, pages)
+    b.row(InlineKeyboardButton(text="◀️ К времени", callback_data=f"lt:{day}:0"))
     return b.as_markup()
 
 def students_kb(pick, more, page, new_cb):
-    rows = q("select id,name from students order by name")
+    rows = q("select id,name from students where coalesce(deleted,0)=0 order by name")
     b = InlineKeyboardBuilder()
     for r_ in rows[page * PER:(page + 1) * PER]:
         b.button(text=r_["name"], callback_data=f"{pick}:{r_['id']}")
-    b.adjust(2)
+    b.adjust(1)
     nav = []
     if page > 0: nav.append(InlineKeyboardButton(text="◀️", callback_data=f"{more}:{page-1}"))
     if (page + 1) * PER < len(rows): nav.append(InlineKeyboardButton(text="▶️", callback_data=f"{more}:{page+1}"))
@@ -340,20 +576,52 @@ def amount_kb(sid):
     b = InlineKeyboardBuilder()
     for a in (3000, 5000, 10000):
         b.button(text=f"{a:,}".replace(",", " "), callback_data=f"pm:{sid}:{a}")
+    b.adjust(3)
+    b.row(InlineKeyboardButton(text="◀️ Назад", callback_data="pb"))      # к списку учеников
+    return b.as_markup()
+
+GRADES = [str(i) for i in range(1, 12)]     # 1–11 классы
+GRADES_PER = 6
+PRICES = (3000, 4000, 5000)
+
+def step_nav(b, back, skip=None):
+    """Нижний ряд шага: «Назад» и (если шаг необязательный) «Пропустить»."""
+    row = [InlineKeyboardButton(text="◀️ Назад", callback_data=f"nsb:{back}")]
+    if skip: row.append(InlineKeyboardButton(text="Пропустить ⏭", callback_data=f"nsk:{skip}"))
+    b.row(*row)
+
+def grade_kb(page=0):
+    pages = -(-len(GRADES) // GRADES_PER)
+    page = max(0, min(page, pages - 1))
+    b = InlineKeyboardBuilder()
+    for g in GRADES[page * GRADES_PER:(page + 1) * GRADES_PER]:
+        b.button(text=f"{g} класс", callback_data=f"nsc:{g}")
+    b.adjust(3)
+    pager(b, "nsg", page, pages)
+    step_nav(b, "grade", "grade")
     return b.as_markup()
 
 def price_kb():
     b = InlineKeyboardBuilder()
-    for a in (2000, 3000, 4000, 5000):
-        b.button(text=f"{a:,}".replace(",", " "), callback_data=f"ns:{a}")
-    b.button(text="Без цены", callback_data="ns:0")
-    b.adjust(4, 1)
+    for a in PRICES:
+        b.button(text=num(a), callback_data=f"nsp:{a}")
+    b.button(text="✏️ Свой вариант", callback_data="nsx")
+    b.adjust(3, 1)
+    step_nav(b, "price", "price")
+    return b.as_markup()
+
+def single_nav_kb(back, skip=None):
+    b = InlineKeyboardBuilder()
+    step_nav(b, back, skip)
     return b.as_markup()
 
 # ---------- состояния ----------
 class NewStudent(StatesGroup):
     name = State()
+    grade = State()
+    subject = State()
     price = State()
+    price_custom = State()
 
 class CustomTime(StatesGroup):
     day = State()
@@ -377,7 +645,7 @@ async def make_lesson(m: Message, day, t, sid, edit, regular, dur=60):
     if res is None:
         text = "⚠️ Время занято или пересекается с другим занятием. Выберите другое."
     else:
-        text = f"✅ {name} записан(а): {pretty(day, t)}, {dur} мин"
+        text = f"✅ Новое занятие добавлено\n👤 {name}\n📅 {pretty(day, t)}, {dur} мин"
         if regular:
             wd = WD[date.fromisoformat(day).weekday()]
             text += f"\n🔁 Регулярно каждую неделю: {wd} в {t}"
@@ -392,11 +660,19 @@ async def ask_amount(m: Message, state: FSMContext, sid, edit):
     await (m.edit_text if edit else m.answer)(
         f"{name}\nВведите сумму или выберите кнопкой:", reply_markup=amount_kb(sid))
 
-async def student_done(m: Message, state: FSMContext, name, price):
+def student_card(name, grade, subject, price):
+    return "\n".join([
+        "✅ Новый ученик успешно добавлен", "",
+        f"👤 Имя: {name}",
+        f"🎓 Класс: {grade_text(grade) or '—'}",
+        f"📚 Занятия: {subject or '—'}",
+        f"💰 Цена за занятие: {money(price) if price else 'не указана'}"])
+
+async def student_done(m: Message, state: FSMContext, name, price, grade="", subject=""):
     then = (await state.get_data()).get("then")
-    sid = run("insert into students(name,price) values(?,?)", name, price)
+    sid = run("insert into students(name,price,grade,subject) values(?,?,?,?)", name, price, grade or None, subject or None)
     await state.clear()
-    await m.answer(f"✅ Ученик «{name}» добавлен" + (f", занятие {money(price)}" if price else ""))
+    await m.answer(student_card(name, grade, subject, price))
     if then == "lesson":
         await state.update_data(sid=sid)
         await m.answer("Выберите дату:", reply_markup=dates_kb(0))
@@ -412,7 +688,43 @@ async def start(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Готово к работе. Выберите действие в меню.", reply_markup=menu_kb())
 
-@r.message(F.text == "📅 Новое занятие")
+@r.message(F.text == "Занятия сегодня")
+async def today_lessons(m: Message, state: FSMContext):
+    await state.clear()
+    for part in today_report():
+        await m.answer(part, parse_mode="HTML")
+
+@r.message(F.text == "Фин. отчет")
+async def fin_report(m: Message, state: FSMContext):
+    await state.clear()
+    await m.answer(finance_report())
+
+def weeks_kb():
+    """4 кнопки друг под другом: текущая неделя и три следующие (на кнопках — даты недель)."""
+    mon0 = date.today() - timedelta(days=date.today().weekday())
+    b = InlineKeyboardBuilder()
+    for i in range(4):
+        s_ = mon0 + timedelta(weeks=i)
+        label = f"{s_:%d.%m} – {s_ + timedelta(days=6):%d.%m}"
+        b.button(text=("Текущая: " + label) if i == 0 else label, callback_data=f"wk:{s_.isoformat()}")
+    b.adjust(1)
+    return b.as_markup()
+
+@r.message(F.text == "Расписание")
+async def week_schedule(m: Message, state: FSMContext):
+    await state.clear()
+    await m.answer("Выберите неделю:", reply_markup=weeks_kb())
+
+@r.callback_query(F.data.startswith("wk:"))
+async def c_week(c: CallbackQuery):
+    start = monday(c.data[3:])
+    await c.answer()
+    pdf = week_pdf(start)
+    await c.message.answer_document(
+        BufferedInputFile(pdf, filename=f"raspisanie_{start}.pdf"),
+        caption=f"📅 Расписание на неделю {start:%d.%m} – {start + timedelta(days=6):%d.%m.%Y}\nФормат A4, готово к печати.")
+
+@r.message(F.text == "Новое занятие")
 async def new_lesson(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Кого записываем?", reply_markup=students_kb("lp", "lpp", 0, "lpn"))
@@ -428,9 +740,8 @@ async def c_lp(c: CallbackQuery, state: FSMContext):
 
 @r.callback_query(F.data == "lpn")
 async def c_lp_new(c: CallbackQuery, state: FSMContext):
-    await state.set_state(NewStudent.name)
     await state.update_data(then="lesson")
-    await c.message.answer("Как зовут ученика?")
+    await ns_show(c.message, state, "name")
     await c.answer()
 
 @r.callback_query(F.data.startswith("lq:"))
@@ -439,28 +750,47 @@ async def c_dur(c: CallbackQuery, state: FSMContext):
     await state.update_data(dur=int(d))
     await c.message.edit_text(f"{pretty(day, hm(t))}, {d} мин\nКакое занятие?", reply_markup=mode_kb(day, t))
 
-@r.message(F.text == "💳 Новая оплата")
+@r.message(F.text == "Новая оплата")
 async def new_pay(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Выберите ученика:", reply_markup=students_kb("pa", "pu", 0, "pn"))
 
-@r.message(F.text == "👤 Новый ученик")
+@r.message(F.text == "Новый ученик")
 async def new_student(m: Message, state: FSMContext):
     await state.clear()
-    await state.set_state(NewStudent.name)
-    await m.answer("Как зовут ученика?")
+    await ns_show(m, state, "name")
 
 # ---------- занятие ----------
 @r.callback_query(F.data.startswith("ld:"))
 async def c_dates(c: CallbackQuery):
     await c.message.edit_text("Выберите дату:", reply_markup=dates_kb(int(c.data[3:])))
 
+@r.callback_query(F.data == "noop")
+async def c_noop(c: CallbackQuery):
+    await c.answer()
+
+@r.callback_query(F.data == "lb")
+async def c_back_students(c: CallbackQuery):
+    await c.message.edit_text("Кого записываем?", reply_markup=students_kb("lp", "lpp", 0, "lpn"))
+
+@r.callback_query(F.data == "pb")
+async def c_back_pay_students(c: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await c.message.edit_text("Выберите ученика:", reply_markup=students_kb("pa", "pu", 0, "pn"))
+
 @r.callback_query(F.data.startswith("lt:"))
-async def c_times(c: CallbackQuery):
+async def c_times(c: CallbackQuery, state: FSMContext):
+    await state.set_state(None)       # выход из ввода своего времени (данные шага сохраняются)
     fill_regular()
-    day = c.data[3:]
+    parts = c.data.split(":")
+    day, page = parts[1], int(parts[2]) if len(parts) > 2 else 0
     d = date.fromisoformat(day)
-    await c.message.edit_text(f"{WD[d.weekday()]} {d:%d.%m} — выберите время:", reply_markup=time_kb(day))
+    await c.message.edit_text(f"{WD[d.weekday()]} {d:%d.%m} — выберите время:", reply_markup=time_kb(day, page))
+
+@r.callback_query(F.data.startswith("lw:"))
+async def c_dur_page(c: CallbackQuery):
+    _, day, t, page = c.data.split(":")
+    await c.message.edit_text(f"{pretty(day, hm(t))}\nДлительность занятия?", reply_markup=dur_kb(day, t, int(page)))
 
 @r.callback_query(F.data == "busy")
 async def c_busy(c: CallbackQuery):
@@ -479,7 +809,8 @@ async def c_time_custom(c: CallbackQuery, state: FSMContext):
     await state.set_state(CustomTime.day)
     await state.update_data(day=day)
     d = date.fromisoformat(day)
-    await c.message.answer(f"{WD[d.weekday()]} {d:%d.%m} — введите время в формате ЧЧ:ММ, например 8:25")
+    await c.message.answer(f"{WD[d.weekday()]} {d:%d.%m} — введите время в формате ЧЧ:ММ, например 8:25",
+                           reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data=f"lt:{day}:0")]]))
     await c.answer()
 
 @r.message(CustomTime.day, F.text.regexp(TIME_RE))
@@ -512,9 +843,8 @@ async def c_lesson_create(c: CallbackQuery, state: FSMContext):
 @r.callback_query(F.data.startswith("ln:"))
 async def c_lesson_new_student(c: CallbackQuery, state: FSMContext):
     _, day, t, mode = c.data.split(":")
-    await state.set_state(NewStudent.name)
     await state.update_data(then=f"l:{day}:{t}:{mode}")
-    await c.message.answer("Как зовут ученика?")
+    await ns_show(c.message, state, "name")
     await c.answer()
 
 # ---------- оплата ----------
@@ -525,21 +855,56 @@ async def c_pay_students(c: CallbackQuery):
 
 @r.callback_query(F.data == "pn")
 async def c_pay_new_student(c: CallbackQuery, state: FSMContext):
-    await state.set_state(NewStudent.name)
     await state.update_data(then="pay")
-    await c.message.answer("Как зовут ученика?")
+    await ns_show(c.message, state, "name")
     await c.answer()
 
 @r.callback_query(F.data.startswith("pa:"))
 async def c_pay_amount(c: CallbackQuery, state: FSMContext):
     await ask_amount(c.message, state, int(c.data[3:]), True)
 
+def pay_alloc(sid, pid):
+    """Куда пошла оплата pid: оплаты ученика закрывают его занятия от старых к новым (каждое по своей цене).
+    Возвращает ([(день, цена урока, оплачено из цены)], остаток без занятия)."""
+    cur = q("select price from students where id=?", sid)[0]["price"] or 0
+    ls = [{"day": l["day"], "price": l["lp"], "rem": l["lp"]}
+          for l in q("select day,time,coalesce(price,?) lp from lessons where student_id=? order by day,time", cur, sid) if l["lp"]]
+    for p in q("select id,amount from payments where student_id=? order by created,id", sid):
+        left, got = p["amount"], []
+        for x in ls:
+            if left <= 0: break
+            if x["rem"] <= 0: continue
+            t = min(left, x["rem"]); x["rem"] -= t; left -= t
+            got.append((x["day"], x["price"], x["price"] - x["rem"]))
+        if p["id"] == pid:
+            return got, left
+    return [], 0
+
+def pay_report(sid, pid, amount):
+    s = next(x for x in stats() if x["id"] == sid)
+    got, left = pay_alloc(sid, pid)
+    today = date.today().isoformat()
+    groups = {"Долги": [], "Сегодня": [], "Предоплаты": []}
+    for day, price, cov in got:
+        key = "Долги" if day < today else "Сегодня" if day == today else "Предоплаты"
+        tail = money(price) if cov >= price else \
+            f"{'Частичная предоплата' if key == 'Предоплаты' else 'Частичная оплата'}: {money(cov)} из {money(price)}"
+        groups[key].append(f"{dmy(day)} — {tail}")
+    out = ["✅ <b>Пополнение прошло успешно</b>", f"+{money(amount)} · {esc(s['name'])}", "", "На что распределилась сумма:"]
+    for k, items in groups.items():
+        if items: out += ["", f"<b>{k}</b>"] + items
+    if left > 0:
+        out += ["", "<b>Остаток без занятия</b>", f"{money(left)} — останется предоплатой"]
+    bal = s["paid"] - s["spent"]
+    sign = "+" if bal > 0 else "−" if bal < 0 else ""
+    out += ["", f"Баланс: {sign}{money(abs(bal))}",
+            "Есть долги" if bal < 0 else "Есть предоплаты" if bal > 0 else "Все оплачено, долгов нет"]
+    return "\n".join(out)
+
 async def record_payment(m: Message, state: FSMContext, sid, amount, edit):
-    run("insert into payments(student_id,amount) values(?,?)", sid, amount)
-    name = q("select name from students where id=?", sid)[0]["name"]
+    pid = run("insert into payments(student_id,amount) values(?,?)", sid, amount)
     await state.clear()
-    await (m.edit_text if edit else m.answer)(
-        f"✅ Оплата принята: +{money(amount)}\n\n👤 {name}\n{balance_text(sid)}")
+    await (m.edit_text if edit else m.answer)(pay_report(sid, pid, amount), parse_mode="HTML")
 
 @r.callback_query(F.data.startswith("pm:"))
 async def c_pay_quick(c: CallbackQuery, state: FSMContext):
@@ -555,23 +920,131 @@ async def m_pay_manual(m: Message, state: FSMContext):
 async def m_pay_bad(m: Message):
     await m.answer("Введите сумму цифрами, например 4500")
 
-# ---------- новый ученик ----------
+# ---------- новый ученик (шаги: имя → класс → занятия → цена) ----------
+async def ns_show(m: Message, state: FSMContext, step, edit=False, page=0):
+    """Показывает шаг мастера. edit=True — правим текущее сообщение (кнопки),
+    иначе шлём новое и убираем кнопки у предыдущего вопроса."""
+    d = await state.get_data()
+    if step == "name":
+        await state.set_state(NewStudent.name)
+        text, kb = "Шаг 1/4. Как зовут ученика?", single_nav_kb("name")
+    elif step == "grade":
+        await state.set_state(NewStudent.grade)
+        text, kb = f"Шаг 2/4. {d['name']}\nВыберите класс:", grade_kb(page)
+    elif step == "subject":
+        await state.set_state(NewStudent.subject)
+        text = "Шаг 3/4. Название занятий (необязательно)\nНапример: ЕГЭ по русскому"
+        kb = single_nav_kb("subject", "subject")
+    elif step == "price":
+        await state.set_state(NewStudent.price)
+        text, kb = "Шаг 4/4. Цена за занятие:", price_kb()
+    else:   # price_custom
+        await state.set_state(NewStudent.price_custom)
+        text, kb = "Введите цену за занятие цифрами, например 3500", single_nav_kb("price_custom")
+    if edit:
+        await m.edit_text(text, reply_markup=kb)
+        return
+    if d.get("prompt"):
+        try: await m.bot.edit_message_reply_markup(m.chat.id, d["prompt"])
+        except Exception: pass
+    sent = await m.answer(text, reply_markup=kb)
+    await state.update_data(prompt=sent.message_id)
+
+async def ns_finish(m: Message, state: FSMContext, price):
+    d = await state.get_data()
+    try: await m.edit_reply_markup()
+    except Exception: pass
+    await student_done(m, state, d["name"], price, d.get("grade"), d.get("subject"))
+
+async def ns_alive(c: CallbackQuery, state: FSMContext):
+    cur = await state.get_state()
+    if not cur or not cur.startswith("NewStudent:"):
+        await c.answer("Сессия устарела, нажмите «Новый ученик» заново", show_alert=True)
+        return False
+    return True
+
+NS_BACK = {"grade": "name", "subject": "grade", "price": "subject", "price_custom": "price"}
+NS_SKIP = {"grade": "subject", "subject": "price"}
+
+@r.callback_query(F.data.startswith("nsb:"))
+async def c_ns_back(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    step = c.data[4:]
+    if step == "name":                     # с первого шага — выход из мастера
+        then = (await state.get_data()).get("then")
+        await state.clear()
+        if then == "lesson":
+            await c.message.edit_text("Кого записываем?", reply_markup=students_kb("lp", "lpp", 0, "lpn"))
+        elif then == "pay":
+            await c.message.edit_text("Выберите ученика:", reply_markup=students_kb("pa", "pu", 0, "pn"))
+        else:
+            await c.message.edit_text("Добавление ученика отменено.")
+        return await c.answer()
+    await ns_show(c.message, state, NS_BACK[step], edit=True)
+    await c.answer()
+
+@r.callback_query(F.data.startswith("nsk:"))
+async def c_ns_skip(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    step = c.data[4:]
+    if step == "price":
+        await ns_finish(c.message, state, 0)
+    else:
+        await state.update_data(**{step: ""})
+        await ns_show(c.message, state, NS_SKIP[step], edit=True)
+    await c.answer()
+
+@r.callback_query(F.data.startswith("nsg:"))
+async def c_ns_grade_page(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    await ns_show(c.message, state, "grade", edit=True, page=int(c.data[4:]))
+    await c.answer()
+
+@r.callback_query(F.data.startswith("nsc:"))
+async def c_ns_grade(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    await state.update_data(grade=c.data[4:])
+    await ns_show(c.message, state, "subject", edit=True)
+    await c.answer()
+
+@r.callback_query(F.data.startswith("nsp:"))
+async def c_ns_price(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    await ns_finish(c.message, state, int(c.data[4:]))
+    await c.answer()
+
+@r.callback_query(F.data == "nsx")
+async def c_ns_price_custom(c: CallbackQuery, state: FSMContext):
+    if not await ns_alive(c, state): return
+    await ns_show(c.message, state, "price_custom", edit=True)
+    await c.answer()
+
 @r.message(NewStudent.name, F.text)
 async def m_name(m: Message, state: FSMContext):
     await state.update_data(name=m.text.strip())
-    await state.set_state(NewStudent.price)
-    await m.answer("Стоимость одного занятия? (нужна для расчёта долгов)", reply_markup=price_kb())
+    await ns_show(m, state, "grade")
 
-@r.callback_query(NewStudent.price, F.data.startswith("ns:"))
-async def c_price(c: CallbackQuery, state: FSMContext):
-    name = (await state.get_data())["name"]
-    await c.message.edit_reply_markup()
-    await student_done(c.message, state, name, int(c.data[3:]))
+@r.message(NewStudent.grade, F.text)
+async def m_grade(m: Message):                             # класс выбирается только кнопками
+    await m.answer("Выберите класс кнопками выше или нажмите «Пропустить».")
+
+@r.message(NewStudent.subject, F.text)
+async def m_subject(m: Message, state: FSMContext):
+    await state.update_data(subject=m.text.strip())
+    await ns_show(m, state, "price")
 
 @r.message(NewStudent.price, F.text.regexp(r"^\d[\d\s]*$"))
-async def m_price(m: Message, state: FSMContext):
-    name = (await state.get_data())["name"]
-    await student_done(m, state, name, int(m.text.replace(" ", "")))
+async def m_price(m: Message, state: FSMContext):          # цену можно и просто написать
+    await ns_finish(m, state, int(m.text.replace(" ", "")))
+
+@r.message(NewStudent.price_custom, F.text.regexp(r"^\d[\d\s]*$"))
+async def m_price_custom(m: Message, state: FSMContext):
+    await ns_finish(m, state, int(m.text.replace(" ", "")))
+
+@r.message(NewStudent.price)
+@r.message(NewStudent.price_custom)
+async def m_price_bad(m: Message):
+    await m.answer("Введите цену цифрами, например 3500")
 
 # ---------- API для мини-аппа ----------
 def authorized(request):
@@ -604,10 +1077,12 @@ def check_slot(j):
 async def api_data(request):
     fill_regular()
     photos = {r["id"]: r["photo"] for r in q("select id, photo from students")}
+    gs = {r["id"]: r for r in q("select id, grade, subject from students")}
     st = [{"id": s["id"], "name": s["name"], "price": s["price"], "paid": s["paid"],
-           "done": s["done"], "balance": s["paid"] - s["done"] * s["price"],
-           "photo": photos.get(s["id"])} for s in stats()]
-    lessons = [dict(x) for x in q("""select l.id,l.day,l.time,coalesce(l.dur,60) dur,l.student_id,l.regular_id,s.name from lessons l
+           "done": s["done"], "spent": s["spent"], "balance": s["paid"] - s["spent"],
+           "photo": photos.get(s["id"]), "deleted": s["deleted"], "grade": gs[s["id"]]["grade"] or "", "subject": gs[s["id"]]["subject"] or ""} for s in stats()]
+    lessons = [dict(x) for x in q(f"""select l.id,l.day,l.time,coalesce(l.dur,60) dur,l.student_id,l.regular_id,s.name,
+        coalesce(l.price,s.price) price, case when {PAST} then 1 else 0 end past from lessons l
         join students s on s.id=l.student_id order by l.day,l.time""")]
     pays = [dict(x) for x in q("""select p.id,p.student_id,p.amount,p.created,s.name from payments p
         join students s on s.id=p.student_id order by p.id desc limit 200""")]
@@ -638,7 +1113,7 @@ async def api_week_send(request):
 async def api_add(request):
     j = await request.json(); check_slot(j)
     res = add_lesson(int(j["student_id"]), j["day"], j["time"], bool(j.get("regular")),
-                     max(15, min(480, int(j.get("dur") or 60))))
+                     max(45, min(480, int(j.get("dur") or 60))))
     if res is None:
         return web.json_response({"error": "busy"}, status=409)
     return web.json_response({"ok": True, "skipped": res[1]})
@@ -677,7 +1152,10 @@ async def api_student_update(request):
         return web.json_response({"error": "photo_too_big"}, status=400)
     update_student(int(j["id"]), name, photo)
     if "price" in j:
-        run("update students set price=? where id=?", max(0, int(j["price"])), int(j["id"]))
+        set_price(int(j["id"]), j["price"])
+    for k in ("grade", "subject"):
+        if k in j:
+            run(f"update students set {k}=? where id=?", (j[k] or "").strip() or None, int(j["id"]))
     return web.json_response({"ok": True})
 
 @guarded
@@ -685,8 +1163,38 @@ async def api_student_add(request):
     j = await request.json(); name = j["name"].strip()
     if not name:
         return web.json_response({"error": "empty_name"}, status=400)
-    sid = run("insert into students(name,price) values(?,?)", name, int(j.get("price") or 0))
+    photo = j.get("photo")
+    if photo and len(photo) > MAX_PHOTO:
+        return web.json_response({"error": "photo_too_big"}, status=400)
+    sid = run("insert into students(name,price,grade,subject) values(?,?,?,?)", name, int(j.get("price") or 0),
+              (j.get("grade") or "").strip() or None, (j.get("subject") or "").strip() or None)
+    if photo:
+        update_student(sid, None, photo)
     return web.json_response({"ok": True, "id": sid})
+
+@guarded
+async def api_student_delete(request):
+    """«Мягкое» удаление: ученик пропадает из списков, прошлые занятия и оплаты остаются в истории,
+    будущие занятия и регулярные серии убираются."""
+    sid = int((await request.json())["id"])
+    db.execute("update students set deleted=1 where id=?", (sid,))
+    db.execute(f"delete from lessons where student_id=? and datetime(day||' '||time) > datetime('now','localtime')", (sid,))
+    db.execute("delete from skips where regular_id in (select id from regular where student_id=?)", (sid,))
+    db.execute("delete from regular where student_id=?", (sid,))
+    db.commit()
+    return web.json_response({"ok": True})
+
+@guarded
+async def api_payment_add(request):
+    """Новая оплата из мини-аппа — в ту же таблицу payments, что и из бота (record_payment)."""
+    j = await request.json()
+    sid, amount = int(j["student_id"]), int(j["amount"])
+    if amount <= 0:
+        return web.json_response({"error": "bad_amount"}, status=400)
+    if not q("select 1 from students where id=?", sid):
+        return web.json_response({"error": "no_student"}, status=404)
+    pid = run("insert into payments(student_id,amount) values(?,?)", sid, amount)
+    return web.json_response({"ok": True, "id": pid})
 
 @guarded
 async def api_payment_update(request):
@@ -723,13 +1231,15 @@ async def cors_mw(request, handler):
 
 
 async def main():
+    if not OWNER:
+        print("⚠️ OWNER_ID не задан: бот и кабинет будут доступны любому пользователю Telegram")
     fill_regular()
     bot = Bot(TOKEN)
     dp = Dispatcher()
     dp.include_router(r)
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
     app["bot"] = bot
-    app.router.add_get("/", lambda _: web.FileResponse("docs/index.html"))
+    app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_post("/api/week/send", api_week_send)
@@ -740,13 +1250,18 @@ async def main():
     app.router.add_post("/api/lesson/stop", api_stop)
     app.router.add_post("/api/student/update", api_student_update)
     app.router.add_post("/api/student/add", api_student_add)
+    app.router.add_post("/api/student/delete", api_student_delete)
+    app.router.add_post("/api/payment/add", api_payment_add)
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     if URL:
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL)))
+        btn = MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL))   # синяя кнопка слева от строки ввода
+        await bot.set_chat_menu_button(menu_button=btn)
+        if OWNER:
+            await bot.set_chat_menu_button(chat_id=OWNER, menu_button=btn)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

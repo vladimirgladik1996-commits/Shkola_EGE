@@ -5,8 +5,5 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - botdata:/app          # tutor.db переживает перезапуски (при обновлении кода делайте docker compose down -v && up -d --build)
+      - ./data:/app/data   # здесь живёт tutor.db — данные переживают пересборку образа
     restart: unless-stopped
-
-volumes:
-  botdata:

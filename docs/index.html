@@ -28,9 +28,21 @@ h2{font-size:15px;margin:14px 2px 8px}
 .col{position:relative;border-left:1px solid var(--ln);background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hh) - 1px),var(--ln) calc(var(--hh) - 1px),var(--ln) var(--hh))}
 .ls{position:absolute;left:2px;right:2px;border-radius:6px;padding:2px 4px;color:#fff;font-size:10.5px;font-weight:600;line-height:1.2;overflow:hidden;border-left:3px solid #0005;cursor:pointer}
 .ls small{display:block;font-weight:400;opacity:.9;font-size:9.5px}
-.bw .ls{background:#fff!important;color:#111;border:1px solid #888;border-left:4px solid #111}
-.bw .col{background-color:#ececec}
-.bw .wh b{border-color:#999}
+.bw .wh,.bw .wb{grid-template-columns:46px repeat(7,1fr)}
+.bw .wh{border-bottom:1.6px solid #111}
+.bw .wh b{border-left:1px solid #555;height:33px;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0;font-size:11px;font-weight:700;white-space:nowrap;color:#111;line-height:1.1}
+.bw .wh b:first-child{border-left:0}
+.bw .wh em{font-size:9.5px;font-weight:400;color:#444;margin-top:3px;line-height:1.1}
+.bw .tl i{transform:translateY(-50%);right:6px;font-size:10px;font-weight:700;color:#111;background:#fff;padding:0 2px;line-height:1}
+.bw .tl i:first-child{transform:none;margin-top:3px}
+.bw .col{border-left:1px solid #555;background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hh)/2 - 1px),#cfcfcf calc(var(--hh)/2 - 1px),#cfcfcf calc(var(--hh)/2)),repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hh) - 1px),#555 calc(var(--hh) - 1px),#555 var(--hh)),repeating-linear-gradient(to bottom,#fff 0,#fff var(--hh),#f4f4f4 var(--hh),#f4f4f4 calc(var(--hh)*2))}
+.bw .ls{position:absolute;left:2.6px;right:2px;background:#fff;color:#111;border:.6px solid #333;border-radius:2.2px;padding:0 3px 0 5.8px;overflow:hidden;cursor:default;font-size:8.9px;line-height:11.4px;white-space:nowrap}
+.bw .ls::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1.8px;background:#595959}
+.bw .ls .r1{display:block;padding-top:var(--gt,1.2px);font-weight:700}
+.bw .ls .r1 small{display:inline;font-weight:400;color:#333;font-size:.82em;opacity:1}
+.bw .ls .nm{display:block;font-weight:700;overflow:hidden;padding-bottom:2px;margin-bottom:-2px}
+.paper h4{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:8px}
+.paper h4 span{font-size:13px;font-weight:400;color:#333}
 .g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
 .g i{font-style:normal;font-size:12px;color:var(--hint);padding:4px 0}
 .d{height:80px;border-radius:10px;background:var(--card);padding:3px 2px;display:flex;flex-direction:column;gap:2px;cursor:pointer;min-width:0}
@@ -42,6 +54,12 @@ h2{font-size:15px;margin:14px 2px 8px}
 .info{flex:1;min-width:0}.info b{display:block;font-size:15px}.info small{color:var(--hint);font-size:12.5px}
 .av{flex:none;width:40px;height:40px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
 .av.big{width:76px;height:76px;font-size:26px;margin:0 auto 10px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.seg button{padding:11px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}.seg button.on{background:var(--acc);color:var(--on)}
+.srch{margin:0 0 8px}.sbar{display:flex;gap:6px;margin-bottom:10px}.sbar .srch{flex:1;min-width:0;margin:0}.ib{position:relative;flex:none;width:46px;height:46px;border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;cursor:pointer;margin:0;color:var(--tx)}.ib.on,.ib.acc{background:var(--acc);color:var(--on)}.ib select{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;padding:0}.pdr{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--hint)}.pdr:not(:empty){margin:-4px 2px 8px}.pdr button{color:var(--acc);font-weight:600;font-size:13px}.calg button.cd{position:relative;aspect-ratio:1;border-radius:10px;font-size:14px;background:var(--card)}.calg .cd.rng{background:color-mix(in srgb,var(--acc) 25%,var(--card))}.calg .cd.sel{background:var(--acc);color:var(--on);font-weight:700}.calg .cd.tdy{outline:1.5px solid var(--acc)}.calg .cd u{position:absolute;bottom:4px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.6}.btn:disabled{opacity:.45}.gauge{display:block;width:100%;border-radius:14px;padding:13px;font-size:22px;font-weight:800;text-align:center;color:#fff;margin-top:12px}.gauge.gzero{background:#2e9e5b}.gauge.gpos{background:#14573a}.gauge.gneg{background:#d64545}.gcap{text-align:center;font-weight:600;margin:6px 0 14px}.phr{display:flex;align-items:center;gap:12px;margin-bottom:12px}.phb{display:flex;gap:6px;flex-wrap:wrap}.bal.neg{border-color:var(--red);color:var(--red)}.flt{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.flt select{margin:0;padding:11px;font-size:14px}
+.dstats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px}.dstats .stat b{font-size:16px}
+.dh{font-size:15px;margin:18px 0 8px}
+.avg{display:grid;grid-template-columns:1fr 1fr;gap:6px}.avgc{background:var(--card);border-radius:14px;padding:14px 12px;border-left:4px solid var(--acc)}.avgc span{display:block;color:var(--hint);font-size:12px;margin-bottom:4px}.avgc b{font-size:19px}
+.hb{background:var(--card);border-radius:14px;padding:12px}.hbr{display:grid;grid-template-columns:78px 1fr auto;gap:8px;align-items:center;padding:5px 0;font-size:13px}.hbn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hbt{height:14px;background:var(--bg);border-radius:7px;overflow:hidden}.hbt i{display:block;height:100%;background:var(--red);border-radius:7px}
 .pos{color:var(--grn)}.neg{color:var(--red)}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
 .stat{background:var(--card);border-radius:14px;padding:10px}.stat small{display:block;color:var(--hint);font-size:12px}
@@ -65,14 +83,55 @@ select,input{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;f
 .cst{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0}
 .bal{border-radius:14px;padding:12px;margin-bottom:12px;font-weight:600;text-align:center;border:1.5px solid var(--ln)}
 .pscroll{flex:1;overflow:auto;padding:14px 12px}
-.paper{background:#fff;color:#111;padding:14px;border-radius:4px;box-shadow:0 2px 14px #0004;min-width:640px}
-.paper h4{font-size:20px}.paper p{color:#666;font-size:12px;margin-bottom:8px}
+.paper{background:#fff;color:#111;padding:14px;border-radius:4px;box-shadow:0 2px 14px #0004;width:842px;min-width:842px}
+.paper h4{font-size:19px;border-bottom-width:1.6px;padding-bottom:7px;margin-bottom:8px}.paper p{color:#666;font-size:12px;margin-bottom:8px}
 .paper .sc{border-color:#999;border-radius:0}
 #toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:12px;z-index:50;display:none;font-size:14px}
 .note{font-size:12px;color:var(--hint);text-align:center;margin-top:14px}
+
+.dseg{display:flex;gap:4px;margin-bottom:12px;background:var(--card);padding:4px;border-radius:14px}
+.dseg button{flex:1;padding:9px 0;border-radius:11px;font-weight:600;font-size:13px;color:var(--hint);transition:background .2s,color .2s}
+.dseg button.on{background:var(--bg);color:var(--tx);box-shadow:0 2px 8px -2px #0003}
+.hero{border-radius:24px;padding:20px 18px 16px;color:#fff;margin-bottom:10px;background:radial-gradient(120% 140% at 100% 0,#ffffff29,transparent 55%),linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 48%,#000));box-shadow:0 16px 32px -18px var(--acc)}
+.hero small{opacity:.82;font-size:13px}
+.hero .big{font-size:36px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:4px 0 10px;font-variant-numeric:tabular-nums}
+.hm{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid #ffffff33}
+.hm b{display:block;font-size:15px;font-variant-numeric:tabular-nums}.hm span{font-size:11.5px;opacity:.78}
+.kp3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.kp{position:relative;overflow:hidden;background:var(--card);border-radius:18px;padding:13px 10px 10px}
+.kp::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kc)}
+.kp small{display:block;color:var(--hint);font-size:11.5px}.kp b{display:block;font-size:15.5px;margin:3px 0 1px;font-variant-numeric:tabular-nums;white-space:nowrap}.kp em{font-style:normal;font-size:11px;color:var(--hint)}
+.pc{background:var(--card);border-radius:22px;padding:16px 14px;margin-bottom:10px}
+.pch{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.pch h3{font-size:16px;padding:0;margin:0;white-space:nowrap}.pch span{font-size:12.5px;color:var(--hint);text-align:right}.pch span b{color:var(--tx)}
+.ax{font-size:9px;fill:var(--hint);font-variant-numeric:tabular-nums}
+.dn circle{transition:stroke-width .25s,opacity .25s}
+.lg{display:grid;grid-template-columns:12px 1fr auto auto;gap:10px;align-items:center;padding:9px 8px;border-radius:12px;font-size:13.5px;cursor:pointer;transition:background .2s}
+.lg.on{background:var(--bg)}.lg .dot{width:12px;height:12px;border-radius:4px}.lgp{color:var(--hint);min-width:36px;text-align:right}
+.dis .tr{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;margin-bottom:6px}.dis .tr i{display:block;height:100%;border-radius:4px;background:var(--dc)}
+.dr{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:9px 0;cursor:pointer}.dr+.dr{border-top:1px solid var(--ln)}
+.dr .bt{height:6px;border-radius:3px;background:var(--bg);margin-top:6px;overflow:hidden}.dr .bt i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#e8837f,var(--red))}
+.av.sm{width:34px;height:34px;font-size:13px}
+@keyframes grw{from{transform:scaleY(0)}}@keyframes fdi{from{opacity:0;transform:translateY(8px)}}
+.an .hero,.an .kp,.an .pc{animation:fdi .45s both}.an .kp:nth-child(2){animation-delay:.05s}.an .kp:nth-child(3){animation-delay:.1s}
+.an .bx{transform-box:fill-box;transform-origin:bottom;animation:grw .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*14ms)}
+@media (prefers-reduced-motion:reduce){.an *{animation:none!important}}
+
+.fc{font-size:30px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:-2px 0 6px}
+.fb{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--bg);margin:4px 0 10px}.fb i{display:block;height:100%}
+.fb .r,.fl .r{background:var(--acc)}.fb .e,.fl .e{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--acc) 60%,transparent) 0 4px,color-mix(in srgb,var(--acc) 22%,transparent) 4px 8px)}.fb .d,.fl .d{background:color-mix(in srgb,var(--red) 38%,transparent)}
+.fl{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;font-size:13.5px}.fl span{display:flex;align-items:center;gap:8px;min-width:0}.fl i{flex:none;width:12px;height:12px;border-radius:4px}.fl b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.fcap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--hint);margin-top:6px}.fcap i{width:14px;height:10px;border-radius:3px;border:1px dashed var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.pc .dseg{background:var(--bg);margin-bottom:10px}.pc .dseg button.on{background:var(--card)}
+.fsub{color:var(--hint);font-size:13px;margin:-2px 0 4px}
+.fbars{display:flex;gap:4px;align-items:flex-end;margin:12px 0 14px}
+.fbars>div{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px}
+.fbars i{display:block;width:100%;max-width:24px;border-radius:6px 6px 2px 2px;background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 45%,transparent))}
+.fbars em{font-style:normal;font-size:9.5px;color:var(--hint);white-space:nowrap;min-height:11px}
+.fh{font-size:13px;font-weight:700;margin:14px 0 2px}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <main id="app"></main>
-<button id="fab" onclick="form()">+ Занятие</button>
+<button id="fab" onclick="fabGo()">+ Занятие</button>
 <nav><button data-t="c" class="on">Расписание</button><button data-t="p">Оплаты</button><button data-t="s">Ученики</button></nav>
 <div id="sheet"></div>
 <div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="$('#pr').classList.remove('on')">Назад</button><button class="btn pri" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
@@ -91,7 +150,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 const hue=id=>`hsl(${id*67%360} 45% 38%)`;
 const money=n=>Math.abs(n).toLocaleString("ru-RU")+"\u00A0"+cur;
 const ini=n=>n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
-const av=(s,c="")=>`<span class="av ${c}" style="background:${hue(s.id)}">${esc(ini(s.name))}</span>`;
+const av=(s,c="")=>`<span class="av ${c}" style="background:${s.photo?`url(${s.photo}) center/cover`:hue(s.id)}">${s.photo?"":esc(ini(s.name))}</span>`;
 
 const tg=window.Telegram.WebApp;tg.ready();tg.expand();
 let S=[],L=[],P=[],cur="₽";const w0=mon(T);
@@ -104,47 +163,66 @@ async function api(p,b){const r=await fetch(API_BASE+p,{method:b?"POST":"GET",he
   if(!r.ok){toast("Не получилось, попробуйте ещё раз");return null}return r.json()}
 function demoData(){const w=mon(T),dd=n=>iso(addD(w,n)),now=new Date();
   const ts=k=>{const d=new Date(now);d.setDate(d.getDate()-k);return iso(d)+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":00"};
-  return{cur:"₽",
-    students:[{id:1,name:"Анна Смирнова",price:1500,paid:9000,done:5,balance:1500,photo:null},
-              {id:2,name:"Иван Петров",price:1500,paid:4500,done:4,balance:-1500,photo:null},
-              {id:3,name:"Мария Ким",price:2000,paid:6000,done:3,balance:0,photo:null}],
-    lessons:[{id:1,student_id:1,day:dd(0),time:"15:00",dur:60,regular_id:null},
-             {id:2,student_id:2,day:dd(1),time:"10:00",dur:90,regular_id:null},
-             {id:3,student_id:3,day:dd(2),time:"18:30",dur:60,regular_id:null},
-             {id:4,student_id:1,day:dd(3),time:"15:00",dur:60,regular_id:11},
-             {id:5,student_id:2,day:dd(4),time:"12:00",dur:60,regular_id:null}],
+  const st=[{id:1,name:"Анна Смирнова",grade:"11",subject:"ЕГЭ по русскому",price:1500,paid:9000,done:5,balance:1500,spent:7500,photo:null,deleted:0},
+            {id:2,name:"Иван Петров",grade:"9",subject:"ОГЭ по математике",price:1500,paid:4500,done:4,balance:-1500,spent:6000,photo:null,deleted:0},
+            {id:3,name:"Мария Ким",grade:"10",subject:"Литература",price:2000,paid:6000,done:3,balance:0,spent:6000,photo:null,deleted:0}];
+  /* как в /api/data: у занятий есть цена и флаг «проведено», поэтому демо живёт теми же расчётами, что и боевые данные */
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const ls=[[1,dd(0),"15:00",60,null],[2,dd(1),"10:00",90,null],[3,dd(2),"18:30",60,null],[1,dd(3),"15:00",60,11],[2,dd(4),"12:00",60,null]]
+    .map(([sid,day,time,dur,rep],i)=>({id:i+1,student_id:sid,day,time,dur,regular_id:rep,price:(st.find(s=>s.id==sid)||{}).price||0,
+      past:day<iso(T)||(day==iso(T)&&mins(time)<=nowMin)?1:0}));
+  return{cur:"₽",students:st,lessons:ls,
     payments:[{id:1,student_id:1,amount:3000,created:ts(1),name:"Анна Смирнова"},
               {id:2,student_id:3,amount:2000,created:ts(2),name:"Мария Ким"},
               {id:3,student_id:2,amount:1500,created:ts(4),name:"Иван Петров"}]}}
-function ingest(d){cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id}));
+function ingest(d){cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id,price:l.price,past:l.past}));
   P=d.payments.map(p=>({id:p.id,sid:p.student_id,amt:p.amount,at:new Date(p.created.replace(" ","T"))}));render()}
 async function load(){const d=await api("/api/data");
   if(!d){ingest(demoData());toast("Демо-режим — данные примерные");return}
   ingest(d)}
 const bal=s=>s;
+const act=()=>S.filter(s=>!s.deleted);
 const when=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+const norm=s=>String(s).toLowerCase().replace(/ё/g,"е");
+/* поиск по любой части имени: «петров», «иван», «иван петров» (порядок слов не важен) */
+const nameMatch=(name,q)=>norm(q).split(/\s+/).filter(Boolean).every(t=>norm(name).includes(t));
 const stName=id=>S.find(s=>s.id==id).name;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2400)}
 
 let tab="c",view="w",ws=w0,mo=new Date(T.getFullYear(),T.getMonth(),1),pf="all",pv="feed";
 
 /* ---------- Расписание ---------- */
+function stGrade(id){const s=S.find(x=>x.id==id),g=((s&&s.grade)||"").trim();return /^\d+$/.test(g)?g+" кл.":g}
+function stSubj(id){const s=S.find(x=>x.id==id);return ((s&&s.subject)||"").trim()}
+/* Имя для печати: «Имя Фамилия 9 кл.» → если не влезает, «Имя Ф. 9 кл.» (см. fitNames) */
+function nameParts(id){const p=stName(id).trim().split(/\s+/),f=p[0]||"",l=p.slice(1).join(" ");return{full:f+(l?" "+l:""),short:l?f+" "+l[0]+".":f}}
+function fitNames(root){
+  root.querySelectorAll(".ls").forEach(ls=>{const nm=ls.querySelector(".nm");if(!nm)return;
+    const fit=()=>nm.scrollWidth<=nm.clientWidth+.5;
+    nm.style.fontSize="";nm.querySelector(".t").textContent=nm.dataset.full;
+    if(fit())return;
+    nm.querySelector(".t").textContent=nm.dataset.short;if(fit())return;
+    let k=1;while(!fit()&&k>.8){k-=.02;nm.style.fontSize=(8.9*k)+"px"}})}
 function grid(start,bw){
-  const H0=8,H1=21,hh=bw?34:46,days=[...Array(7)].map((_,i)=>addD(start,i));
-  let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${iso(d)==iso(T)?"td":""}">${WD[i]}<em>${d.getDate()}</em></b>`).join("")}</div>
+  let H0=8,H1=21;const hh=bw?37.9:46,days=[...Array(7)].map((_,i)=>addD(start,i));
+  const dk=days.map(iso),wl=L.filter(l=>dk.includes(l.day));   // сетка всегда 08–21, расширяется только если занятие выходит за границы
+  if(wl.length){H0=Math.min(H0,Math.max(0,Math.min(...wl.map(l=>Math.floor(mins(l.time)/60)))));H1=Math.max(H1,Math.min(24,Math.max(...wl.map(l=>Math.ceil((mins(l.time)+l.dur)/60)))))}
+  let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${!bw&&iso(d)==iso(T)?"td":""}">${bw?WDF[i]:WD[i]}<em>${bw?d.toLocaleDateString("ru-RU"):d.getDate()}</em></b>`).join("")}</div>
   <div class="wb" style="height:${(H1-H0)*hh}px"><div class="tl">${[...Array(H1-H0)].map((_,i)=>`<i style="top:${i*hh}px">${pad(H0+i)}:00</i>`).join("")}</div>`;
   days.forEach(d=>{
     h+=`<div class="col">`+L.filter(l=>l.day==iso(d)).map(l=>{
-      const s=mins(l.time),top=(s-H0*60)/60*hh,ht=l.dur/60*hh-1,st=stName(l.sid);
-      return `<div class="ls" style="top:${top}px;height:${ht}px;background:${hue(l.sid)}" onclick="${bw?"":`form(${l.id})`}">${esc(st.split(" ")[0])}<small>${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""}</small></div>`}).join("")+`</div>`});
+      const s=mins(l.time),top=(s-H0*60)/60*hh,ht=l.dur/60*hh-.8,st=stName(l.sid);
+      if(bw){const g=stGrade(l.sid),np=nameParts(l.sid);
+        return `<div class="ls" style="top:${top}px;height:${ht}px"><span class="r1">${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""} <small>(${l.dur} мин)</small></span><span class="nm" data-full="${esc(np.full)}" data-short="${esc(np.short)}"><span class="t">${esc(np.full)}</span>${g?" "+esc(g):""}</span></div>`}
+      return `<div class="ls" style="top:${top}px;height:${ht}px;background:${hue(l.sid)}" onclick="form(${l.id})">${esc(st.split(" ")[0])}<small>${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""}</small></div>`}).join("")+`</div>`});
   return h+"</div></div>";
 }
 function sched(){
   const seg=`<button class="pill ${view=="w"?"on":""}" onclick="view='w';render()">Неделя</button><button class="pill ${view=="m"?"on":""}" onclick="view='m';render()">Месяц</button>`;
-  let h=`<div class="bar">${seg}<span style="flex:1"></span><button class="pill" onclick="printIt()">🖨 Печать</button></div>`;
+  let h=`<div class="bar">${seg}<span style="flex:1"></span>${view=="w"?`<button class="pill" onclick="printIt()">🖨 Распечатать</button>`:""}</div>`;
   if(view=="w"){
     const e=addD(ws,6);
-    h+=`<div class="bar"><button class="pill" onclick="ws=addD(ws,-7);render()">‹</button><button class="pill" onclick="ws=w0;render()">Сегодня</button><b class="ttl">${ws.getDate()} ${ws.toLocaleDateString("ru-RU",{month:"short"})} – ${e.getDate()} ${e.toLocaleDateString("ru-RU",{month:"short"})}</b><button class="pill" onclick="ws=addD(ws,7);render()">›</button></div><div class="sc">${grid(ws,0)}</div><p class="note">Начало блока — по минутам, высота — по длительности. Нажмите на занятие, чтобы изменить.</p>`;
+    h+=`<div class="bar"><button class="pill" onclick="ws=addD(ws,-7);render()">‹</button><b class="ttl">${ws.getDate()} ${ws.toLocaleDateString("ru-RU",{month:"short"})} – ${e.getDate()} ${e.toLocaleDateString("ru-RU",{month:"short"})}</b><button class="pill" onclick="ws=addD(ws,7);render()">›</button></div><div class="sc">${grid(ws,0)}</div>`;
   }else{
     const y=mo.getFullYear(),m=mo.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate();
     h+=`<div class="bar"><button class="pill" onclick="mo=new Date(${y},${m-1},1);render()">‹</button><b class="ttl">${mo.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="mo=new Date(${y},${m+1},1);render()">›</button></div><div class="g">${WD.map(d=>`<i>${d}</i>`).join("")}${"<span></span>".repeat(off)}`;
@@ -157,25 +235,28 @@ function sched(){
 }
 function dayCard(k){
   const ls=L.filter(l=>l.day==k).sort((a,b)=>a.time<b.time?-1:1);
-  open(`<h3>${new Date(k+"T00:00").toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}</h3><p class="sub">${ls.length?ls.length+" зан.":"Занятий нет"}</p>${ls.map(l=>`<div class="row" onclick="form(${l.id})"><b>${l.time}–${hm(mins(l.time)+l.dur)}</b><span class="info">${esc(stName(l.sid))}</span></div>`).join("")}<div class="btns"><button class="btn pri" onclick="form(0,'${k}')">+ Добавить занятие</button></div>`);
+  open(`<h3>${new Date(k+"T00:00").toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}</h3><p class="sub">${ls.length?ls.length+" зан.":"Занятий нет"}</p>${ls.map(l=>`<div class="row" onclick="form(${l.id},'${k}','${k}')"><b>${l.time}–${hm(mins(l.time)+l.dur)}</b><span class="info">${esc(stName(l.sid))}</span></div>`).join("")}<div class="btns"><button class="btn pri" onclick="form(0,'${k}','${k}')">+ Добавить занятие</button></div>`);
 }
 function printIt(){
-  const start=view=="w"?ws:w0,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
-  $("#paper").innerHTML=`<h4>Расписание на неделю</h4><p>${f(start)} – ${f(e)} · слева жирная полоса — занято, под именем — время и длительность</p><div class="sc">${grid(start,1)}</div>`;
-  $("#pr").classList.add("on");
+  const start=ws,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
+  $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
+  $("#pr").classList.add("on");fitNames($("#paper"));
 }
 
 /* ---------- Форма занятия ---------- */
 let fd=60;
-function form(id,day){
+function form(id,day,from){
   const l=id?L.find(x=>x.id==id):null;fd=l?l.dur:60;
-  open(`<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
-  <label>Ученик<select id="fs" ${l?"disabled":""} onchange="$('#fn').style.display=this.value=='new'?'block':'none'">${S.map(s=>`<option value="${s.id}" ${l&&l.sid==s.id?"selected":""}>${esc(s.name)}</option>`).join("")}<option value="new">＋ Новый ученик…</option></select></label>
+  /* бот предлагает 45…180 мин с шагом 15; здесь — основные чипы 45/60/90/120/150/180.
+     Своя длительность существующего занятия (например 75 мин) показывается отдельным чипом и сохраняется */
+  const durs=[45,60,90,120,150,180];if(fd&&!durs.includes(fd))durs.push(fd);durs.sort((a,b)=>a-b);
+  open(`${from?`<button class="pen" aria-label="Назад" onclick="dayCard('${from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
+  <label>Ученик<select id="fs" ${l?"disabled":""} onchange="$('#fn').style.display=this.value=='new'?'block':'none'">${S.filter(s=>!s.deleted||(l&&l.sid==s.id)).map(s=>`<option value="${s.id}" ${l&&l.sid==s.id?"selected":""}>${esc(s.name)}</option>`).join("")}<option value="new">＋ Новый ученик…</option></select></label>
   <input id="fn" placeholder="Имя нового ученика" style="display:none;margin-bottom:10px">
   <label>Дата<input type="date" id="fdte" value="${l?l.day:day||iso(T)}"></label>
   <label>Время начала (любые минуты)<input type="time" id="ft" step="60" value="${l?l.time:"08:00"}" oninput="upd()"></label>
-  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${[30,45,60,90,120].map(d=>`<button class="pill ${d==fd?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
-  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" onclick="save(${id||0})">Сохранить</button>${l?(l.rep?`<button class="btn dng" onclick="del('/api/lesson/stop',${id},'Убрать это и все следующие занятия серии?')">Прекратить серию</button>`:`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="del('/api/lesson/cancel',${id},'Отменить занятие?')">${l.rep?"Отменить только это":"Отменить занятие"}</button>`:""}</div>`);
+  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==fd?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
+  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" onclick="save(${id||0})">Сохранить</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${id})">Отменить урок</button>`:""}</div>`);
   upd();
 }
 function setD(d){fd=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
@@ -188,55 +269,301 @@ async function save(id){
   if(!r)return;close_();ws=mon(new Date(day+"T00:00"));await load();
   if(r.skipped)toast("Часть повторов не поставлена — время занято: "+r.skipped)
 }
+function cancelL(id){const l=L.find(x=>x.id==id);
+  if(!l.rep)return del("/api/lesson/cancel",id,"Отменить урок?");
+  tg.showPopup({title:"Отменить урок",message:"Это регулярное занятие. Отменить только этот урок или этот и все последующие уроки на это время с данным учеником?",
+    buttons:[{id:"one",type:"default",text:"Только этот урок"},{id:"all",type:"destructive",text:"Этот и все последующие"},{type:"cancel"}]},
+    async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
 let pdfStart="";
 async function sharePdf(){const r=await fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:{"X-Init":tg.initData}});
   const f=r.ok&&new File([await r.blob()],"raspisanie_"+pdfStart+".pdf",{type:"application/pdf"});
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){if(e&&e.name=="AbortError")return}}
   if(await api("/api/week/send",{start:pdfStart}))tg.showAlert("PDF отправлен в чат с ботом. Перешлите файл в нужный мессенджер.")}
-function payEdit(id){const p=P.find(x=>x.id==id);open(`<h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
+/* Распределение оплат: все оплаты ученика идут по порядку и закрывают его занятия от старых к новым (каждое по своей цене).
+   Результат для каждой оплаты: на какие занятия она пошла, полностью или частично; остаток — предоплата без занятия. */
+function allocate(sid){
+  const s=S.find(x=>x.id==sid),ls=L.filter(l=>l.sid==sid&&(l.price||0)>0).sort((a,b)=>(a.day+a.time<b.day+b.time?-1:1)),rem=ls.map(l=>l.price);
+  const ps_=P.filter(p=>p.sid==sid).sort((a,b)=>a.at-b.at||a.id-b.id),res={};
+  let older=Math.max(0,(s.paid||0)-ps_.reduce((a,p)=>a+p.amt,0));      // оплаты старше загруженных (сервер отдаёт последние 200)
+  for(let i=0;i<ls.length&&older>0;i++){const t=Math.min(older,rem[i]);rem[i]-=t;older-=t}
+  ps_.forEach(p=>{let left=p.amt;const list=[];
+    for(let i=0;i<ls.length&&left>0;i++){if(rem[i]<=0)continue;const t=Math.min(left,rem[i]);rem[i]-=t;left-=t;list.push({l:ls[i],take:t,covered:ls[i].price-rem[i]})}
+    res[p.id]={list,left}});
+  return res}
+function payCard(id,isNew){
+  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at);
+  const G={d:[],t:[],f:[]};
+  a.list.forEach(x=>{const k=x.l.day<pd?"d":x.l.day==pd?"t":"f",full=x.covered>=x.l.price;
+    G[k].push(`<div class="row" style="cursor:default;align-items:flex-start"><span class="info"><b>${dmy2(x.l.day)}</b>${full?"":`<small style="display:block">${k=="f"?"Частичная предоплата":"Частичная оплата"}: ${money(x.covered)} из ${money(x.l.price)}</small>`}</span><b>${money(x.l.price)}</b></div>`)});
+  const sec=(t,k,extra="")=>G[k].length||extra?`<h2>${t}</h2>${G[k].join("")}${extra}`:"";
+  const left=a.left>0?`<div class="row" style="cursor:default;align-items:flex-start"><span class="info"><b>Остаток без занятия</b><small style="display:block">Пока нет занятий, на которые его можно списать — останется предоплатой</small></span><b class="pos">+${money(a.left)}</b></div>`:"";
+  const body=sec("Долги","d")+sec("Сегодня","t")+sec("Предоплаты","f",left)||'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
+  const bl=s.b==0?money(0):(s.b>0?"+":"−")+money(s.b);
+  open(`<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${isNew?"✅ Пополнение прошло успешно":esc(s.name)}</h3><p class="sub" style="margin:0">${isNew?esc(s.name):"Оплата · "+when(p.at)}</p></div></div>
+  <div class="stat" style="margin:14px 0 4px"><small>Сумма пополнения</small><b class="pos" style="font-size:24px">+${money(p.amt)}</b></div>
+  <h2 style="margin-top:14px">На что распределилась сумма</h2>${body}
+  <div class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}">Баланс: ${bl}</div>
+  <p class="gcap">${s.b<0?"Есть долги":s.b>0?"Есть предоплаты":"Все оплачено, долгов нет"}</p>
+  <div class="btns">${isNew?'<button class="btn pri" onclick="close_()">Готово</button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div>`)}
+function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-label="Назад" onclick="payCard(${id})">‹</button><h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
 function payDel(id){tg.showConfirm("Удалить платёж? Баланс пересчитается.",async ok=>{if(ok&&await api("/api/payment/delete",{id})){close_();load()}})}
 
 /* ---------- Оплаты ---------- */
 const PAL=["#1f7a6d","#d0813a","#5b6fd6","#c5486b","#7a9a2e","#8a5fb5"];
+let ps="",pst="all",pd1="",pd2="",pty="all",cal;   // поиск, (резерв), период, тип записи, состояние календаря
+/* Долги: оплата закрывает занятия от старых к новым; не закрытая часть прошедшего занятия — запись «долг» на дату занятия */
+function debtEntries(){const out=[];
+  S.forEach(s=>{let rem=s.paid||0;
+    L.filter(l=>l.sid==s.id&&l.past&&(l.price||0)>0).sort((a,b)=>(a.day+a.time<b.day+b.time?-1:1)).forEach(l=>{
+      if(rem>=l.price){rem-=l.price;return}
+      out.push({k:"debt",sid:s.id,amt:l.price-rem,at:new Date(l.day+"T"+l.time),lid:l.id});rem=0})});
+  return out}
+function allEntries(){return P.map(p=>({k:"pay",id:p.id,sid:p.sid,amt:p.amt,at:p.at})).concat(debtEntries())}
+function qMatch(e,q){
+  const toks=norm(q.replace(/(\d)\s+(?=\d)/g,"$1")).split(/\s+/).filter(Boolean),nm=norm(stName(e.sid));
+  return toks.every(t=>nm.includes(t)||(/^\d+$/.test(t)&&String(e.amt).includes(t)))}
+function payFeedList(){
+  const f=allEntries().filter(e=>(pty=="all"||e.k==pty)&&(!pd1||(iso(e.at)>=pd1&&iso(e.at)<=pd2))&&(!ps.trim()||qMatch(e,ps))).sort((a,b)=>b.at-a.at);
+  if(!f.length)return '<p class="empty">Записей по этому фильтру нет.</p>';
+  return f.map(e=>{const s=S.find(x=>x.id==e.sid);
+    return e.k=="pay"?`<div class="feed" onclick="payCard(${e.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b></div>`
+      :`<div class="feed" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг за занятие · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
+function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);const n=$("#pdr");if(n)n.innerHTML=pdrHtml()}
+const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
+const pdrHtml=()=>pd1?`<span>📅 ${pd1==pd2?dmy2(pd1):dmy2(pd1)+" – "+dmy2(pd2)}</span><button onclick="pd1=pd2='';payUpd()">✕ Сбросить</button>`:"";
+function payFeed(){
+  return `<div class="sbar"><input id="psr" class="srch" type="search" placeholder="🔍 Имя, фамилия или сумма" value="${esc(ps)}" oninput="ps=this.value;payUpd()">
+  <button class="ib ${pd1?"on":""}" id="pcal" onclick="payCal()" aria-label="Фильтр по дате"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button>
+  <label class="ib ${pty!="all"?"on":""}" id="ptf" title="Тип записи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+    <select onchange="pty=this.value;payUpd();$('#ptf').classList.toggle('on',pty!='all')" aria-label="Тип записи"><option value="all" ${pty=="all"?"selected":""}>Все записи</option><option value="pay" ${pty=="pay"?"selected":""}>Оплата</option><option value="debt" ${pty=="debt"?"selected":""}>Долг</option></select></label>
+  <button class="ib acc" onclick="payNew()" aria-label="Новая оплата">＋</button></div>
+  <div class="pdr" id="pdr">${pdrHtml()}</div><div id="flist">${payFeedList()}</div>`}
+
+/* ---- календарь: одна дата или период (две даты подряд) ---- */
+function payCal(){const base=pd1?new Date(pd1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:pd1,b:pd1==pd2?"":pd2,t:"p"};calShow()}
+function dashCal(){const on=dp=="c"&&dc1,base=on?new Date(dc1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:on?dc1:"",b:on&&dc1!=dc2?dc2:"",t:"d"};calShow()}
+function calShow(){
+  const y=cal.m.getFullYear(),m=cal.m.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),has=new Set(allEntries().map(e=>iso(e.at)));
+  const lo=cal.a,hi=cal.b||cal.a;let g=WD.map(d=>`<i>${d}</i>`).join("")+"<span></span>".repeat(off);
+  for(let d=1;d<=n;d++){const k=`${y}-${pad(m+1)}-${pad(d)}`,ed=k==lo||k==hi,inr=lo&&k>lo&&k<hi;
+    g+=`<button class="cd ${ed?"sel":inr?"rng":""} ${k==iso(T)?"tdy":""}" onclick="calPick('${k}')">${d}${has.has(k)?'<u></u>':""}</button>`}
+  open(`<h3>${cal.t=="d"?"Выбор периода":"Фильтр по дате"}</h3><p class="sub">${!lo?"Нажмите дату или две даты для периода":lo==hi?dmy2(lo):dmy2(lo)+" – "+dmy2(hi)}</p>
+  <div class="bar"><button class="pill" onclick="cal.m=new Date(${y},${m-1},1);calShow()">‹</button><b class="ttl">${cal.m.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="cal.m=new Date(${y},${m+1},1);calShow()">›</button></div>
+  <div class="g calg">${g}</div>
+  <div class="btns"><button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Применить</button><button class="btn" onclick="calReset()">${cal.t=="d"?"Текущая неделя":"Сбросить"}</button></div>`)}
+function calPick(k){if(!cal.a||cal.b){cal.a=k;cal.b=""}else if(k<cal.a){cal.b=cal.a;cal.a=k}else cal.b=k;calShow()}
+function calApply(){if(cal.t=="d"){dp="c";dc1=cal.a;dc2=cal.b||cal.a;dsel=-1;dpi=-1;close_();render();return}pd1=cal.a;pd2=cal.b||cal.a;close_();payUpd()}
+function calReset(){if(cal.t=="d"){dp="w";dsel=-1;dpi=-1;close_();render();return}pd1=pd2='';close_();payUpd()}
+/* ---------- Дашборд ---------- */
+let dp="w",dc1="",dc2="",dsel=-1,dpi=-1,fp="m";   // dp: w/m/q/y — период, c — свои даты (dc1…dc2)
+const kfmt=v=>v>=1000?(v/1000).toFixed(1).replace(".",",").replace(/,0$/,"")+" тыс.":String(Math.round(v));
+const nice=v=>{const p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return(f<=1?1:f<=2?2:f<=5?5:10)*p};
+const plu=(n,a,b,c)=>{const m=n%100,k=n%10;return m>10&&m<20?c:k==1?a:k>1&&k<5?b:c};
+const fsh=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"short"}).replace(".","");
+function setDp(k){dp=k;dsel=-1;dpi=-1;render()}
+function setFp(k){fp=k;dashUpd()}
+function dashUpd(){const e=$("#dash");e.className="";e.innerHTML=payDash()}
+function payDash(){
+  const y=T.getFullYear(),m=T.getMonth();
+  const PR={w:[w0,addD(w0,7)],m:[new Date(y,m,1),new Date(y,m+1,1)],q:[new Date(y,m-2,1),new Date(y,m+1,1)],y:[new Date(y,m-11,1),new Date(y,m+1,1)]};
+  if(dp=="c"&&dc1)PR.c=[new Date(dc1+"T00:00"),addD(new Date(dc2+"T00:00"),1)];
+  const [a,b]=PR[dp]||PR.w;
+  const inp=P.filter(p=>p.at>=a&&p.at<b),held=L.filter(l=>l.past&&l.day>=iso(a)&&l.day<iso(b)).length;
+  const sum=l=>l.reduce((s,p)=>s+p.amt,0),tot=sum(inp);
+  const debtors=act().filter(s=>s.b<0).sort((x,z)=>x.b-z.b),pre=act().filter(s=>s.b>0);
+  const debtSum=-debtors.reduce((s,x)=>s+x.b,0),preSum=pre.reduce((s,x)=>s+x.b,0);
+  const w1=addD(w0,7),sumW=sum(P.filter(p=>p.at>=w0&&p.at<w1)),lessons=S.reduce((s,x)=>s+(x.done||0),0);
+  const stp=id=>(S.find(s=>s.id==id)||{}).price||0,lp=l=>l.price!=null?l.price:stp(l.sid);
+  const mk=iso(T).slice(0,7),fut=L.filter(l=>!l.past&&l.day.slice(0,7)==mk),exp=fut.reduce((s,l)=>s+lp(l),0);
+  /* --- прогноз по расписанию на выбранный будущий период --- */
+  const FR={w:[T,addD(mon(T),7),"Неделя"],m:[T,new Date(y,m+1,1),"Месяц"],n:[new Date(y,m+1,1),new Date(y,m+2,1),"След. месяц"],q:[T,new Date(y,m+3,1),"3 месяца"]};
+  const [fa,fb]=FR[fp],fka=iso(fa),fkb=iso(fb),avail={};S.forEach(s_=>avail[s_.id]=Math.max(s_.b,0));   // предоплата сначала гасит ближайшие занятия
+  let rev=0,cov=0,hrs=0,fn=0;const fS={},fB={},wk0=mon(fa);
+  L.filter(l=>!l.past).sort((x,z)=>(x.day+x.time<z.day+z.time?-1:1)).forEach(l=>{const pr=lp(l),c=Math.min(avail[l.sid]||0,pr);avail[l.sid]=(avail[l.sid]||0)-c;
+    if(l.day<fka||l.day>=fkb)return;rev+=pr;cov+=c;hrs+=(l.dur||60)/60;fn++;
+    const o=fS[l.sid]||(fS[l.sid]={v:0,n:0});o.v+=pr;o.n++;
+    const bi=fp=="w"?Math.round((new Date(l.day+"T00:00")-fa)/864e5):Math.floor(Math.round((new Date(l.day+"T00:00")-wk0)/864e5)/7);fB[bi]=(fB[bi]||0)+pr});
+  const unc=rev-cov,fcMax=rev+debtSum;
+  const fN=fp=="w"?Math.round((fb-fa)/864e5):Math.ceil(Math.round((fb-wk0)/864e5)/7),fv2=[...Array(fN)].map((_,i)=>fB[i]||0),fmx=Math.max(...fv2,1),fpk=fv2.indexOf(Math.max(...fv2));
+  const fLab=i=>fp=="w"?WD[(fa.getDay()+6+i)%7]:(fN>8&&i%3?"":fsh(addD(wk0,i*7)));
+  const fbars=fv2.map((v,i)=>`<div><em style="min-height:11px">${v>0&&(fN<=8||i==fpk)?kfmt(v):""}</em><i style="height:${v>0?Math.max(4,v/fmx*62):2}px;${v>0?"":"background:var(--ln)"}"></i><em>${fLab(i)}</em></div>`).join("");
+  const fRows=Object.entries(fS).sort((x,z)=>z[1].v-x[1].v),far=fb>addD(T,84);
+  const priced=L.map(l=>({p:lp(l),d:l.dur||60})).filter(x=>x.p>0),sp=priced.reduce((s,x)=>s+x.p,0);
+  const avgL=priced.length?Math.round(sp/priced.length):0,avgH=priced.length?Math.round(sp/(priced.reduce((s,x)=>s+x.d,0)/60)):0;
+  const spent=S.reduce((s,x)=>s+(x.spent!=null?x.spent:(x.done||0)*(x.price||0)),0),rate=spent>0?Math.max(0,Math.min(100,Math.round((1-debtSum/spent)*100))):null;
+
+  /* --- платежи по ученикам (для кольца и выводов) --- */
+  const bySt={};inp.forEach(p=>bySt[p.sid]=(bySt[p.sid]||0)+p.amt);
+  let parts=Object.entries(bySt).map(([id,v])=>({id:+id,v,name:stName(+id)})).sort((x,z)=>z.v-x.v);
+  if(parts.length>6){const rest=parts.slice(5);parts=parts.slice(0,5).concat({id:-1,v:sum(rest.map(r=>({amt:r.v}))),name:"Остальные ("+rest.length+")"})}
+
+  /* --- столбцы: по дням / неделям / месяцам --- */
+  const nd=Math.round((b-a)/864e5),st0=mon(a),be=addD(b,-1),dd=x=>Math.round((new Date(x.getFullYear(),x.getMonth(),x.getDate())-st0)/864e5),da=x=>Math.round((new Date(x.getFullYear(),x.getMonth(),x.getDate())-a)/864e5);
+  let n,idx,lab,tip,bs;
+  if(nd<=62){n=nd;idx=p=>da(p.at);bs=i=>addD(a,i);const sp_=Math.ceil(n/8);lab=i=>n<=7?WD[(a.getDay()+6+i)%7]:(i%sp_==0?bs(i).getDate():"");tip=i=>bs(i).toLocaleDateString("ru-RU",{day:"numeric",month:"long"})}
+  else if(nd<=190){n=Math.ceil((dd(be)+1)/7);idx=p=>Math.floor(dd(p.at)/7);bs=i=>addD(st0,i*7);lab=i=>i%3==0?fsh(bs(i)):"";tip=i=>fsh(bs(i))+" – "+fsh(addD(bs(i),6))}
+  else{n=(be.getFullYear()-a.getFullYear())*12+be.getMonth()-a.getMonth()+1;idx=p=>(p.at.getFullYear()-a.getFullYear())*12+p.at.getMonth()-a.getMonth();bs=i=>new Date(a.getFullYear(),a.getMonth()+i,1);const sp_=Math.ceil(n/12);lab=i=>i%sp_==0?bs(i).toLocaleDateString("ru-RU",{month:"short"}).replace(".",""):"";tip=i=>bs(i).toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}
+  const vals=Array(n).fill(0),fv=Array(n).fill(0);inp.forEach(p=>{const i=idx(p);if(i>=0&&i<n)vals[i]+=p.amt});
+  L.filter(l=>!l.past).forEach(l=>{const at=new Date(l.day+"T00:00");if(at<a||at>=b)return;const i=idx({at});if(i>=0&&i<n)fv[i]+=lp(l)});
+  const mx=nice(Math.max(...vals.map((v,i)=>v+fv[i]),1)),pk=vals.indexOf(Math.max(...vals));
+  const W=340,H=180,pl=34,pr=4,pt=16,pbm=22,bw=(W-pl-pr)/n,rw=Math.max(3,Math.min(18,bw*.62)),Y=v=>pt+(H-pt-pbm)*(1-v/mx);
+  let bars="",hits="";const fsum=fv.reduce((x,z)=>x+z,0);
+  vals.forEach((v,i)=>{const x=pl+i*bw+(bw-rw)/2,h=Math.max(2,(H-pt-pbm)*v/mx),isF=bs(i)>T,op=dsel>=0?(i==dsel?1:.3):(isF?.35:1);
+    bars+=v>0?`<rect class="bx" style="--i:${i}" x="${x.toFixed(1)}" y="${(H-pbm-h).toFixed(1)}" width="${rw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(rw/2,4).toFixed(1)}" fill="url(#gb)" opacity="${op}"/>`
+      :`<rect x="${x.toFixed(1)}" y="${H-pbm-2}" width="${rw.toFixed(1)}" height="2" rx="1" fill="var(--ln)" opacity="${isF?.4:1}"/>`;
+    if(fv[i]>0){const gh=(H-pt-pbm)*fv[i]/mx,gy=H-pbm-(v>0?h:0)-gh;bars+=`<rect x="${x.toFixed(1)}" y="${gy.toFixed(1)}" width="${rw.toFixed(1)}" height="${gh.toFixed(1)}" rx="${Math.min(rw/2,4).toFixed(1)}" fill="var(--acc)" fill-opacity=".14" stroke="var(--acc)" stroke-dasharray="3 2" stroke-width="1" opacity="${dsel>=0&&i!=dsel?.3:1}"/>`}
+    hits+=`<rect x="${(pl+i*bw).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H-pt-pbm}" fill="transparent" onclick="dsel=${i==dsel?-1:i};dashUpd()"/>`});
+  const pkLbl=dsel<0&&vals[pk]>0?`<text class="ax" x="${(pl+pk*bw+bw/2).toFixed(1)}" y="${(Y(vals[pk])-5).toFixed(1)}" text-anchor="middle" style="fill:var(--tx);font-weight:700">${kfmt(vals[pk])}</text>`:"";
+  const grid=[0,.5,1].map(f=>`<line x1="${pl}" x2="${W-pr}" y1="${Y(mx*f).toFixed(1)}" y2="${Y(mx*f).toFixed(1)}" stroke="var(--ln)" ${f?'stroke-dasharray="3 4"':""}/><text class="ax" x="${pl-5}" y="${(Y(mx*f)+3).toFixed(1)}" text-anchor="end">${f?kfmt(mx*f):"0"}</text>`).join("");
+  const xl=vals.map((_,i)=>lab(i)?`<text class="ax" x="${(pl+i*bw+bw/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${lab(i)}</text>`:"").join("");
+  const barCap=dsel>=0?`<b>${tip(dsel)}</b> · ${money(vals[dsel])}${fv[dsel]>0?` <span style="opacity:.8">+ ${money(fv[dsel])} по расписанию</span>`:""}`:vals[pk]>0?`Пик: <b>${tip(pk)}</b>`:"Оплат за период нет";
+
+  /* --- кольцо --- */
+  const R=64,C=2*Math.PI*R;let off=0,ring="",leg="";
+  parts.forEach((p,i)=>{const f=p.v/tot,len=f*C,gap=parts.length>1?3:0,c=p.id<0?"#9aa0a6":PAL[i%PAL.length],on=dpi==i;p.c=c;
+    ring+=`<circle cx="100" cy="100" r="${R}" fill="none" stroke="${c}" stroke-width="${on?28:22}" stroke-dasharray="${Math.max(.1,len-gap).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 100 100)" opacity="${dpi>=0&&!on?.3:1}" onclick="dpi=${on?-1:i};dashUpd()" style="cursor:pointer"/>`;off+=len;
+    leg+=`<div class="lg ${on?"on":""}" onclick="dpi=${on?-1:i};dashUpd()"><span class="dot" style="background:${c}"></span><span class="hbn">${esc(p.name)}</span><span class="lgp">${Math.round(f*100)}%</span><b>${money(p.v)}</b></div>`});
+  const sel=dpi>=0&&parts[dpi],cm=sel?money(sel.v):money(tot);
+  const center=`<text x="100" y="92" text-anchor="middle" font-size="11" fill="var(--hint)">${sel?esc(sel.name.split(" ")[0]):"Всего"}</text><text x="100" y="${sel?112:113}" text-anchor="middle" font-size="${cm.length>9?12.5:15}" font-weight="800" fill="var(--tx)">${cm}</text>${sel?`<text x="100" y="128" text-anchor="middle" font-size="11" fill="var(--hint)">${Math.round(sel.v/tot*100)}% выручки</text>`:""}`;
+
+  /* --- сборка --- */
+  const HL=dp=="w"?"текущая неделя, "+fsh(a)+" – "+fsh(be):dp=="m"?T.toLocaleDateString("ru-RU",{month:"long"}):dp=="q"?"последние 3 месяца":dp=="y"?"последние 12 месяцев":(dc1==dc2?dmy2(dc1):dmy2(dc1)+" – "+dmy2(dc2));
+  const dc=rate==null?"":rate>=90?"var(--grn)":rate>=70?"#d0913a":"var(--red)";
+  let h=`<div class="sbar"><select class="srch" aria-label="Период" onchange="setDp(this.value)">${[["w","Текущая неделя"],["m","Месяц"],["q","3 месяца"],["y","Год"]].map(([k,t])=>`<option value="${k}" ${dp==k?"selected":""}>${t}</option>`).join("")}${dp=="c"?`<option value="c" selected>${dc1==dc2?dmy2(dc1):dmy2(dc1)+" – "+dmy2(dc2)}</option>`:""}</select>
+  <button class="ib ${dp=="c"?"on":""}" onclick="dashCal()" aria-label="Выбрать даты"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button></div>
+  <div class="hero"><small>Выручка · ${HL}</small><div class="big">${money(tot)}</div>
+    <div class="hm"><div><b>${held}</b><span>${plu(held,"занятие","занятия","занятий")} проведено</span></div><div><b>${inp.length}</b><span>${plu(inp.length,"оплата","оплаты","оплат")}</span></div><div><b>${inp.length?money(Math.round(tot/inp.length)):"—"}</b><span>средний чек</span></div></div></div>
+  <div class="kp3" style="grid-template-columns:1fr 1fr"><div class="kp" style="--kc:var(--red);cursor:pointer" onclick="debtPop()"><small>Долги</small><b class="neg">${money(debtSum)}</b><em>${debtors.length} ${plu(debtors.length,"ученик","ученика","учеников")}</em></div>
+    <div class="kp" style="--kc:var(--grn);cursor:pointer" onclick="prePop()"><small>Предоплаты</small><b class="pos">${money(preSum)}</b><em>${pre.length} ${plu(pre.length,"ученик","ученика","учеников")}</em></div></div>
+  <div class="pc"><div class="pch"><h3>Динамика оплат</h3><span>${barCap}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" role="img" aria-label="Динамика оплат"><defs><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--acc)"/><stop offset="1" style="stop-color:var(--acc);stop-opacity:.45"/></linearGradient></defs>${grid}${bars}${pkLbl}${xl}${hits}</svg>${fsum>0?`<p class="fcap"><i></i>Пунктир — запланированные занятия: ещё ${money(fsum)}</p>`:""}</div>
+  <div class="pc"><div class="pch"><h3>Кто платит</h3><span>${tot?"нажмите на сектор":""}</span></div>${tot?`<svg class="dn" viewBox="0 0 200 200" style="width:220px;display:block;margin:0 auto 8px" role="img" aria-label="Оплаты по ученикам">${ring}${center}</svg>${leg}`:'<p class="empty">Оплат за период нет.</p>'}</div>
+  <div class="pc"><div class="pch"><h3>Долги</h3><span>${rate==null?"":`оплачено <b>${rate}%</b> проведённого`}</span></div>
+    ${rate==null?"":`<div class="dis"><div class="tr"><i style="width:${rate}%;--dc:${dc}"></i></div></div>`}
+    ${debtors.length?debtors.slice(0,5).map(s=>`<div class="dr" onclick="card(${s.id})">${av(s,"sm")}<div><b class="hbn" style="display:block">${esc(s.name)}</b><div class="bt"><i style="width:${Math.max(6,s.b/debtors[0].b*100)}%"></i></div></div><div style="text-align:right"><b class="neg">${money(s.b)}</b>${s.price>0?`<small style="display:block;color:var(--hint);font-size:11.5px">≈ ${Math.ceil(-s.b/s.price)} ${plu(Math.ceil(-s.b/s.price),"занятие","занятия","занятий")}</small>`:""}</div></div>`).join(""):'<p class="empty">Долгов нет 🎉</p>'}</div>
+  <div class="pc"><div class="pch"><h3>Средняя стоимость</h3><span>по ${priced.length} ${plu(priced.length,"занятию","занятиям","занятиям")}</span></div><div class="avg"><div class="avgc"><span>За урок</span><b>${avgL?money(avgL):"—"}</b></div><div class="avgc"><span>За час</span><b>${avgH?money(avgH):"—"}</b></div></div></div>
+  ${P.length>=200?'<p class="note">Учтены последние 200 оплат — данные за дальние периоды могут быть неполными.</p>':""}
+  <div class="pc"><div class="pch"><h3>Прогноз по расписанию</h3><span>${fsh(fa)} – ${fsh(addD(fb,-1))}</span></div>
+    <div class="dseg">${Object.entries(FR).map(([k,v])=>`<button class="${fp==k?"on":""}" onclick="setFp('${k}')">${v[2]}</button>`).join("")}</div>
+    ${fn?`<div class="fc">≈ ${money(rev)}</div><p class="fsub">${fn} ${plu(fn,"занятие","занятия","занятий")} · ${hrs%1?hrs.toFixed(1).replace(".",","):hrs} ч${fn?` · ≈ ${money(Math.round(rev/fn))} за занятие`:""}</p>
+    <div class="fbars">${fbars}</div>
+    <div class="fb"><i class="r" style="width:${cov/Math.max(fcMax,1)*100}%"></i><i class="e" style="width:${unc/Math.max(fcMax,1)*100}%"></i><i class="d" style="width:${debtSum/Math.max(fcMax,1)*100}%"></i></div>
+    <div class="fl"><span><i class="r"></i>Уже оплачено наперёд</span><b>${money(cov)}</b></div>
+    <div class="fl"><span><i class="e"></i>Ждём оплату</span><b>${money(unc)}</b></div>
+    ${debtSum>0?`<div class="fl"><span><i class="d"></i>Старые долги, если вернут</span><b>+${money(debtSum)}</b></div>`:""}
+    <div class="fh">По ученикам</div>${fRows.slice(0,5).map(([id,o])=>{const st=S.find(x=>x.id==id);return `<div class="dr" onclick="card(${id})">${av(st,"sm")}<div><b class="hbn" style="display:block">${esc(st.name)}</b><small style="color:var(--hint);font-size:12px">${o.n} ${plu(o.n,"занятие","занятия","занятий")}</small></div><b>${money(o.v)}</b></div>`}).join("")}${fRows.length>5?`<p class="note" style="margin:6px 0 0">и ещё ${fRows.length-5} ${plu(fRows.length-5,"ученик","ученика","учеников")}</p>`:""}`
+    :'<p class="empty">На этот период занятий в расписании нет.</p>'}
+    <p class="note" style="margin:10px 0 0;text-align:left">Сумма — по цене занятий из расписания, без учёта переносов. Предоплаты сначала закрывают ближайшие занятия.${far?" Регулярные занятия раскладываются на 12 недель вперёд — дальше прогноз может быть неполным.":""}</p></div>`;
+  return h}
+function debtPop(){
+  const by={};debtEntries().filter(e=>!(S.find(x=>x.id==e.sid)||{}).deleted).forEach(e=>(by[e.sid]=by[e.sid]||[]).push(e));
+  const sts=Object.keys(by).map(id=>({s:S.find(x=>x.id==id),l:by[id].sort((x,z)=>z.at-x.at),sum:by[id].reduce((t,e)=>t+e.amt,0)})).sort((x,z)=>z.sum-x.sum),tot=sts.reduce((t,x)=>t+x.sum,0);
+  open(`<h3>Долги</h3><p class="sub">${sts.length?`${sts.length} ${plu(sts.length,"ученик","ученика","учеников")} · всего ${money(tot)}`:"Долгов нет"}</p>
+  ${sts.map(x=>`<div class="row" onclick="card(${x.s.id})" style="margin-top:8px">${av(x.s,"sm")}<span class="info"><b>${esc(x.s.name)}</b><small>${x.l.length} ${plu(x.l.length,"занятие","занятия","занятий")}</small></span><b class="neg">${money(x.sum)}</b></div>${x.l.map(e=>`<div class="row" style="cursor:default;margin-left:18px;padding:7px 12px"><span class="info"><small>Занятие · ${dmy2(iso(e.at))}</small></span><b class="neg" style="font-size:14px">${money(e.amt)}</b></div>`).join("")}`).join("")||'<p class="empty">Долгов нет 🎉</p>'}`)}
+function prePop(){
+  const sts=act().filter(s=>s.b>0).sort((x,z)=>z.b-x.b).map(s=>{let av_=s.b;const items=[];
+    L.filter(l=>l.sid==s.id&&!l.past&&(l.price||0)>0).sort((x,z)=>(x.day+x.time<z.day+z.time?-1:1)).forEach(l=>{if(av_<=0)return;const c=Math.min(av_,l.price);av_-=c;items.push({l,c})});
+    return{s,items,left:av_}}),tot=sts.reduce((t,x)=>t+x.s.b,0);
+  open(`<h3>Предоплаты</h3><p class="sub">${sts.length?`${sts.length} ${plu(sts.length,"ученик","ученика","учеников")} · всего ${money(tot)}`:"Предоплат нет"}</p>
+  ${sts.map(x=>`<div class="row" onclick="card(${x.s.id})" style="margin-top:8px">${av(x.s,"sm")}<span class="info"><b>${esc(x.s.name)}</b><small>наперёд</small></span><b class="pos">+${money(x.s.b)}</b></div>${x.items.map(({l,c})=>`<div class="row" style="cursor:default;margin-left:18px;padding:7px 12px;align-items:flex-start"><span class="info"><small>Урок · ${dmy2(l.day)}, ${l.time}</small>${c<l.price?`<small style="display:block">Частичная предоплата: ${money(c)} из ${money(l.price)}</small>`:""}</span><b style="font-size:14px">${money(l.price)}</b></div>`).join("")}${x.left>0?`<div class="row" style="cursor:default;margin-left:18px;padding:7px 12px"><span class="info"><small>Остаток без занятия</small></span><b class="pos" style="font-size:14px">+${money(x.left)}</b></div>`:""}`).join("")||'<p class="empty">Предоплат нет.</p>'}`)}
 function pay(){
-  const st=S.map(bal),debt=st.filter(s=>s.b<0),pre=st.filter(s=>s.b>0);
-  const ids=pf=="debt"?new Set(debt.map(s=>s.id)):pf=="pre"?new Set(pre.map(s=>s.id)):null;
-  const feed=P.filter(p=>!ids||ids.has(p.sid)).sort((a,b)=>b.at-a.at);
-  const month=P.filter(p=>p.at.getMonth()==T.getMonth()).reduce((a,p)=>a+p.amt,0);
-  const chip=(k,t)=>`<button class="pill ${pf==k?"on":""}" onclick="pf='${k}';render()">${t}</button>`;
-  let h=`<div class="stats"><div class="stat"><small>За месяц</small><b>${money(month)}</b></div><div class="stat"><small>Наперёд</small><b class="pos">${money(pre.reduce((a,s)=>a+s.b,0))}</b></div><div class="stat"><small>Долги</small><b class="neg">${money(-debt.reduce((a,s)=>a+s.b,0))}</b></div></div>
-  <div class="bar"><div class="chips">${chip("all","Все")}${chip("debt","Должники ("+debt.length+")")}${chip("pre","Предоплата ("+pre.length+")")}</div><button class="pill on" onclick="pv='${pv=="feed"?"chart":"feed"}';render()">${pv=="feed"?"📊 График":"☰ Лента"}</button></div>`;
-  if(!feed.length)return h+'<p class="empty">Оплат по этому фильтру нет.</p>';
-  if(pv=="feed")return h+feed.map(p=>{const s=bal(S.find(x=>x.id==p.sid));
-    return `<div class="feed" onclick="payEdit(${p.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>${when(p.at)}</small></span><b class="pos">+${money(p.amt)}</b></div>`}).join("");
-  const sums={};feed.forEach(p=>sums[p.sid]=(sums[p.sid]||0)+p.amt);
-  const parts=Object.entries(sums).map(([id,v])=>({id:+id,v})).sort((a,b)=>b.v-a.v),tot=parts.reduce((a,p)=>a+p.v,0);
-  let a=-Math.PI/2,svg="";
-  parts.forEach((p,i)=>{const f=p.v/tot,b=a+f*2*Math.PI,c=PAL[i%PAL.length],X=(r,t)=>(100+r*Math.cos(t)).toFixed(2),Y=(r,t)=>(100+r*Math.sin(t)).toFixed(2);
-    svg+=f>.999?`<circle cx="100" cy="100" r="90" fill="${c}"/>`:`<path d="M100 100L${X(90,a)} ${Y(90,a)}A90 90 0 ${f>.5?1:0} 1 ${X(90,b)} ${Y(90,b)}Z" fill="${c}" stroke="var(--bg)" stroke-width="2"/>`;p.c=c;a=b});
-  return h+`<svg viewBox="0 0 200 200" style="width:220px;display:block;margin:6px auto 14px" role="img" aria-label="Оплаты по ученикам">${svg}<circle cx="100" cy="100" r="52" fill="var(--bg)"/><text x="100" y="98" text-anchor="middle" font-size="11" fill="var(--hint)">Всего</text><text x="100" y="116" text-anchor="middle" font-size="14" font-weight="700" fill="var(--tx)">${money(tot)}</text></svg>`+
-    parts.map(p=>`<div class="feed" style="cursor:default"><span style="width:14px;height:14px;border-radius:4px;background:${p.c};flex:none"></span><span class="info"><b>${esc(stName(p.id))}</b></span><span>${Math.round(p.v/tot*100)}%</span><b>${money(p.v)}</b></div>`).join("");
+  return `<div class="seg"><button class="${pv=="feed"?"on":""}" onclick="pv='feed';render()">Лента</button><button class="${pv=="dash"?"on":""}" onclick="pv='dash';render()">Дашборд</button></div>`+(pv=="feed"?payFeed():`<div id="dash" class="an">${payDash()}</div>`)}
+
+/* ---------- Новая оплата (те же быстрые суммы, что и в боте: 3 000 / 5 000 / 10 000, либо ручной ввод) ---------- */
+const PAY_QUICK=[3000,5000,10000];
+function fabGo(){tab=="p"?payNew():form()}
+function payNew(sid){
+  if(!act().length)return toast("Сначала добавьте ученика");
+  const cur_=sid||(pst!="all"?pst:act()[0].id);
+  open(`<h3>Новая оплата</h3><p class="sub">Выберите ученика и сумму</p>
+  <label>Ученик<select id="pns">${act().map(s=>`<option value="${s.id}" ${s.id==cur_?"selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
+  <label>Быстрая сумма</label><div class="chips" style="margin-bottom:10px">${PAY_QUICK.map(a=>`<button class="pill" onclick="payAdd(${a})">${a.toLocaleString("ru-RU")}</button>`).join("")}</div>
+  <label>Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500"></label>
+  <div class="btns"><button class="btn pri" onclick="payAdd()">Внести оплату</button></div>`);
+}
+async function payAdd(a){
+  const sid=+$("#pns").value,v=a||parseInt($("#pna").value,10);
+  if(!v||v<=0)return toast("Введите сумму больше нуля");
+  const r=await api("/api/payment/add",{student_id:sid,amount:v});if(!r)return;
+  close_();await load();if(r.id&&P.find(x=>x.id==r.id))payCard(r.id,1);else toast("Оплата принята: +"+money(v)+" · "+stName(sid));
 }
 
-/* ---------- Ученики ---------- */
-function stu(){return S.map(bal).map(s=>{const t=!s.price?"цена не указана":s.b<0?"долг "+money(s.b):s.b>0?"наперёд "+money(s.b):"всё оплачено";
-  return `<div class="srow" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>${s.price?money(s.price)+" / занятие · ":""}проведено ${s.done}</small></span><b class="${s.b<0?"neg":s.b>0?"pos":""}">${t}</b></div>`}).join("")}
-function card(id,ed){
-  const s=bal(S.find(x=>x.id==id)),last=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at).slice(0,5);
-  const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
-  if(ed)return open(`<h3>Анкета ученика</h3><p class="sub">Редактирование</p><label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Цена занятия, ₽<input id="ep" type="number" inputmode="numeric" value="${s.price}"></label><div class="btns"><button class="btn pri" onclick="saveS(${id})">Сохранить</button><button class="btn" onclick="card(${id})">Отмена</button></div>`);
-  open(`<button class="pen" aria-label="Редактировать анкету" onclick="card(${id},1)">✏️</button>${av(s,"big")}<h3 style="text-align:center;padding:0">${esc(s.name)}</h3><p class="sub" style="text-align:center">${s.price?money(s.price)+" за занятие":"цена не указана"}</p>
-  <div class="cst"><div class="stat"><small>Занятий проведено</small><b>${s.done}</b></div><div class="stat"><small>Оплачено всего</small><b>${money(s.paid)}</b></div></div><div class="bal">${bt}</div>
-  <h2 style="margin-top:0">Последние платежи</h2>${last.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Платежей ещё не было.</p>'}`);
+/* ---------- Ученики: поиск, фильтр по классу, добавление, карточка ---------- */
+const GRADES=[...Array(11)].map((_,i)=>i+1),PRICE_QUICK=[3000,4000,5000];
+let sq="",sg="all",ph;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать)
+const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
+function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
+function stu(){
+  const gs=stuGrades();
+  return `<div class="sbar"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
+  <label class="ib ${sg!="all"?"on":""}" id="sfl" title="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+    <select onchange="sg=this.value;stuUpd();$('#sfl').classList.toggle('on',sg!='all')" aria-label="Класс"><option value="all">Все классы</option>${gs.map(g=>`<option value="${esc(g)}" ${sg==g?"selected":""}>${esc(gtxt(g))}</option>`).join("")}<option value="none" ${sg=="none"?"selected":""}>Без класса</option></select></label>
+  <button class="ib acc" onclick="studNew()" aria-label="Добавить ученика">＋</button></div><div id="slist">${stuList()}</div>`}
+function stuUpd(){$("#slist").innerHTML=stuList()}
+function stuList(){
+  const q_=sq.trim().toLowerCase(),f=act().map(bal).filter(s=>(!q_||nameMatch(s.name,q_))&&(sg=="all"||(sg=="none"?!(s.grade||"").trim():(s.grade||"").trim()==sg)));
+  if(!f.length)return '<p class="empty">Учеников по этому запросу нет.</p>';
+  return f.map(s=>{const t=!s.price?"цена не указана":s.b<0?"долг "+money(s.b):s.b>0?"наперёд "+money(s.b):"всё оплачено",g=gtxt(s.grade);
+    return `<div class="srow" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>${g?esc(g)+" · ":""}${s.price?money(s.price)+" / занятие · ":""}проведено ${s.done}</small></span><b class="${s.b<0?"neg":s.b>0?"pos":""}">${t}</b></div>`}).join("")}
+
+/* фото: центр-квадрат 360×360, JPEG — сервер принимает data-URL до ~500 КБ */
+function pickPhoto(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{const im=new Image();im.onload=()=>{const m=Math.min(im.width,im.height),c=document.createElement("canvas");c.width=c.height=360;
+    c.getContext("2d").drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,360,360);ph=c.toDataURL("image/jpeg",.85);phShow()};im.src=r.result};r.readAsDataURL(f)}
+function phShow(){const v=$("#phv");if(!v)return;v.style.background=ph?`url(${ph}) center/cover`:"var(--card)";v.textContent=ph?"":"📷"}
+function photoField(cur){ph=undefined;
+  return `<div class="phr"><span id="phv" class="av big" style="margin:0;${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
+  <div class="phb"><label class="pill">Выбрать фото<input type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)"></label><button class="pill" onclick="ph='';phShow()">Убрать</button></div></div>`}
+const gradeSel=(id,cur)=>{cur=(cur||"").trim();const L_=GRADES.map(String);return `<select id="${id}"><option value="">Не указан</option>${(cur&&!L_.includes(cur)?[cur]:[]).concat(L_).map(g=>`<option value="${esc(g)}" ${g==cur?"selected":""}>${esc(gtxt(g))}</option>`).join("")}</select>`};
+const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
+function studNew(){
+  open(`<h3>Новый ученик</h3><p class="sub">Обязательно только имя</p>${photoField("")}
+  <label>Имя и фамилия *<input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label>
+  <label>Класс${gradeSel("ng","")}</label>
+  <label>Предмет<input id="nsb" placeholder="Например: ЕГЭ по русскому"></label>${priceField("np","")}
+  <div class="btns"><button class="btn pri" onclick="studAdd()">Сохранить</button></div>`);
 }
-async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Введите имя");if(await api("/api/student/update",{id,name:n,price:+$("#ep").value||0})){await load();card(id);toast("Анкета сохранена")}}
+async function studAdd(){
+  const name=$("#nn").value.trim();if(!name)return toast("Введите имя ученика");
+  const b={name,grade:$("#ng").value,subject:$("#nsb").value.trim(),price:Math.max(0,parseInt($("#np").value,10)||0)};if(ph)b.photo=ph;
+  const r=await api("/api/student/add",b);if(!r)return;
+  close_();await load();toast("Ученик добавлен: "+name);
+}
+function card(id,ed){
+  const s=bal(S.find(x=>x.id==id));
+  if(ed)return open(`<h3>Редактирование профиля</h3><p class="sub">${esc(s.name)}</p>${photoField(s.photo)}
+    <label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Класс${gradeSel("eg",s.grade)}</label>
+    <label>Предмет<input id="es" value="${esc(s.subject||"")}"></label>${priceField("ep",s.price)}<p class="sub" style="margin-top:6px">Новая цена применится к будущим занятиям. Уже проведённые останутся по прежней цене.</p>
+    <div class="btns"><button class="btn pri" onclick="saveS(${id})">Сохранить</button><button class="btn" onclick="card(${id})">Отмена</button></div>`);
+  const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
+  const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Текущий долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
+  const info=(k,v)=>`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
+  open(`${s.deleted?"":`<button class="pen" aria-label="Редактировать профиль" onclick="card(${id},1)">✏️</button>`}${av(s,"big")}<h3 style="text-align:center;padding:0">${esc(s.name)}</h3>
+  <p class="sub" style="text-align:center">${[gtxt(s.grade),s.subject].filter(Boolean).map(esc).join(" · ")||"класс и предмет не указаны"}</p>
+  <button class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}" onclick="balPop(${id})">${s.b==0?money(0):(s.b>0?"+":"−")+money(s.b)}</button>
+  <p class="gcap">${s.b<0?"Есть долг":s.b>0?"Есть предоплата":"Все уроки оплачены вовремя"}</p>
+  <div class="cst"><div class="stat"><small>Занятий проведено</small><b>${s.done}</b></div><div class="stat"><small>Оплачено всего</small><b>${money(s.paid)}</b></div>
+  <div class="stat"><small>Количество оплат</small><b>${mine.length}</b></div><div class="stat"><small>Занятий впереди</small><b>${plan}</b></div></div>
+  ${info("Класс",esc(gtxt(s.grade)||"—"))}${info("Предмет",esc(s.subject||"—"))}${info("Цена за занятие",s.price?money(s.price):"не указана")}${info("Стоимость проведённых",money(s.spent||0))}
+  <h2>Последние платежи</h2>${last.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Платежей ещё не было.</p>'}${s.deleted?'<p class="note">Ученик удалён. История занятий и оплат сохранена.</p>':`<div class="btns" style="margin-top:18px"><button class="btn dng" onclick="studDel(${id})">Удалить ученика</button></div>`}`);
+}
+function studDel(id){const s=S.find(x=>x.id==id);
+  tg.showConfirm(`Удалить ученика «${s.name}»? Прошлые занятия и оплаты останутся в истории, будущие занятия будут убраны.`,async ok=>{if(ok&&await api("/api/student/delete",{id})){close_();await load();toast("Ученик удалён")}})}
+function balPop(id){
+  const s=S.find(x=>x.id==id),pays=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at).slice(0,8),ds=debtEntries().filter(e=>e.sid==id).sort((a,b)=>b.at-a.at);
+  open(`<button class="pen" aria-label="Назад" onclick="card(${id})">‹</button><h3>Оплаты и долги</h3><p class="sub">${esc(s.name)}</p>
+  <h2 style="margin-top:6px">Последние оплаты</h2>${pays.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Оплат ещё не было.</p>'}
+  <h2>Долги</h2>${ds.map(e=>`<div class="row" style="cursor:default"><span class="info">Занятие · ${when(e.at)}</span><b class="neg">${money(e.amt)}</b></div>`).join("")||'<p class="empty">Долгов нет.</p>'}`)}
+async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Введите имя");
+  const b={id,name:n,grade:$("#eg").value,subject:$("#es").value.trim(),price:Math.max(0,parseInt($("#ep").value,10)||0)};if(ph!==undefined)b.photo=ph;
+  if(await api("/api/student/update",b)){await load();card(id);toast("Профиль сохранён")}}
 
 /* ---------- каркас ---------- */
 function open(h){$("#sheet").innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){$("#sheet").classList.remove("on")}
-function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():stu();$("#fab").style.display=tab=="c"?"block":"none";document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
+function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():stu();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
 $("nav").onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;render();scrollTo(0,0)}};
 load();
 </script></body></html>

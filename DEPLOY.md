@@ -109,7 +109,7 @@ Description=Tutor bot + API
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/tutor-app          # важно: бот читает docs/index.html от CWD
+WorkingDirectory=/opt/tutor-app          # каталог с bot.py: рядом лежат docs/, fonts/ и data/
 Environment=BOT_TOKEN=***
 Environment=OWNER_ID=***
 Environment=WEBAPP_URL=https://app.вашдомен.ru/
@@ -139,7 +139,8 @@ WantedBy=multi-user.target
 - Шрифты `fonts/DejaVuSans.ttf` и `fonts/DejaVuSans-Bold.ttf` уже в репозитории —
   нужны для PDF с кириллицей. Без них бот не стартует (или положите системные
   в `/usr/share/fonts/truetype/dejavu/`).
-- База `tutor.db` (SQLite) создаётся автоматически, мигрирует сама.
+- База `./data/tutor.db` (SQLite) создаётся автоматически, мигрирует сама
+  (старый файл `tutor.db` рядом с кодом переносится в `data/` при первом запуске).
 
 ## Публикация кода на GitHub
 

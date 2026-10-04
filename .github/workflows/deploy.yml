@@ -1,0 +1,29 @@
+# Автодеплой backend после push в main.
+# Фронтенд (docs/) GitHub Pages подхватывает сам.
+#
+# Настройка (однократно, в GitHub: Settings → Secrets and variables → Actions):
+#   SERVER_HOST   — адрес сервера
+#   SERVER_USER   — пользователь SSH
+#   SERVER_SSH_KEY — приватный SSH-ключ (его место здесь, а не в чате)
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'cd /opt/tutor-app && sh deploy.sh'
