@@ -12,7 +12,7 @@ COPY docs/ docs/
 COPY fonts/ fonts/
 
 # не root: UID/GID задаются из docker-compose (см. APP_UID/APP_GID в deploy.sh), чтобы писать в ./data
-RUN mkdir -p /app/data && chmod 755 /app/data
+RUN mkdir -p /app/data && chown 1000:1000 /app/data   # владелец = USER ниже: без этого sqlite не создаст tutor.db
 USER 1000:1000
 
 EXPOSE 8080
