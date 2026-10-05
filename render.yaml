@@ -1,0 +1,63 @@
+# ============================================================
+# Render Blueprint — «Кабинет репетитора» (bot.py: Telegram-бот + HTTP API)
+#
+# Подключение (однократно):
+#   Render Dashboard → New → Blueprint → выбрать репозиторий
+#   vladimirgladik1996-commits/Shkola_EGE
+#   Render сам прочитает этот файл и создаст сервис с диском.
+#
+# Секреты (BOT_TOKEN, OWNER_ID, WEBAPP_URL) при деплое через Blueprint
+# Render спросит в веб-форме (sync: false) — в репозиторий они не попадают.
+# ============================================================
+
+services:
+  - type: web
+    name: tutor-bot
+    runtime: docker
+    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+
+    # ⚠️ Нужен ПЛАТНЫЙ тариф (Starter и выше): бесплатный Render «усыпляет»
+    # сервис при простое — бот на long polling перестанет отвечать,
+    # а SQLite-база без диска живёт только до ближайшего деплоя.
+    plan: starter
+    region: frankfurt
+
+    # / отдаёт docs/index.html — подходит для health check
+    healthCheckPath: /
+
+    # автодеплой при пуше в main (заменяет SSH-скрипт deploy.sh)
+    autoDeploy: true
+
+    # Persistent disk: здесь живёт ./data/tutor.db (ученики, занятия, оплаты).
+    # Путь должен совпадать с DATA_DIR в bot.py и volume в docker-compose.yml.
+    disk:
+      name: tutor-data
+      mountPath: /app/data
+      sizeGB: 1
+
+    envVars:
+      # --- секреты: значения вводятся в панели Render, не в коде ---
+      - key: BOT_TOKEN
+        sync: false # токен от @BotFather
+      - key: OWNER_ID
+        sync: false # @username и/или Telegram ID через запятую: @user1,@user2,111222333
+      - key: WEBAPP_URL
+        sync: false # https://tutor-bot-cn4a.onrender.com/  (см. комментарий ниже)
+
+      # --- обычные настройки ---
+      # Render сам выдаёт PORT — bot.py его читает (os.getenv("PORT", "8080")).
+      - key: CURRENCY
+        value: "₽"
+
+# ------------------------------------------------------------
+# WEBAPP_URL = публичный HTTPS-адрес сервиса, например:
+#   https://tutor-bot-cn4a.onrender.com/
+# Схема «всё с одного домена»: этот же адрес отдаёт и страницу мини-аппа,
+# и /api/*, и PDF — CORS и API_BASE не нужны.
+# Этот же URL указать в @BotFather → /setmenubutton (или /newapp).
+# Если мини-апп остаётся на GitHub Pages — дополнительно задать
+# ALLOW_ORIGIN=https://vladimirgladik1996-commits.github.io
+# и прописать API_BASE в docs/index.html (см. DEPLOY.md, сценарий B).
+# ------------------------------------------------------------

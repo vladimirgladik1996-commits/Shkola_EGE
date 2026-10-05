@@ -19,7 +19,7 @@ Telegram-бот и мини-апп (Telegram Web App) для репетитор�
 
 ```bash
 export BOT_TOKEN="***"
-export OWNER_ID=111222333
+export OWNER_ID="111222333,@user1,@user2"   # Telegram ID и/или @username через запятую
 export WEBAPP_URL=https://ваш-адрес
 export CURRENCY=₽        # необязательно
 python bot.py
@@ -86,7 +86,9 @@ Telegram ──► bot.py (aiogram) ──► SQLite (tutor.db)
 
 1. Мини-апп шлёт `initData` Telegram в заголовке `X-Init`.
 2. Backend проверяет HMAC-подпись `initData` секретным ключом = **токен бота**.
-3. Доступ есть **только у `OWNER_ID`** — кабинет однопользовательский.
+3. Доступ есть **только у `OWNER_ID`** — можно указать нескольких пользователей:
+   числовые Telegram ID и/или @username через запятую:
+   `OWNER_ID=111222333,@Gladik_Vladimir,@Gladik_N,@hungerrr`.
 
 `GitHub Pages` умеет только статику: он не запустит Python и не отдаст `/api/*`.
 Поэтому «залить на Pages» недостаточно — нужен запущенный backend с публичным

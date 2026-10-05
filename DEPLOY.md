@@ -6,7 +6,8 @@
 (aiohttp), который раздаёт **и страницу** (`/` → `docs/index.html`), **и API**
 (`/api/*`), и PDF. Мини-апп ходит в API по относительным путям с заголовком
 `X-Init` (Telegram `initData`, проверяется HMAC-ом по токену бота) и работает
-только для владельца (`OWNER_ID`).
+только для пользователей из `OWNER_ID` (несколько — через запятую, как числовые
+ID, так и @username).
 
 **GitHub Pages умеет только статику.** Он не запустит Python-бота и не отдаст
 `/api/*`. Поэтому «просто залить на Pages» приложение не заработает — нужен
@@ -24,7 +25,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 export BOT_TOKEN="***"          # от @BotFather
-export OWNER_ID="111222333"     # ваш Telegram ID (узнать у @userinfobot)
+export OWNER_ID="@user1,@user2,111222333"   # @username и/или ID через запятую
 export WEBAPP_URL="https://<туннель>"   # подставите после запуска туннеля
 python bot.py
 ```
@@ -122,12 +123,40 @@ WantedBy=multi-user.target
 
 ---
 
+## Сценарий D — Render (облако, рекомендую для продакшена без своего сервера)
+
+Весь backend (бот + API + страница + PDF) живёт на Render как Docker-сервис,
+база `./data/tutor.db` — на постоянном диске. Всё с одного домена: без CORS и
+без `API_BASE`. В корне репозитория лежит [`render.yaml`](render.yaml) —
+Blueprint, который создаёт сервис и диск автоматически.
+
+| Шаг | Действие |
+|---|---|
+| 1 | Render Dashboard → **New → Blueprint** → репозиторий `Shkola_EGE` |
+| 2 | Render прочитает `render.yaml`: создастся сервис `tutor-bot` + диск `tutor-data` (`/app/data`) |
+| 3 | В форме заполнить секреты: `BOT_TOKEN`, `OWNER_ID`, `WEBAPP_URL` |
+| 4 | `WEBAPP_URL` = `https://tutor-bot-cn4a.onrender.com/` (адрес сервиса) |
+| 5 | `@BotFather` → `/setmenubutton` → тот же URL |
+| 6 | Дождаться деплоя → `GET https://tutor-bot-cn4a.onrender.com/` отдаёт мини-апп |
+
+**Важно:**
+
+- Нужен **платный тариф** (Starter и выше): бесплатный «усыпляет» сервис при
+  простое — бот на long polling перестанет отвечать; и только на платном есть
+  persistent disk — без него SQLite-база теряется при каждом деплое.
+- После первого запуска на диске появится `tutor.db`; бэкапы — см. `deploy.sh`.
+- Смена `BOT_TOKEN` → перезапуск сервиса (HMAC-проверка initData от токена).
+- Деплой при пуше в `main` включён в `render.yaml` (`autoDeploy: true`),
+  поэтому SSH-воркфлоу `.github/workflows/deploy.yml` переведён в ручной режим.
+
+---
+
 ## Переменные окружения
 
 | Переменная | Назначение | Обязательна |
 |---|---|---|
 | `BOT_TOKEN` | токен от @BotFather | да |
-| `OWNER_ID` | Telegram ID владельца (кабинет только для него) | рекомендуется |
+| `OWNER_ID` | Доступ в кабинет: @username и/или числовые Telegram ID через запятую | рекомендуется |
 | `WEBAPP_URL` | публичный https-адрес мини-аппа (для кнопки меню) | да для кнопки |
 | `ALLOW_ORIGIN` | разрешённый источник для CORS (для сценария B) | только для B |
 | `PORT` | порт HTTP (по умолчанию 8080) | нет |

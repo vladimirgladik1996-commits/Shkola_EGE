@@ -1,15 +1,19 @@
-# Автодеплой backend после push в main.
-# Фронтенд (docs/) GitHub Pages подхватывает сам.
+# Автодеплой backend. Сейчас прод-деплой идёт через Render (render.yaml,
+# autoDeploy при пуше в main), поэтому этот SSH-сценарий переведён в ручной
+# запуск: Actions → deploy → Run workflow.
 #
-# Настройка (однократно, в GitHub: Settings → Secrets and variables → Actions):
+# Настройка (для SSH-сценария, однократно, в GitHub: Settings → Secrets and
+# variables → Actions):
 #   SERVER_HOST   — адрес сервера
 #   SERVER_USER   — пользователь SSH
 #   SERVER_SSH_KEY — приватный SSH-ключ (его место здесь, а не в чате)
 name: deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+  # push в main больше не триггерит этот workflow:
+  #   push:
+  #     branches: [main]
 
 jobs:
   backend:

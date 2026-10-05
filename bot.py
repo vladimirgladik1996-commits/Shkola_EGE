@@ -12,7 +12,21 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 TOKEN = os.environ["BOT_TOKEN"]
-OWNER = int(os.getenv("OWNER_ID", "0"))      # Telegram ID репетитора
+# Доступ в кабинет: OWNER_ID — список Telegram ID и/или @username через запятую,
+# например OWNER_ID="111222333,@Gladik_Vladimir,@Gladik_N,@hungerrr"
+_owner_raw = [x.strip() for x in os.getenv("OWNER_ID", "").replace(";", ",").split(",") if x.strip()]
+OWNERS = tuple(sorted({int(x) for x in _owner_raw if x.isdigit()}))
+OWNER_NAMES = frozenset(x.lstrip("@").lower() for x in _owner_raw if not x.isdigit())
+OWNER = bool(OWNERS or OWNER_NAMES)   # есть ли ограничение по доступу (пусто = кабинет открыт всем)
+
+
+def has_access(uid, uname=None):
+    """Доступ по числовому ID или @username (без учёта регистра)."""
+    if not OWNER:
+        return True
+    if uid is not None and uid in OWNERS:
+        return True
+    return bool(uname) and uname.lower() in OWNER_NAMES
 URL = os.getenv("WEBAPP_URL", "")            # https-адрес мини-аппа
 PORT = int(os.getenv("PORT", "8080"))
 CUR = os.getenv("CURRENCY", "₽")
@@ -630,9 +644,13 @@ class Pay(StatesGroup):
     amount = State()
 
 r = Router()
+async def _owner_only(event) -> bool:
+    u = event.from_user
+    return has_access(u.id if u else None, u.username if u else None)
+
 if OWNER:
-    r.message.filter(F.from_user.id == OWNER)
-    r.callback_query.filter(F.from_user.id == OWNER)
+    r.message.filter(_owner_only)
+    r.callback_query.filter(_owner_only)
 
 def pretty(day, t):
     d = date.fromisoformat(day)
@@ -1053,8 +1071,8 @@ def authorized(request):
     check = "\n".join(f"{k}={v}" for k, v in sorted(d.items()))
     key = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
     ok = hmac.compare_digest(hmac.new(key, check.encode(), hashlib.sha256).hexdigest(), got)
-    uid = json.loads(d.get("user", "{}")).get("id")
-    return ok and (not OWNER or uid == OWNER)
+    user = json.loads(d.get("user", "{}"))
+    return ok and has_access(user.get("id"), user.get("username"))
 
 def guarded(fn):
     async def w(request):
@@ -1230,11 +1248,44 @@ async def cors_mw(request, handler):
     return resp
 
 
+# ---------- Резервное копирование базы ----------
+async def backup_loop(bot: Bot):
+    """Каждые 12 ч отправляет файл базы всем пользователям с доступом.
+
+    На бесплатном тарифе хостинга диск эфемерный: tutor.db переживает только
+    пересоздание контейнера, а деплой/рестарт — нет. Бэкап в чат Telegram
+    позволяет вернуть данные одной командой восстановления на хосте."""
+    while True:
+        try:
+            if os.path.exists(DB_PATH):
+                for chat_id in OWNERS:
+                    try:
+                        await bot.send_document(chat_id=chat_id,
+                                                document=BufferedInputFile(open(DB_PATH, "rb").read(),
+                                                                          filename=f"tutor-{date.today().isoformat()}.db"),
+                                                caption="💾 Бэкап базы (tutor.db)")
+                    except Exception as e:
+                        print(f"⚠️ бэкап: не отправлено {chat_id}: {e}")
+                for name in OWNER_NAMES:
+                    try:
+                        chat = await bot.get_chat(f"@{name}")
+                        await bot.send_document(chat_id=chat.id,
+                                                document=BufferedInputFile(open(DB_PATH, "rb").read(),
+                                                                          filename=f"tutor-{date.today().isoformat()}.db"),
+                                                caption="💾 Бэкап базы (tutor.db)")
+                    except Exception as e:
+                        print(f"⚠️ бэкап: не отправлено @{name}: {e}")
+        except Exception as e:
+            print(f"⚠️ бэкап: {e}")
+        await asyncio.sleep(12 * 3600)
+
+
 async def main():
     if not OWNER:
         print("⚠️ OWNER_ID не задан: бот и кабинет будут доступны любому пользователю Telegram")
     fill_regular()
     bot = Bot(TOKEN)
+    asyncio.create_task(backup_loop(bot))   # бэкап базы в чат (важно на free-тарифе без диска)
     dp = Dispatcher()
     dp.include_router(r)
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
@@ -1260,8 +1311,9 @@ async def main():
     if URL:
         btn = MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL))   # синяя кнопка слева от строки ввода
         await bot.set_chat_menu_button(menu_button=btn)
-        if OWNER:
-            await bot.set_chat_menu_button(chat_id=OWNER, menu_button=btn)
+        if OWNERS:
+            for chat_id in OWNERS:                      # синяя кнопка — каждому пользователю с доступом
+                await bot.set_chat_menu_button(chat_id=chat_id, menu_button=btn)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
