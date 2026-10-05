@@ -18,10 +18,11 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: ./
 
-    # ⚠️ Нужен ПЛАТНЫЙ тариф (Starter и выше): бесплатный Render «усыпляет»
-    # сервис при простое — бот на long polling перестанет отвечать,
-    # а SQLite-база без диска живёт только до ближайшего деплоя.
-    plan: starter
+    # Бесплатный тариф (по требованию владельца). Следствия:
+    #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
+    #  • диск на free недоступен, tutor.db НЕ переживает деплой/рестарт —
+    #    поэтому в bot.py включён автобэкап базы в Telegram каждые 12 часов.
+    plan: free
     region: frankfurt
 
     # / отдаёт docs/index.html — подходит для health check
@@ -30,12 +31,13 @@ services:
     # автодеплой при пуше в main (заменяет SSH-скрипт deploy.sh)
     autoDeploy: true
 
-    # Persistent disk: здесь живёт ./data/tutor.db (ученики, занятия, оплаты).
-    # Путь должен совпадать с DATA_DIR в bot.py и volume в docker-compose.yml.
-    disk:
-      name: tutor-data
-      mountPath: /app/data
-      sizeGB: 1
+    # Диск не используется: на бесплатном тарифе он недоступен.
+    # (При переходе на платный тариф раскомментируйте — данные перестанут
+    # теряться при деплоях: путь совпадает с DATA_DIR в bot.py.)
+    # disk:
+    #   name: tutor-data
+    #   mountPath: /app/data
+    #   sizeGB: 1
 
     envVars:
       # --- секреты: значения вводятся в панели Render, не в коде ---
