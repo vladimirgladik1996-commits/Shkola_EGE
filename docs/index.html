@@ -146,11 +146,12 @@ const mon=d=>addD(d,-((d.getDay()+6)%7));
 const WD=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"],WDF=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
 const mins=t=>+t.slice(0,2)*60+ +t.slice(3);
 const hm=m=>pad(Math.floor(m/60))+":"+pad(m%60);
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hue=id=>`hsl(${id*67%360} 45% 38%)`;
 const money=n=>Math.abs(n).toLocaleString("ru-RU")+"\u00A0"+cur;
 const ini=n=>n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
-const av=(s,c="")=>`<span class="av ${c}" style="background:${s.photo?`url(${s.photo}) center/cover`:hue(s.id)}">${s.photo?"":esc(ini(s.name))}</span>`;
+const safePhoto=p=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/]+={0,2}$/.test(p||"")?p:"";
+const av=(s,c="")=>{const ph_=safePhoto(s.photo);return `<span class="av ${c}" style="background:${ph_?`url(${ph_}) center/cover`:hue(s.id)}">${ph_?"":esc(ini(s.name))}</span>`};
 
 const tg=window.Telegram.WebApp;tg.ready();tg.expand();
 let S=[],L=[],P=[],cur="₽";const w0=mon(T);
@@ -158,7 +159,13 @@ let S=[],L=[],P=[],cur="₽";const w0=mon(T);
 // ""  → тот же домен (бот сам раздаёт страницу и API, всё как раньше);
 // URL → мини-апп на GitHub Pages, а бот работает отдельно (нужен ALLOW_ORIGIN на боте).
 const API_BASE=(window.__API_BASE__||"").replace(/\/+$/,"");
+let locked=false;
+function lockScreen(code){locked=true;document.body.textContent="";const d=document.createElement("div");
+  d.style.cssText="padding:64px 28px;text-align:center;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
+  d.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом и нажмите /start, затем откройте кабинет заново."
+    :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет и откройте его заново из чата с ботом.";document.body.appendChild(d)}
 async function api(p,b){const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:{"X-Init":tg.initData,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});
+  if(r.status==401||r.status==403){lockScreen(r.status);return null}
   if(r.status==409){toast("Время занято или пересекается с другим занятием");return null}
   if(!r.ok){toast("Не получилось, попробуйте ещё раз");return null}return r.json()}
 function demoData(){const w=mon(T),dd=n=>iso(addD(w,n)),now=new Date();
@@ -178,7 +185,7 @@ function demoData(){const w=mon(T),dd=n=>iso(addD(w,n)),now=new Date();
 function ingest(d){cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id,price:l.price,past:l.past}));
   P=d.payments.map(p=>({id:p.id,sid:p.student_id,amt:p.amount,at:new Date(p.created.replace(" ","T"))}));render()}
 async function load(){const d=await api("/api/data");
-  if(!d){ingest(demoData());toast("Демо-режим — данные примерные");return}
+  if(!d){if(locked)return;ingest(demoData());toast("Демо-режим — данные примерные");return}
   ingest(d)}
 const bal=s=>s;
 const act=()=>S.filter(s=>!s.deleted);
@@ -513,7 +520,7 @@ function pickPhoto(inp){const f=inp.files[0];if(!f)return;const r=new FileReader
   r.onload=()=>{const im=new Image();im.onload=()=>{const m=Math.min(im.width,im.height),c=document.createElement("canvas");c.width=c.height=360;
     c.getContext("2d").drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,360,360);ph=c.toDataURL("image/jpeg",.85);phShow()};im.src=r.result};r.readAsDataURL(f)}
 function phShow(){const v=$("#phv");if(!v)return;v.style.background=ph?`url(${ph}) center/cover`:"var(--card)";v.textContent=ph?"":"📷"}
-function photoField(cur){ph=undefined;
+function photoField(cur){ph=undefined;cur=safePhoto(cur);
   return `<div class="phr"><span id="phv" class="av big" style="margin:0;${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
   <div class="phb"><label class="pill">Выбрать фото<input type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)"></label><button class="pill" onclick="ph='';phShow()">Убрать</button></div></div>`}
 const gradeSel=(id,cur)=>{cur=(cur||"").trim();const L_=GRADES.map(String);return `<select id="${id}"><option value="">Не указан</option>${(cur&&!L_.includes(cur)?[cur]:[]).concat(L_).map(g=>`<option value="${esc(g)}" ${g==cur?"selected":""}>${esc(gtxt(g))}</option>`).join("")}</select>`};

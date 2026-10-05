@@ -1,4 +1,6 @@
 .env
+*.env
+backups/
 data/
 tutor.db
 __pycache__/

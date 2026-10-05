@@ -2,8 +2,12 @@ services:
   bot:
     build: .
     env_file: .env
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"   # владелец ./data на хосте; deploy.sh задаёт автоматически
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"   # только localhost: наружу — через nginx/Caddy с HTTPS (Docker иначе обходит ufw)
     volumes:
       - ./data:/app/data   # здесь живёт tutor.db — данные переживают пересборку образа
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped

@@ -6,8 +6,7 @@
 (aiohttp), который раздаёт **и страницу** (`/` → `docs/index.html`), **и API**
 (`/api/*`), и PDF. Мини-апп ходит в API по относительным путям с заголовком
 `X-Init` (Telegram `initData`, проверяется HMAC-ом по токену бота) и работает
-только для пользователей из `OWNER_ID` (несколько — через запятую, как числовые
-ID, так и @username).
+только для владельца (`OWNER_ID`).
 
 **GitHub Pages умеет только статику.** Он не запустит Python-бота и не отдаст
 `/api/*`. Поэтому «просто залить на Pages» приложение не заработает — нужен
@@ -25,7 +24,10 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 export BOT_TOKEN="***"          # от @BotFather
-export OWNER_ID="@user1,@user2,111222333"   # @username и/или ID через запятую
+export AUTH_LOGIN="..."         # свой логин и хэш пароля: python auth.py
+export AUTH_PASSWORD_HASH="..."
+export PUBLIC_URL="https://<туннель>"
+# кто допущен — по умолчанию три ника из ALLOWED_USERNAMES (см. ниже)
 export WEBAPP_URL="https://<туннель>"   # подставите после запуска туннеля
 python bot.py
 ```
@@ -90,17 +92,18 @@ server {
   ssl_certificate     /etc/letsencrypt/live/app.вашдомен.ru/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/app.вашдомен.ru/privkey.pem;
 
-  # можно отдавать статику nginx-ом (быстрее), а API проксировать:
-  root /opt/tutor-app/docs;
-  location / { try_files $uri /index.html; }
-
-  location /api/ {
+  # Проще и безопаснее всего — проксировать ВСЁ на бота: он сам отдаёт страницу, /login и API.
+  # (/login обязан доходить до бота, иначе вход не откроется; не подменяйте его на index.html.)
+  location / {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    client_max_body_size 2m;
   }
 }
 ```
-> Если не хочетесь разделять — просто проксируйте весь `/` на бота: он сам отдаёт и страницу, и API.
+> Порт `8080` в `docker-compose.yml` привязан к `127.0.0.1` — наружу бот доступен только через nginx/Caddy с HTTPS.
+> В `.env` задайте `PUBLIC_URL=https://app.вашдомен.ru` (на него ссылается кнопка «Войти»).
 
 ### systemd
 ```ini
@@ -111,9 +114,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/tutor-app          # каталог с bot.py: рядом лежат docs/, fonts/ и data/
-Environment=BOT_TOKEN=***
-Environment=OWNER_ID=***
-Environment=WEBAPP_URL=https://app.вашдомен.ru/
+EnvironmentFile=/opt/tutor-app/.env      # секреты — в .env (chmod 600), а не в самом unit-файле
 ExecStart=/opt/tutor-app/.venv/bin/python bot.py
 Restart=always
 
@@ -123,42 +124,16 @@ WantedBy=multi-user.target
 
 ---
 
-## Сценарий D — Render (облако, рекомендую для продакшена без своего сервера)
-
-Весь backend (бот + API + страница + PDF) живёт на Render как Docker-сервис,
-база `./data/tutor.db` — на постоянном диске. Всё с одного домена: без CORS и
-без `API_BASE`. В корне репозитория лежит [`render.yaml`](render.yaml) —
-Blueprint, который создаёт сервис и диск автоматически.
-
-| Шаг | Действие |
-|---|---|
-| 1 | Render Dashboard → **New → Blueprint** → репозиторий `Shkola_EGE` |
-| 2 | Render прочитает `render.yaml`: создастся сервис `tutor-bot` (бесплатный тариф) |
-| 3 | В форме заполнить секреты: `BOT_TOKEN`, `OWNER_ID`, `WEBAPP_URL` |
-| 4 | `WEBAPP_URL` = `https://tutor-bot-cn4a.onrender.com/` (адрес сервиса) |
-| 5 | `@BotFather` → `/setmenubutton` → тот же URL |
-| 6 | Дождаться деплоя → `GET https://tutor-bot-cn4a.onrender.com/` отдаёт мини-апп |
-
-**Важно (бесплатный тариф):**
-
-- Сервис «усыпает» после ~15 мин простоя — бот отвечает, как только кто-то
-  откроет веб-адрес (или приходит запрос по API).
-- Диск на free недоступен: `tutor.db` **не переживает деплой/рестарт**.
-  Данные сохраняются благодаря автобэкапу: каждые 12 часов бот присылает файл
-  базы в чат всем, у кого есть доступ (см. `backup_loop` в `bot.py`).
-  Восстановление: положить присланный файл на хост в `data/tutor.db`.
-- Смена `BOT_TOKEN` → перезапуск сервиса (HMAC-проверка initData от токена).
-- Деплой при пуше в `main` включён в `render.yaml` (`autoDeploy: true`),
-  поэтому SSH-воркфлоу `.github/workflows/deploy.yml` переведён в ручной режим.
-
----
-
 ## Переменные окружения
 
 | Переменная | Назначение | Обязательна |
 |---|---|---|
 | `BOT_TOKEN` | токен от @BotFather | да |
-| `OWNER_ID` | Доступ в кабинет: @username и/или числовые Telegram ID через запятую | рекомендуется |
+| `ALLOWED_USERNAMES` | @ники (без @) через запятую, кому разрешён доступ. По умолчанию: `Gladik_Vladimir,Gladik_N,hungerrr` | да (или `ALLOWED_IDS`) |
+| `ALLOWED_IDS` | числовые Telegram-ID, допускаются без проверки ника (`OWNER_ID` — то же самое, старое имя) | нет |
+| `AUTH_LOGIN`, `AUTH_PASSWORD_HASH` | логин и scrypt-хэш пароля (`python auth.py`) | да |
+| `PUBLIC_URL` | https-адрес backend, где открывается `/login` | да (если не совпадает с `WEBAPP_URL`) |
+| `SESSION_DAYS` | срок сессии без активности, по умолчанию 30; пока пользуются — продлевается, пароль повторно не спрашивается | нет |
 | `WEBAPP_URL` | публичный https-адрес мини-аппа (для кнопки меню) | да для кнопки |
 | `ALLOW_ORIGIN` | разрешённый источник для CORS (для сценария B) | только для B |
 | `PORT` | порт HTTP (по умолчанию 8080) | нет |
@@ -184,3 +159,32 @@ git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
 ```
 Затем Settings → Pages → включить (для сценария B) — см. выше.
+
+## Безопасность деплоя (чек-лист)
+
+- **CI/CD:** добавьте секрет `SERVER_KNOWN_HOSTS` (`ssh-keyscan -t ed25519 <host>`) — деплой проверяет отпечаток сервера и не стартует без него.
+  Деплой идёт только после успешных тестов. Включите 2FA на GitHub и Branch protection для `main`; для SSH заведите отдельного
+  пользователя без sudo (по возможности с `command="cd /opt/tutor-app && sh deploy.sh"` в `authorized_keys`).
+- **Первый деплой этой версии:** контейнер теперь работает не от root. Если `data/tutor.db` создан раньше (владелец root), выполните один раз
+  `sudo chown -R $(id -u):$(id -g) data` — `deploy.sh` подскажет, если это нужно.
+- **Бэкапы:** `deploy.sh` делает консистентную копию (`sqlite3 backup`), права 600, хранит 14 последних. Копии лежат на том же сервере —
+  настройте регулярную выгрузку в зашифрованное хранилище вне сервера (restic/age).
+- **Секреты:** `.env` — `chmod 600`, владелец — пользователь деплоя. Токен бота скомпрометирован → перевыпустите в @BotFather, перезапустите бота.
+- **Доступ по людям:** трое допущенных входят каждый со своего аккаунта по одному логину/паролю. Хотите отозвать человека — уберите ник из
+  `ALLOWED_USERNAMES` и перезапустите: его сессия перестаёт действовать сразу. Сменили Telegram-аккаунт — удалите старую привязку:
+  `sqlite3 data/tutor.db "delete from auth_pins where username='<ник маленькими буквами>'"`.
+
+## Журнал, логи, миграции, восстановление
+
+- **Журнал действий** (таблица `audit_log`, хранится год): кто из троих (`tg_id`), какое изменение (`/api/payment/add` и т.п.) и над какими записями
+  (id, день, сумма — без имён и фото). Смотреть:
+  `sqlite3 data/tutor.db "select ts, tg_id, action, target from audit_log order by id desc limit 50"`.
+- **Логи:** `docker compose logs -f bot`. Входы (успех/ошибка/блокировка), отказы постороннему, превышение лимита и непредвиденные ошибки API.
+  Пароли и токены не логируются. Уровень — `LOG_LEVEL`.
+- **Лимит запросов** к API: `API_RATE_PER_MIN` (по умолчанию 120 в минуту на аккаунт). Для `/login` добавьте ещё `limit_req` в nginx.
+- **Миграции схемы:** версия хранится в базе (`pragma user_version`), новые изменения — отдельным пунктом в `MIGRATIONS` в `bot.py`. Применяются сами при запуске.
+- **БД в режиме WAL:** рядом с `tutor.db` появятся `tutor.db-wal` и `-shm` — это нормально. Копировать вручную только через `sqlite3 .backup` (так делает `deploy.sh`),
+  а не `cp`.
+- **Проверка бэкапа:** `deploy.sh` после копирования выполняет `integrity_check`; если копия битая — деплой останавливается до обновления кода.
+- **Восстановление:** остановить бота (`docker compose stop`), положить копию на место `data/tutor.db` (удалив `tutor.db-wal` и `-shm`), `docker compose up -d`.
+  Проверьте восстановление на тестовой копии заранее, а не в день аварии.

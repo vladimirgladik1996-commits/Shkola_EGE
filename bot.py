@@ -1,32 +1,22 @@
-import asyncio, hashlib, hmac, json, os, re, sqlite3
+import asyncio, collections, hashlib, hmac, json, logging, os, re, sqlite3, time
 from datetime import date, timedelta
 from urllib.parse import parse_qsl
 
 from aiohttp import web
-from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import CommandStart
+import auth
+from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
-                           MenuButtonWebApp, Message, WebAppInfo)
+                           MenuButtonWebApp, Message, ReplyKeyboardRemove, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("tutor")
+
 TOKEN = os.environ["BOT_TOKEN"]
-# Доступ в кабинет: OWNER_ID — список Telegram ID и/или @username через запятую,
-# например OWNER_ID="111222333,@Gladik_Vladimir,@Gladik_N,@hungerrr"
-_owner_raw = [x.strip() for x in os.getenv("OWNER_ID", "").replace(";", ",").split(",") if x.strip()]
-OWNERS = tuple(sorted({int(x) for x in _owner_raw if x.isdigit()}))
-OWNER_NAMES = frozenset(x.lstrip("@").lower() for x in _owner_raw if not x.isdigit())
-OWNER = bool(OWNERS or OWNER_NAMES)   # есть ли ограничение по доступу (пусто = кабинет открыт всем)
-
-
-def has_access(uid, uname=None):
-    """Доступ по числовому ID или @username (без учёта регистра)."""
-    if not OWNER:
-        return True
-    if uid is not None and uid in OWNERS:
-        return True
-    return bool(uname) and uname.lower() in OWNER_NAMES
+# Кто допущен — см. auth.py: ALLOWED_USERNAMES (по умолчанию три @ника), ALLOWED_IDS, OWNER_ID (старый вариант, тоже работает).
 URL = os.getenv("WEBAPP_URL", "")            # https-адрес мини-аппа
 PORT = int(os.getenv("PORT", "8080"))
 CUR = os.getenv("CURRENCY", "₽")
@@ -45,8 +35,14 @@ if not os.path.exists(DB_PATH) and os.path.exists(_legacy_db):
     os.replace(_legacy_db, DB_PATH)
 
 db = sqlite3.connect(DB_PATH, check_same_thread=False)
+try: os.chmod(DB_PATH, 0o600)
+except OSError: pass
 db.row_factory = sqlite3.Row
-db.executescript("""
+db.execute("pragma busy_timeout=5000")           # при конкурирующей записи ждём, а не падаем сразу
+db.execute("pragma journal_mode=wal")            # устойчивее к сбоям; консистентная копия при бэкапе
+db.execute("pragma synchronous=normal")
+
+BASE_SCHEMA = """
 create table if not exists students(id integer primary key, name text not null, price integer default 0, photo text);
 create table if not exists lessons(id integer primary key, student_id integer not null, day text not null, time text not null,
   regular_id integer, dur integer default 60, unique(day,time));
@@ -55,23 +51,76 @@ create table if not exists payments(id integer primary key, student_id integer n
 create table if not exists regular(id integer primary key, student_id integer not null, weekday integer not null,
   time text not null, start text not null, dur integer default 60);
 create table if not exists skips(regular_id integer, day text, primary key(regular_id, day));
-""")
-for stmt in ("alter table lessons add column regular_id integer",
-             "alter table students add column photo text",
-             "alter table lessons add column dur integer default 60",
-             "alter table regular add column dur integer default 60",
-             "alter table students add column grade text",
-             "alter table students add column subject text",
-             "alter table lessons add column price integer",
-             "alter table students add column deleted integer default 0"):     # цена, «замороженная» для уже прошедших занятий     # для старых баз
-    try:
-        db.execute(stmt)
-    except sqlite3.OperationalError:
-        pass
+"""
+
+# Версионируемые миграции (pragma user_version). Новая версия схемы = новый элемент списка; старые не правим.
+# Каждая команда идемпотентна: «duplicate column» на базах, где колонка уже есть, пропускается.
+MIGRATIONS = [
+    [   # v1: колонки, добавлявшиеся в прошлых версиях (для старых баз)
+        "alter table lessons add column regular_id integer",
+        "alter table students add column photo text",
+        "alter table lessons add column dur integer default 60",
+        "alter table regular add column dur integer default 60",
+        "alter table students add column grade text",
+        "alter table students add column subject text",
+        "alter table lessons add column price integer",       # цена, «замороженная» для уже прошедших занятий
+        "alter table students add column deleted integer default 0",
+    ],
+    [   # v2: журнал действий и индексы
+        "create table if not exists audit_log(id integer primary key, ts text default (datetime('now','localtime')), "
+        "tg_id integer, action text not null, target text)",
+        "create index if not exists ix_audit_ts on audit_log(ts)",
+        "create index if not exists ix_lessons_student on lessons(student_id)",
+        "create index if not exists ix_payments_student on payments(student_id)",
+        "create index if not exists ix_regular_student on regular(student_id)",
+    ],
+]
+
+def migrate(conn):
+    """Применяет недостающие миграции по порядку; версия хранится в pragma user_version."""
+    ver = conn.execute("pragma user_version").fetchone()[0]
+    for i, stmts in enumerate(MIGRATIONS[ver:], start=ver + 1):
+        for s in stmts:
+            try:
+                conn.execute(s)
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    raise
+        conn.execute(f"pragma user_version={i}")
+        conn.commit()
+        log.info("схема БД обновлена до версии %s", i)
+    return len(MIGRATIONS)
+
+def init_db(conn):
+    conn.executescript(BASE_SCHEMA)
+    migrate(conn)
+
+init_db(db)
+auth.init(db)     # таблицы авторизации (ссылки, сессии)
+db.execute("delete from audit_log where ts < datetime('now','-365 days','localtime')"); db.commit()   # храним год
+
+def _canon_days():
+    """Старые записи с днём в нестандартном виде («20261005», «2026-W41-1») приводим к YYYY-MM-DD."""
+    for tbl, col in (("lessons", "day"), ("regular", "start"), ("skips", "day")):
+        for rid, d in db.execute(f"select rowid, {col} from {tbl} where {col} not glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'").fetchall():
+            try:
+                db.execute(f"update {tbl} set {col}=? where rowid=?", (date.fromisoformat(d).isoformat(), rid))
+            except (ValueError, TypeError, sqlite3.IntegrityError):
+                pass
+    db.commit()
+_canon_days()
 
 def q(sql, *a): return db.execute(sql, a).fetchall()
 def run(sql, *a):
     c = db.execute(sql, a); db.commit(); return c.lastrowid
+
+AUDIT_KEYS = ("id", "student_id", "regular_id", "day", "time", "amount", "dur")   # только идентификаторы и суммы: без имён и фото
+
+def audit(uid, action, target=""):
+    try:
+        db.execute("insert into audit_log(tg_id, action, target) values(?,?,?)", (uid, action, target[:200])); db.commit()
+    except sqlite3.Error:
+        log.exception("не удалось записать audit_log")
 
 def money(n): return f"{n:,}".replace(",", " ") + f" {CUR}"
 def hm(t): return f"{t[:2]}:{t[2:]}"
@@ -643,14 +692,36 @@ class CustomTime(StatesGroup):
 class Pay(StatesGroup):
     amount = State()
 
-r = Router()
-async def _owner_only(event) -> bool:
-    u = event.from_user
-    return has_access(u.id if u else None, u.username if u else None)
+def _allowed(e):
+    u = e.from_user
+    return bool(u) and auth.allowed(u.id, u.username)
 
-if OWNER:
-    r.message.filter(_owner_only)
-    r.callback_query.filter(_owner_only)
+async def _allowed_f(e):          # async: фильтр выполняется в потоке event loop, а не в пуле (общее соединение SQLite)
+    return _allowed(e)
+
+r = Router()
+r.message.filter(_allowed_f)
+r.callback_query.filter(_allowed_f)
+
+# Публичный роутер: ТОЛЬКО /start (выдача ссылки на вход). Всё остальное — в роутере r за проверкой входа.
+pub = Router()
+pub.message.filter(_allowed_f)
+
+class AuthMW(BaseMiddleware):
+    """Deny by default: в роутер r попадают только вошедшие, исключений нет."""
+    async def __call__(self, handler, event, data):
+        uid = event.from_user.id if event.from_user else 0
+        if not _allowed(event):
+            return                                               # чужим бот не отвечает вовсе
+        if auth.is_authorized(uid):
+            return await handler(event, data)
+        if isinstance(event, CallbackQuery):
+            await event.answer("Нужен вход — нажмите /start", show_alert=True)
+        else:
+            await event.answer("Сначала войдите — нажмите /start", reply_markup=ReplyKeyboardRemove())
+
+r.message.outer_middleware(AuthMW())
+r.callback_query.outer_middleware(AuthMW())
 
 def pretty(day, t):
     d = date.fromisoformat(day)
@@ -701,10 +772,21 @@ async def student_done(m: Message, state: FSMContext, name, price, grade="", sub
         await make_lesson(m, day, hm(t), sid, False, mode == "r")
 
 # ---------- меню ----------
-@r.message(CommandStart())
+@pub.message(CommandStart())
 async def start(m: Message, state: FSMContext):
     await state.clear()
-    await m.answer("Готово к работе. Выберите действие в меню.", reply_markup=menu_kb())
+    if auth.is_authorized(m.from_user.id):
+        await m.answer("Готово к работе. Выберите действие в меню.", reply_markup=menu_kb())
+        return
+    await m.answer("🔐 Для работы с ботом и кабинетом нужно войти.", reply_markup=ReplyKeyboardRemove())
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Войти", url=auth.new_link(m.from_user.id, m.from_user.username or ""))]])
+    await m.answer("Нажмите кнопку и введите логин и пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
+
+@r.message(Command("logout"))
+async def logout(m: Message, state: FSMContext):
+    await state.clear()
+    auth.logout(m.from_user.id)
+    await m.answer("Вы вышли. Чтобы войти снова, нажмите /start.", reply_markup=ReplyKeyboardRemove())
 
 @r.message(F.text == "Занятия сегодня")
 async def today_lessons(m: Message, state: FSMContext):
@@ -1065,31 +1147,106 @@ async def m_price_bad(m: Message):
     await m.answer("Введите цену цифрами, например 3500")
 
 # ---------- API для мини-аппа ----------
+INIT_MAX_AGE = 24 * 3600     # initData старше суток не принимаем: украденную строку нельзя воспроизводить вечно
+
 def authorized(request):
-    d = dict(parse_qsl(request.headers.get("X-Init", "")))
-    got = d.pop("hash", "")
-    check = "\n".join(f"{k}={v}" for k, v in sorted(d.items()))
-    key = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
-    ok = hmac.compare_digest(hmac.new(key, check.encode(), hashlib.sha256).hexdigest(), got)
-    user = json.loads(d.get("user", "{}"))
-    return ok and has_access(user.get("id"), user.get("username"))
+    """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой."""
+    try:
+        raw = request.headers.get("X-Init", "")
+        if not raw or len(raw) > 8192:
+            return 403
+        d = dict(parse_qsl(raw))
+        got = d.pop("hash", "")
+        check = "\n".join(f"{k}={v}" for k, v in sorted(d.items()))
+        key = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+        want = hmac.new(key, check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(want.encode(), got.encode()):          # bytes: не падает на не-ASCII
+            return 403
+        age = time.time() - int(d["auth_date"])
+        if age > INIT_MAX_AGE or age < -300:
+            return 403
+        usr = json.loads(d["user"])
+        uid, uname = usr["id"], usr.get("username")
+    except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
+        return 403
+    if type(uid) is not int or not auth.allowed(uid, uname):
+        return 403
+    return 200 if auth.is_authorized(uid) else 401
+
+RATE_LIMIT = int(os.getenv("API_RATE_PER_MIN", "120"))      # запросов в минуту с одного аккаунта
+_hits = {}                                                  # tg_id → времена последних запросов (только для вошедших)
+_denied_log = {}
+
+def rate_ok(uid, now=None):
+    now = now or time.time()
+    d = _hits.setdefault(uid, collections.deque())
+    while d and d[0] < now - 60:
+        d.popleft()
+    if len(d) >= RATE_LIMIT:
+        return False
+    d.append(now)
+    return True
 
 def guarded(fn):
     async def w(request):
-        if not authorized(request):
-            return web.Response(status=403)
+        code = authorized(request)
+        if code != 200:
+            if code == 403:                                  # посторонний с валидной подписью — пишем, но не чаще раза в 10 минут
+                try: who = user_id(request)
+                except Exception: who = None
+                if time.time() - _denied_log.get(who, 0) > 600:
+                    _denied_log[who] = time.time(); log.warning("api denied: tg_id=%s path=%s", who, request.path)
+            return web.Response(status=code)
+        uid = user_id(request)
+        if not rate_ok(uid):
+            log.warning("api rate limit: tg_id=%s path=%s", uid, request.path)
+            return web.Response(status=429, headers={"Retry-After": "30"})
         try:
-            return await fn(request)
-        except (ValueError, KeyError, IndexError):
+            resp = await fn(request)
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError, RecursionError, OverflowError):
+            log.info("api bad request: tg_id=%s path=%s", uid, request.path)
             return web.Response(status=400)
+        except web.HTTPException:
+            raise
+        except Exception:                                    # непредвиденное: пишем в лог, наружу — без деталей
+            log.exception("api error: tg_id=%s path=%s", uid, request.path)
+            return web.json_response({"error": "internal"}, status=500)
+        if request.method == "POST" and resp.status < 400:   # журнал изменений
+            try:
+                j = await request.json()
+                target = " ".join(f"{k}={j[k]}" for k in AUDIT_KEYS if isinstance(j, dict) and isinstance(j.get(k), (int, str)) and len(str(j[k])) <= 20)
+            except Exception:
+                target = ""
+            audit(uid, request.path, target)
+        return resp
     return w
 
-TIME_FMT = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+TIME_FMT = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]", re.ASCII)
+DAY_FMT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", re.ASCII)
+MAX_MONEY = 10_000_000
+MAX_NAME, MAX_GRADE, MAX_SUBJECT = 100, 20, 100
 
 def check_slot(j):
-    date.fromisoformat(j["day"])
-    if not TIME_FMT.match(j["time"]):
+    """Проверяет день и время; день записывается обратно строго в виде YYYY-MM-DD (без «20261005» и т.п.)."""
+    if not isinstance(j["day"], str) or not isinstance(j["time"], str) or not DAY_FMT.fullmatch(j["day"]):
         raise ValueError
+    j["day"] = date.fromisoformat(j["day"]).isoformat()
+    if not TIME_FMT.fullmatch(j["time"]):
+        raise ValueError
+
+def money_val(x, lo=0):
+    """Целое число рублей в разумных пределах, иначе ValueError (→ 400)."""
+    if isinstance(x, bool) or not isinstance(x, (int, str)):
+        raise ValueError
+    n = int(x)
+    if not lo <= n <= MAX_MONEY:
+        raise ValueError
+    return n
+
+def clip(s, limit):
+    if not isinstance(s, str) or len(s.strip()) > limit:
+        raise ValueError
+    return s.strip()
 
 @guarded
 async def api_data(request):
@@ -1110,6 +1267,8 @@ def user_id(request):
     return json.loads(dict(parse_qsl(request.headers.get("X-Init", ""))).get("user", "{}")).get("id")
 
 def monday(s):
+    if not isinstance(s, str) or not DAY_FMT.fullmatch(s):
+        raise ValueError
     d = date.fromisoformat(s)
     return d - timedelta(days=d.weekday())
 
@@ -1130,7 +1289,10 @@ async def api_week_send(request):
 @guarded
 async def api_add(request):
     j = await request.json(); check_slot(j)
-    res = add_lesson(int(j["student_id"]), j["day"], j["time"], bool(j.get("regular")),
+    sid = int(j["student_id"])
+    if not q("select 1 from students where id=? and coalesce(deleted,0)=0", sid):
+        return web.json_response({"error": "no_student"}, status=404)
+    res = add_lesson(sid, j["day"], j["time"], bool(j.get("regular")),
                      max(45, min(480, int(j.get("dur") or 60))))
     if res is None:
         return web.json_response({"error": "busy"}, status=409)
@@ -1139,7 +1301,9 @@ async def api_add(request):
 @guarded
 async def api_move(request):
     j = await request.json(); check_slot(j)
-    if not move_lesson(int(j["id"]), j["day"], j["time"], int(j.get("dur") or 0) or None):
+    dur = int(j.get("dur") or 0)
+    dur = max(45, min(480, dur)) if dur else None
+    if not move_lesson(int(j["id"]), j["day"], j["time"], dur):
         return web.json_response({"error": "busy"}, status=409)
     return web.json_response({"ok": True})
 
@@ -1158,34 +1322,42 @@ async def api_stop(request):
     return web.json_response({"ok": True})
 
 MAX_PHOTO = 700_000   # ограничение размера base64-фото (~500 КБ картинки)
+PHOTO_RE = re.compile(r"data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}")
+
+def check_photo(photo):
+    """None/"" (нет/убрать) или строго JPEG data-URL. Иначе — ValueError → 400."""
+    if photo in (None, ""):
+        return photo
+    if not isinstance(photo, str) or len(photo) > MAX_PHOTO or not PHOTO_RE.fullmatch(photo):
+        raise ValueError
+    return photo
 
 @guarded
 async def api_student_update(request):
     j = await request.json()
-    name = j["name"].strip() if "name" in j else None
+    name = clip(j["name"], MAX_NAME) if "name" in j else None
     if name is not None and not name:
         return web.json_response({"error": "empty_name"}, status=400)
-    photo = j.get("photo")
-    if photo and len(photo) > MAX_PHOTO:
-        return web.json_response({"error": "photo_too_big"}, status=400)
-    update_student(int(j["id"]), name, photo)
-    if "price" in j:
-        set_price(int(j["id"]), j["price"])
-    for k in ("grade", "subject"):
-        if k in j:
-            run(f"update students set {k}=? where id=?", (j[k] or "").strip() or None, int(j["id"]))
+    photo = check_photo(j.get("photo"))
+    sid = int(j["id"])
+    price = money_val(j["price"]) if "price" in j else None
+    extra = {k: clip(j[k] or "", lim) or None for k, lim in (("grade", MAX_GRADE), ("subject", MAX_SUBJECT)) if k in j}
+    update_student(sid, name, photo)               # все проверки выше — до первой записи в БД
+    if price is not None:
+        set_price(sid, price)
+    for k, v in extra.items():                     # k — только из белого списка выше
+        run(f"update students set {k}=? where id=?", v, sid)
     return web.json_response({"ok": True})
 
 @guarded
 async def api_student_add(request):
-    j = await request.json(); name = j["name"].strip()
+    j = await request.json(); name = clip(j["name"], MAX_NAME)
     if not name:
         return web.json_response({"error": "empty_name"}, status=400)
-    photo = j.get("photo")
-    if photo and len(photo) > MAX_PHOTO:
-        return web.json_response({"error": "photo_too_big"}, status=400)
-    sid = run("insert into students(name,price,grade,subject) values(?,?,?,?)", name, int(j.get("price") or 0),
-              (j.get("grade") or "").strip() or None, (j.get("subject") or "").strip() or None)
+    photo = check_photo(j.get("photo"))
+    price = money_val(j.get("price") or 0)
+    grade, subject = clip(j.get("grade") or "", MAX_GRADE) or None, clip(j.get("subject") or "", MAX_SUBJECT) or None
+    sid = run("insert into students(name,price,grade,subject) values(?,?,?,?)", name, price, grade, subject)
     if photo:
         update_student(sid, None, photo)
     return web.json_response({"ok": True, "id": sid})
@@ -1206,9 +1378,7 @@ async def api_student_delete(request):
 async def api_payment_add(request):
     """Новая оплата из мини-аппа — в ту же таблицу payments, что и из бота (record_payment)."""
     j = await request.json()
-    sid, amount = int(j["student_id"]), int(j["amount"])
-    if amount <= 0:
-        return web.json_response({"error": "bad_amount"}, status=400)
+    sid, amount = int(j["student_id"]), money_val(j["amount"], 1)
     if not q("select 1 from students where id=?", sid):
         return web.json_response({"error": "no_student"}, status=404)
     pid = run("insert into payments(student_id,amount) values(?,?)", sid, amount)
@@ -1217,9 +1387,7 @@ async def api_payment_add(request):
 @guarded
 async def api_payment_update(request):
     j = await request.json()
-    amount = int(j["amount"])
-    if amount <= 0:
-        return web.json_response({"error": "bad_amount"}, status=400)
+    amount = money_val(j["amount"], 1)
     update_payment(int(j["id"]), amount)
     return web.json_response({"ok": True})
 
@@ -1238,6 +1406,10 @@ async def cors_mw(request, handler):
         resp = web.Response(status=204)
     else:
         resp = await handler(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.path.startswith("/api/"):
+        resp.headers.setdefault("Cache-Control", "no-store")             # данные учеников не кешируем
     allow = os.getenv("ALLOW_ORIGIN", "")
     origin = request.headers.get("Origin", "")
     if allow and origin and (allow == "*" or origin in [o.strip() for o in allow.split(",")]):
@@ -1248,48 +1420,9 @@ async def cors_mw(request, handler):
     return resp
 
 
-# ---------- Резервное копирование базы ----------
-async def backup_loop(bot: Bot):
-    """Каждые 12 ч отправляет файл базы всем пользователям с доступом.
-
-    На бесплатном тарифе хостинга диск эфемерный: tutor.db переживает только
-    пересоздание контейнера, а деплой/рестарт — нет. Бэкап в чат Telegram
-    позволяет вернуть данные одной командой восстановления на хосте."""
-    while True:
-        try:
-            if os.path.exists(DB_PATH):
-                for chat_id in OWNERS:
-                    try:
-                        await bot.send_document(chat_id=chat_id,
-                                                document=BufferedInputFile(open(DB_PATH, "rb").read(),
-                                                                          filename=f"tutor-{date.today().isoformat()}.db"),
-                                                caption="💾 Бэкап базы (tutor.db)")
-                    except Exception as e:
-                        print(f"⚠️ бэкап: не отправлено {chat_id}: {e}")
-                for name in OWNER_NAMES:
-                    try:
-                        chat = await bot.get_chat(f"@{name}")
-                        await bot.send_document(chat_id=chat.id,
-                                                document=BufferedInputFile(open(DB_PATH, "rb").read(),
-                                                                          filename=f"tutor-{date.today().isoformat()}.db"),
-                                                caption="💾 Бэкап базы (tutor.db)")
-                    except Exception as e:
-                        print(f"⚠️ бэкап: не отправлено @{name}: {e}")
-        except Exception as e:
-            print(f"⚠️ бэкап: {e}")
-        await asyncio.sleep(12 * 3600)
-
-
-async def main():
-    if not OWNER:
-        print("⚠️ OWNER_ID не задан: бот и кабинет будут доступны любому пользователю Telegram")
-    fill_regular()
-    bot = Bot(TOKEN)
-    asyncio.create_task(backup_loop(bot))   # бэкап базы в чат (важно на free-тарифе без диска)
-    dp = Dispatcher()
-    dp.include_router(r)
+def make_app():
+    """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
-    app["bot"] = bot
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
@@ -1305,15 +1438,33 @@ async def main():
     app.router.add_post("/api/payment/add", api_payment_add)
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
+    return app
+
+
+async def main():
+    auth.require_config()
+    fill_regular()
+    bot = Bot(TOKEN)
+    dp = Dispatcher()
+    dp.include_router(pub)
+    dp.include_router(r)
+    app = make_app()
+    app["bot"] = bot
+
+    async def on_login(tg_id):                      # после входа через сайт — открываем меню в чате
+        await bot.send_message(tg_id, "✅ Вход выполнен. Готово к работе — выберите действие в меню.", reply_markup=menu_kb())
+    async def on_alert(tg_id, text):
+        await bot.send_message(tg_id, text)
+    auth.setup(app, on_login, on_alert)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     if URL:
         btn = MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL))   # синяя кнопка слева от строки ввода
         await bot.set_chat_menu_button(menu_button=btn)
-        if OWNERS:
-            for chat_id in OWNERS:                      # синяя кнопка — каждому пользователю с доступом
-                await bot.set_chat_menu_button(chat_id=chat_id, menu_button=btn)
+        for uid in sorted(auth.ALLOWED_IDS):
+            try: await bot.set_chat_menu_button(chat_id=uid, menu_button=btn)
+            except Exception: pass                                           # чат ещё не начат — не страшно
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
