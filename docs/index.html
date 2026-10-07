@@ -162,8 +162,21 @@ const API_BASE=(window.__API_BASE__||"").replace(/\/+$/,"");
 let locked=false;
 function lockScreen(code){locked=true;document.body.textContent="";const d=document.createElement("div");
   d.style.cssText="padding:64px 28px;text-align:center;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
-  d.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом и нажмите /start, затем откройте кабинет заново."
-    :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет и откройте его заново из чата с ботом.";document.body.appendChild(d)}
+  const t=document.createElement("div");
+  t.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом, нажмите /start → «Войти» и введите логин и пароль. Затем вернитесь сюда и нажмите «Обновить»."
+    :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет (✕) и откройте его заново из чата с ботом.";d.appendChild(t);
+  const b=document.createElement("button");
+  b.textContent=code==401?"Я вошёл — обновить кабинет":"Закрыть кабинет";
+  b.style.cssText="margin-top:22px;padding:12px 24px;font:inherit;font-weight:600;color:#fff;background:var(--tg-theme-button-color,#2481cc);border:0;border-radius:10px;cursor:pointer";
+  b.onclick=()=>code==401?location.reload():tg.close();d.appendChild(b);
+  document.body.appendChild(d)}
+/* Вход происходит на странице /login (другая вкладка/браузер), а эта страница уже загружена и «заперта».
+   Поэтому при возврате в кабинет (свернули-развернули, вернулись из браузера) пробуем обновиться сами —
+   один раз за возврат, чтобы не зациклиться. */
+let autoRetry=false;
+const wake=()=>{if(locked&&!autoRetry&&document.visibilityState==="visible"){autoRetry=true;location.reload()}};
+document.addEventListener("visibilitychange",wake);
+if(tg.onEvent)tg.onEvent("activated",wake);
 async function api(p,b){const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:{"X-Init":tg.initData,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});
   if(r.status==401||r.status==403){lockScreen(r.status);return null}
   if(r.status==409){toast("Время занято или пересекается с другим занятием");return null}
