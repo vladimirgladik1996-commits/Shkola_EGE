@@ -1441,6 +1441,33 @@ def make_app():
     return app
 
 
+# ---------- keep-alive: не даём Render (free plan) усыпить сервис ----------
+KA_SEC = int(os.getenv("KEEPALIVE_SEC", "180"))   # 3 минуты — чаще, чем 15-минутный простой Render
+
+async def keepalive():
+    """Каждые KA_SEC секунд шлёт HTTP-запрос на собственный ПУБЛИЧНЫЙ URL.
+    Render считает сервис активным только по входящим запросам через свой прокси,
+    поэтому важны две вещи:
+      1) адрес — именно WEBAPP_URL (https://....onrender.com/), а не 127.0.0.1:
+         локальные запросы через прокси не проходят и активностью не считаются;
+      2) интервал < 15 минут (по умолчанию 180 с). Меняется переменной KEEPALIVE_SEC.
+    Недоступность адреса не роняет задачу: ошибка логируется, цикл продолжается."""
+    base = (URL or "").rstrip("/")
+    if not base:
+        log.warning("keepalive выключен: не задан WEBAPP_URL")
+        return
+    import aiohttp
+    async with aiohttp.ClientSession() as s:
+        while True:
+            try:
+                async with s.get(base + "/", timeout=aiohttp.ClientTimeout(total=15)) as r:
+                    await r.read()
+                log.debug("keepalive ping -> %s", r.status)
+            except Exception as e:
+                log.warning("keepalive ping не прошёл: %s", e)
+            await asyncio.sleep(KA_SEC)
+
+
 async def main():
     auth.require_config()
     fill_regular()
@@ -1459,6 +1486,7 @@ async def main():
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    ka = asyncio.create_task(keepalive())   # анти-сон: пинг каждые 3 мин (ссылку держим, чтобы задачу не собрал GC)
     if URL:
         btn = MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL))   # синяя кнопка слева от строки ввода
         await bot.set_chat_menu_button(menu_button=btn)
