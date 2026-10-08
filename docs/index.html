@@ -534,10 +534,22 @@ function cropPhoto(f,cb){if(!f)return;const r=new FileReader();
 function pickPhoto(inp){cropPhoto(inp.files[0],p=>{ph=p;phShow()})}
 async function cardPhoto(inp,id){cropPhoto(inp.files[0],async p=>{if(!p)return;
   const r=await api("/api/student/update",{id,photo:p});if(r){await load();card(id);toast("Фото обновлено")}})}
+function photoMenu(id){                    // id ученика; без id — форма добавления/редактирования
+  const inForm=id==null,s=inForm?null:(S.find(x=>x.id==id)||{}),v=$("#phv"),
+        has=inForm?!!(v&&v.textContent===""):!!(s.photo),
+        btns=[{id:"pick",type:"default",text:"Выбрать из галереи"}];
+  if(has)btns.push({id:"del",type:"destructive",text:"Удалить фото"});
+  btns.push({id:"no",type:"cancel",text:"Отмена"});
+  tg.showPopup({title:"Фото ученика",message:has?"Смените или удалите фото":"Выберите фото из галереи",buttons:btns},async r=>{
+    if(r==="pick"){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
+      inp.onchange=()=>inForm?pickPhoto(inp):cardPhoto(inp,id);inp.click()}
+    else if(r==="del"){
+      if(inForm){ph="";phShow()}
+      else if(await api("/api/student/update",{id,photo:""})){await load();card(id);toast("Фото удалено")}}});}
 function phShow(){const v=$("#phv");if(!v)return;v.style.background=ph?`url(${ph}) center/cover`:"var(--card)";v.textContent=ph?"":"📷"}
 function photoField(cur){ph=undefined;cur=safePhoto(cur);
   return `<div class="phw"><span id="phv" class="av" style="${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
-  <label class="phb2" title="Сменить фото">📷<input type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)"></label></div>`}
+  <button class="phb2" title="Изменить фото" onclick="photoMenu()">📷</button></div>`}
 const gradeSel=(id,cur)=>{cur=(cur||"").trim();const L_=GRADES.map(String);return `<select id="${id}"><option value="">Не указан</option>${(cur&&!L_.includes(cur)?[cur]:[]).concat(L_).map(g=>`<option value="${esc(g)}" ${g==cur?"selected":""}>${esc(gtxt(g))}</option>`).join("")}</select>`};
 const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
 function studNew(){
@@ -562,7 +574,7 @@ function card(id,ed){
   const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
   const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Текущий долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
   const info=(k,v)=>`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
-  open(`${s.deleted?"":`<button class="pen" aria-label="Редактировать профиль" onclick="card(${id},1)">✏️</button>`}${s.deleted?av(s,"big"):`<div class="phw">${av(s)}<label class="phb2" title="Сменить фото">📷<input type="file" accept="image/*" style="display:none" onchange="cardPhoto(this,${id})"></label></div>`}<h3 style="text-align:center;padding:0;font-size:21px">${esc(s.name)}</h3>
+  open(`${s.deleted?"":`<button class="pen" aria-label="Редактировать профиль" onclick="card(${id},1)">✏️</button>`}${s.deleted?av(s,"big"):`<div class="phw">${av(s)}<button class="phb2" title="Изменить фото" onclick="photoMenu(${id})">📷</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px">${esc(s.name)}</h3>
   <p class="sub" style="text-align:center">${[gtxt(s.grade),s.subject].filter(Boolean).map(esc).join(" · ")||"класс и предмет не указаны"}</p>
   <button class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}" onclick="balPop(${id})">${s.b==0?money(0):(s.b>0?"+":"−")+money(s.b)}</button>
   <p class="gcap">${s.b<0?"Есть долг":s.b>0?"Есть предоплата":"Все уроки оплачены вовремя"}</p>
