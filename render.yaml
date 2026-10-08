@@ -17,6 +17,7 @@ services:
     repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
     dockerfilePath: ./Dockerfile
     dockerContext: ./
+    branch: main
 
     # Бесплатный тариф (по требованию владельца). Следствия:
     #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
@@ -58,6 +59,53 @@ services:
       # счётчик простоя. По умолчанию 180 с (3 минуты); для free достаточно < 900.
       - key: KEEPALIVE_SEC
         value: "180"
+
+  # ============================================================
+  # TEST (dev) — проверка новых фич перед выкаткой в прод.
+  # Строится из ветки dev; сюда мержится новое, тестируется, потом
+  # ветка сливается в main (прод). См. DEPLOY.md «Среды».
+  #
+  # Создаётся при синхронизации Blueprint (или вручную: New → Web
+  # Service → репозиторий, Branch: dev, тот же Dockerfile).
+  #
+  # Важно:
+  #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
+  #    токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад);
+  #  • KEEPALIVE_SEC=0 — без антисна: dev спит после ~15 мин простоя и
+  #    не тратит ограниченные 750 бесплатных часов (prod занимает ~730).
+  #    Пробуждение — первый запрос, ~1 минута.
+  # ============================================================
+  - type: web
+    name: tutor-bot-dev
+    runtime: docker
+    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    branch: dev
+    plan: free
+    region: frankfurt
+    healthCheckPath: /
+    autoDeploy: true
+
+    envVars:
+      - key: BOT_TOKEN
+        sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
+      - key: ALLOWED_USERNAMES
+        sync: false # те же люди, что и в прод
+      - key: WEBAPP_URL
+        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
+      - key: AUTH_LOGIN
+        sync: false
+      - key: AUTH_PASSWORD_HASH
+        sync: false # можно тот же логин/пароль, что и в прод
+      - key: PUBLIC_URL
+        sync: false
+      - key: CURRENCY
+        value: "₽"
+      - key: KEEPALIVE_SEC
+        value: "0"
+      - key: LOG_LEVEL
+        value: "DEBUG"
 
 # ------------------------------------------------------------
 # WEBAPP_URL = публичный HTTPS-адрес сервиса, например:
