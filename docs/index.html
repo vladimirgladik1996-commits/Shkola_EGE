@@ -132,10 +132,27 @@ select,input{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;f
 .fbars i{display:block;width:100%;max-width:24px;border-radius:6px 6px 2px 2px;background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 45%,transparent))}
 .fbars em{font-style:normal;font-size:9.5px;color:var(--hint);white-space:nowrap;min-height:11px}
 .fh{font-size:13px;font-weight:700;margin:14px 0 2px}
+#top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);z-index:40;border-bottom:1px solid var(--ln)}
+#burger{width:42px;height:42px;flex:none;border-radius:12px;background:var(--card);font-size:20px;line-height:1;margin:0}
+#pttl{font-size:16px}
+#app{padding-top:58px}
+#menu{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none}
+#menu.on{display:block}
+#menu .mbox{position:absolute;left:0;top:0;bottom:0;width:76%;max-width:300px;background:var(--bg);padding:18px 12px;display:flex;flex-direction:column;gap:6px;box-shadow:3px 0 28px rgba(0,0,0,.28)}
+#menu .mbox button{text-align:left;padding:14px 16px;border-radius:12px;font-size:15px;font-weight:600;background:var(--card)}
+#menu .mbox button.on{background:var(--acc);color:var(--on)}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
+<header id="top"><button id="burger" aria-label="Меню" onclick="menuTg()">☰</button><b id="pttl">Расписание</b></header>
+<div id="menu" onclick="if(event.target.id=='menu')menuTg()"><div class="mbox">
+  <button data-t="c" class="on" onclick="go('c')">Расписание</button>
+  <button data-t="p" onclick="go('p')">Оплаты</button>
+  <button data-t="s" onclick="go('s')">Ученики</button>
+  <button data-t="ch" onclick="go('ch')">Чат</button>
+  <button data-t="mt" onclick="go('mt')">Материалы</button>
+  <button data-t="kn" onclick="go('kn')">Канал</button>
+</div></div>
 <main id="app"></main>
 <button id="fab" onclick="fabGo()">+ Занятие</button>
-<nav><button data-t="c" class="on">Расписание</button><button data-t="p">Оплаты</button><button data-t="s">Ученики</button></nav>
 <div id="sheet"></div>
 <div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="$('#pr').classList.remove('on')">Назад</button><button class="btn pri" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
 <div id="toast"></div>
@@ -260,32 +277,40 @@ function printIt(){
   const start=ws,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
   $("#pr").classList.add("on");fitNames($("#paper"));
+  pdfBlob=null;                                          /* забираем PDF сразу: шаринг должен идти без сетевой паузы */
+  fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:{"X-Init":tg.initData}})
+    .then(r=>r.ok?r.blob():null).then(b=>{pdfBlob=b}).catch(()=>{pdfBlob=null});
 }
 
 /* ---------- Форма занятия ---------- */
-let fd=60;
-function form(id,day,from){
-  const l=id?L.find(x=>x.id==id):null;fd=l?l.dur:60;
+let fd=60,F=null;
+function form(id,day,from,pre){
+  const l=id?L.find(x=>x.id==id):null;
+  F={id:id||0,from:from||"",day:l?l.day:(day||iso(T)),time:l?l.time:"08:00",dur:l?l.dur:60,rep:false,sid:pre||(l?String(l.sid):"")};
+  formR();
+}
+function formR(){
+  const l=F.id?L.find(x=>x.id==F.id):null;fd=F.dur;
   /* бот предлагает 45…180 мин с шагом 15; здесь — основные чипы 45/60/90/120/150/180.
      Своя длительность существующего занятия (например 75 мин) показывается отдельным чипом и сохраняется */
-  const durs=[45,60,90,120,150,180];if(fd&&!durs.includes(fd))durs.push(fd);durs.sort((a,b)=>a-b);
-  open(`${from?`<button class="pen" aria-label="Назад" onclick="dayCard('${from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
-  <label>Ученик<select id="fs" ${l?"disabled":""} onchange="$('#fn').style.display=this.value=='new'?'block':'none'">${S.filter(s=>!s.deleted||(l&&l.sid==s.id)).map(s=>`<option value="${s.id}" ${l&&l.sid==s.id?"selected":""}>${esc(s.name)}</option>`).join("")}<option value="new">＋ Новый ученик…</option></select></label>
-  <input id="fn" placeholder="Имя нового ученика" style="display:none;margin-bottom:10px">
-  <label>Дата<input type="date" id="fdte" value="${l?l.day:day||iso(T)}"></label>
-  <label>Время начала (любые минуты)<input type="time" id="ft" step="60" value="${l?l.time:"08:00"}" oninput="upd()"></label>
-  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==fd?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
-  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" onclick="save(${id||0})">Сохранить</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${id})">Отменить урок</button>`:""}</div>`);
+  const durs=[45,60,90,120,150,180];if(F.dur&&!durs.includes(F.dur))durs.push(F.dur);durs.sort((a,b)=>a-b);
+  open(`${F.from?`<button class="pen" aria-label="Назад" onclick="dayCard('${F.from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
+  <label>Ученик<select id="fs" ${l?"disabled":""} onchange="fsCh(this.value)">${S.filter(s=>!s.deleted||(l&&l.sid==s.id)).map(s=>`<option value="${s.id}" ${String(s.id)==String(F.sid)?"selected":""}>${esc(s.name)}</option>`).join("")}${l?"":'<option value="new">＋ Новый ученик…</option>'}</select></label>
+  <label>Дата<button class="pill" style="width:100%;text-align:left;margin:0" onclick="datePick()">📅 ${dmy2(F.day)}</button></label>
+  <label>Время начала (любые минуты)<input type="time" id="ft" step="60" value="${F.time}" oninput="F.time=this.value;upd()"></label>
+  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==F.dur?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
+  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0" onchange="F.rep=this.checked">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" onclick="save()">Сохранить</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${F.id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${F.id})">Отменить урок</button>`:""}</div>`);
   upd();
 }
-function setD(d){fd=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
-function upd(){const t=$("#ft").value;$("#fend").textContent=t?`${t}–${hm(mins(t)+fd)} · ${fd} мин`:""}
-async function save(id){
-  const t=$("#ft").value,day=$("#fdte").value;if(!t||!day)return toast("Укажите дату и время");
-  let sid=$("#fs").value;
-  if(sid=="new"){const n=$("#fn").value.trim();if(!n)return toast("Введите имя ученика");const r=await api("/api/student/add",{name:n});if(!r)return;sid=r.id}
-  const r=id?await api("/api/lesson/move",{id,day,time:t,dur:fd}):await api("/api/lesson/add",{student_id:+sid,day,time:t,dur:fd,regular:!!($("#frep")&&$("#frep").checked)});
-  if(!r)return;close_();ws=mon(new Date(day+"T00:00"));await load();
+function fsCh(v){F.sid=v;if(v=="new"){F.sid="";studNew(1)}}   // полная карточка нового ученика, потом возврат в форму
+function datePick(){cal={m:new Date(+F.day.slice(0,4),+F.day.slice(5,7)-1,1),a:F.day,b:"",t:"l"};calShow()}
+function setD(d){F.dur=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
+function upd(){const t=F.time;$("#fend").textContent=t?`${t}–${hm(mins(t)+F.dur)} · ${F.dur} мин`:""}
+async function save(){
+  if(!F.time||!F.day)return toast("Укажите дату и время");
+  if(!F.sid)return toast("Выберите ученика");
+  const r=F.id?await api("/api/lesson/move",{id:F.id,day:F.day,time:F.time,dur:F.dur}):await api("/api/lesson/add",{student_id:+F.sid,day:F.day,time:F.time,dur:F.dur,regular:F.rep});
+  if(!r)return;close_();ws=mon(new Date(F.day+"T00:00"));F=null;await load();
   if(r.skipped)toast("Часть повторов не поставлена — время занято: "+r.skipped)
 }
 function cancelL(id){const l=L.find(x=>x.id==id);
@@ -294,11 +319,17 @@ function cancelL(id){const l=L.find(x=>x.id==id);
     buttons:[{id:"one",type:"default",text:"Только этот урок"},{id:"all",type:"destructive",text:"Этот и все последующие"},{type:"cancel"}]},
     async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
-let pdfStart="";
-async function sharePdf(){const r=await fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:{"X-Init":tg.initData}});
-  const f=r.ok&&new File([await r.blob()],"raspisanie_"+pdfStart+".pdf",{type:"application/pdf"});
-  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){if(e&&e.name=="AbortError")return}}
-  if(await api("/api/week/send",{start:pdfStart}))tg.showAlert("PDF отправлен в чат с ботом. Перешлите файл в нужный мессенджер.")}
+let pdfStart="",pdfBlob=null;
+async function sharePdf(){
+  if(!pdfBlob){toast("PDF ещё готовится — секунду");return}
+  const f=new File([pdfBlob],"raspisanie_"+pdfStart+".pdf",{type:"application/pdf"});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){
+    try{await navigator.share({files:[f],title:"Расписание"});return}
+    catch(e){if(e&&e.name=="AbortError")return}}
+  /* нет системного шаринга — сохраняем файл: его можно отправить из галереи/файлов */
+  const u=URL.createObjectURL(pdfBlob),a=document.createElement("a");a.href=u;a.download=f.name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);
+  tg.showAlert("Файл сохранён. Откройте его в приложении «Файлы» и отправьте в нужном мессенджере.")}
 /* Распределение оплат: все оплаты ученика идут по порядку и закрывают его занятия от старых к новым (каждое по своей цене).
    Результат для каждой оплаты: на какие занятия она пошла, полностью или частично; остаток — предоплата без занятия. */
 function allocate(sid){
@@ -364,17 +395,17 @@ function payFeed(){
 function payCal(){const base=pd1?new Date(pd1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:pd1,b:pd1==pd2?"":pd2,t:"p"};calShow()}
 function dashCal(){const on=dp=="c"&&dc1,base=on?new Date(dc1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:on?dc1:"",b:on&&dc1!=dc2?dc2:"",t:"d"};calShow()}
 function calShow(){
-  const y=cal.m.getFullYear(),m=cal.m.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),has=new Set(allEntries().map(e=>iso(e.at)));
+  const y=cal.m.getFullYear(),m=cal.m.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),has=new Set(cal.t=="l"?L.map(l=>l.day):allEntries().map(e=>iso(e.at)));
   const lo=cal.a,hi=cal.b||cal.a;let g=WD.map(d=>`<i>${d}</i>`).join("")+"<span></span>".repeat(off);
   for(let d=1;d<=n;d++){const k=`${y}-${pad(m+1)}-${pad(d)}`,ed=k==lo||k==hi,inr=lo&&k>lo&&k<hi;
     g+=`<button class="cd ${ed?"sel":inr?"rng":""} ${k==iso(T)?"tdy":""}" onclick="calPick('${k}')">${d}${has.has(k)?'<u></u>':""}</button>`}
-  open(`<h3>${cal.t=="d"?"Выбор периода":"Фильтр по дате"}</h3><p class="sub">${!lo?"Нажмите дату или две даты для периода":lo==hi?dmy2(lo):dmy2(lo)+" – "+dmy2(hi)}</p>
+  open(`${cal.t=="l"?`<button class="pen" aria-label="Назад" onclick="formR()">‹</button>`:""}<h3>${cal.t=="d"?"Выбор периода":cal.t=="l"?"Выбор даты":"Фильтр по дате"}</h3><p class="sub">${!lo?"Нажмите день в календаре":lo==hi?dmy2(lo):dmy2(lo)+" – "+dmy2(hi)}</p>
   <div class="bar"><button class="pill" onclick="cal.m=new Date(${y},${m-1},1);calShow()">‹</button><b class="ttl">${cal.m.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="cal.m=new Date(${y},${m+1},1);calShow()">›</button></div>
   <div class="g calg">${g}</div>
-  <div class="btns"><button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Применить</button><button class="btn" onclick="calReset()">${cal.t=="d"?"Текущая неделя":"Сбросить"}</button></div>`)}
-function calPick(k){if(!cal.a||cal.b){cal.a=k;cal.b=""}else if(k<cal.a){cal.b=cal.a;cal.a=k}else cal.b=k;calShow()}
-function calApply(){if(cal.t=="d"){dp="c";dc1=cal.a;dc2=cal.b||cal.a;dsel=-1;dpi=-1;close_();render();return}pd1=cal.a;pd2=cal.b||cal.a;close_();payUpd()}
-function calReset(){if(cal.t=="d"){dp="w";dsel=-1;dpi=-1;close_();render();return}pd1=pd2='';close_();payUpd()}
+  <div class="btns">${cal.t=="l"?`<button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Выбрать</button><button class="btn" onclick="calReset()">Сегодня</button>`:`<button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Применить</button><button class="btn" onclick="calReset()">${cal.t=="d"?"Текущая неделя":"Сбросить"}</button>`}</div>`)}
+function calPick(k){if(cal.t=="l"){cal.a=k;cal.b="";calShow();return}if(!cal.a||cal.b){cal.a=k;cal.b=""}else if(k<cal.a){cal.b=cal.a;cal.a=k}else cal.b=k;calShow()}
+function calApply(){if(cal.t=="l"){F.day=cal.a;formR();return}if(cal.t=="d"){dp="c";dc1=cal.a;dc2=cal.b||cal.a;dsel=-1;dpi=-1;close_();render();return}pd1=cal.a;pd2=cal.b||cal.a;close_();payUpd()}
+function calReset(){if(cal.t=="l"){F.day=iso(T);formR();return}if(cal.t=="d"){dp="w";dsel=-1;dpi=-1;close_();render();return}pd1=pd2='';close_();payUpd()}
 /* ---------- Дашборд ---------- */
 let dp="w",dc1="",dc2="",dsel=-1,dpi=-1,fp="m";   // dp: w/m/q/y — период, c — свои даты (dc1…dc2)
 const kfmt=v=>v>=1000?(v/1000).toFixed(1).replace(".",",").replace(/,0$/,"")+" тыс.":String(Math.round(v));
@@ -511,7 +542,7 @@ async function payAdd(a){
 
 /* ---------- Ученики: поиск, фильтр по классу, добавление, карточка ---------- */
 const GRADES=[...Array(11)].map((_,i)=>i+1),PRICE_QUICK=[3000,4000,5000];
-let sq="",sg="all",ph;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать)
+let sq="",sg="all",ph,nsBack=0;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать), возврат из нового ученика в форму занятия
 const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
 function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
 function stu(){
@@ -552,7 +583,8 @@ function photoField(cur){ph=undefined;cur=safePhoto(cur);
   <button class="phb2" title="Изменить фото" onclick="photoMenu()">📷</button></div>`}
 const gradeSel=(id,cur)=>{cur=(cur||"").trim();const L_=GRADES.map(String);return `<select id="${id}"><option value="">Не указан</option>${(cur&&!L_.includes(cur)?[cur]:[]).concat(L_).map(g=>`<option value="${esc(g)}" ${g==cur?"selected":""}>${esc(gtxt(g))}</option>`).join("")}</select>`};
 const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
-function studNew(){
+function studNew(back){
+  nsBack=back||0;
   open(`<h3>Новый ученик</h3><p class="sub">Обязательно только имя</p>${photoField("")}
   <label>Имя и фамилия *<input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label>
   <label>Класс${gradeSel("ng","")}</label>
@@ -563,7 +595,9 @@ async function studAdd(){
   const name=$("#nn").value.trim();if(!name)return toast("Введите имя ученика");
   const b={name,grade:$("#ng").value,subject:$("#nsb").value.trim(),price:Math.max(0,parseInt($("#np").value,10)||0)};if(ph)b.photo=ph;
   const r=await api("/api/student/add",b);if(!r)return;
-  close_();await load();toast("Ученик добавлен: "+name);
+  await load();
+  if(nsBack){nsBack=0;F.sid=String(r.id);formR();toast("Ученик добавлен: "+name);return}   // вернулись в форму занятия
+  close_();toast("Ученик добавлен: "+name);
 }
 function card(id,ed){
   const s=bal(S.find(x=>x.id==id));
@@ -574,7 +608,7 @@ function card(id,ed){
   const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
   const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Текущий долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
   const info=(k,v)=>`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
-  open(`${s.deleted?"":`<button class="pen" aria-label="Редактировать профиль" onclick="card(${id},1)">✏️</button>`}${s.deleted?av(s,"big"):`<div class="phw">${av(s)}<button class="phb2" title="Изменить фото" onclick="photoMenu(${id})">📷</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px">${esc(s.name)}</h3>
+  open(`${s.deleted?av(s,"big"):`<div class="phw">${av(s)}<button class="phb2" title="Изменить фото" onclick="photoMenu(${id})">📷</button></div>`}${s.deleted?"":`<div style="text-align:center;margin:-2px 0 10px"><button class="pill" onclick="card(${id},1)">✏️ Изменить</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px">${esc(s.name)}</h3>
   <p class="sub" style="text-align:center">${[gtxt(s.grade),s.subject].filter(Boolean).map(esc).join(" · ")||"класс и предмет не указаны"}</p>
   <button class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}" onclick="balPop(${id})">${s.b==0?money(0):(s.b>0?"+":"−")+money(s.b)}</button>
   <p class="gcap">${s.b<0?"Есть долг":s.b>0?"Есть предоплата":"Все уроки оплачены вовремя"}</p>
@@ -597,7 +631,10 @@ async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Вв�
 /* ---------- каркас ---------- */
 function open(h){$("#sheet").innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){$("#sheet").classList.remove("on")}
-function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():stu();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
-$("nav").onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;render();scrollTo(0,0)}};
+function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():soon();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";$("#pttl").textContent=TITLES[tab]||"";document.querySelectorAll("#menu button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
+const TITLES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат",mt:"Материалы",kn:"Канал"};
+function soon(){return `<h2>${TITLES[tab]||""}</h2><p class="empty">Раздел «${TITLES[tab]||""}» появится позже.</p>`}
+function menuTg(){$("#menu").classList.toggle("on")}
+function go(t){tab=t;$("#menu").classList.remove("on");render();scrollTo(0,0)}
 load();
 </script></body></html>
