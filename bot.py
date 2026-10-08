@@ -33,8 +33,6 @@ DB_PATH = os.path.join(DATA_DIR, "tutor.db")
 _legacy_db = os.path.join(HERE, "tutor.db")      # старая база лежала рядом с кодом — переносим
 if not os.path.exists(DB_PATH) and os.path.exists(_legacy_db):
     os.replace(_legacy_db, DB_PATH)
-DB_FRESH = not os.path.exists(DB_PATH)           # базы не было — контейнер пересоздан (free-тариф: диск не сохраняется)
-
 db = sqlite3.connect(DB_PATH, check_same_thread=False)
 try: os.chmod(DB_PATH, 0o600)
 except OSError: pass
@@ -1421,189 +1419,6 @@ async def cors_mw(request, handler):
     return resp
 
 
-# ---------- Резервное копирование и восстановление базы ----------
-# На бесплатном тарифе Render диск эфемерный: tutor.db стирается при каждом
-# рестарте/деплое/засыпании сервиса. Бэкап файлом в чат Telegram — единственное,
-# что переживает перезапуск; восстановление — прислать файл боту обратно.
-BACKUP_H = max(1, int(os.getenv("BACKUP_HOURS", "12") or 12))     # период бэкапа, часов
-MAX_RESTORE_FILE = 20 * 1024 * 1024          # Bot API не отдаёт боту файлы больше 20 МБ
-_pending = {}                                # tg_id → байты присланного бэкапа (ждут подтверждения)
-
-
-def db_snapshot() -> bytes:
-    """Консистентная копия базы одним файлом (backup API sqlite — строки из WAL не потеряются)."""
-    tmp = DB_PATH + ".bak"
-    dst = sqlite3.connect(tmp)
-    try:
-        db.backup(dst)
-    finally:
-        dst.close()
-    try:
-        with open(tmp, "rb") as f:
-            return f.read()
-    finally:
-        os.remove(tmp)
-
-
-def _has_data():
-    """Пустую базу не рассылаем как бэкап: иначе она затрёт последний нормальный файл в чате."""
-    try:
-        return bool(q("select 1 from students limit 1") or q("select 1 from payments limit 1"))
-    except Exception:
-        return False
-
-
-def restore_db(data: bytes):
-    """Живая подмена базы присланным файлом (без рестарта): проверка → замена → переинициализация."""
-    global db
-    if not isinstance(data, (bytes, bytearray)) or not bytes(data).startswith(b"SQLite format 3\x00"):
-        raise ValueError("это не файл базы SQLite")
-    tmp = DB_PATH + ".restore"
-    with open(tmp, "wb") as f:
-        f.write(data)
-    try:
-        v = sqlite3.connect(tmp)
-        try:
-            if v.execute("pragma quick_check").fetchone()[0] != "ok":
-                raise ValueError("файл базы повреждён")
-        finally:
-            v.close()
-    except Exception:
-        os.remove(tmp)                         # рабочая база ещё не тронута — проверка идёт до подмены
-        raise
-    try: os.chmod(tmp, 0o600)
-    except OSError: pass
-    db.close()
-    for suffix in ("", "-wal", "-shm"):       # WAL-файлы старой базы к новому файлу не относятся
-        p = DB_PATH + suffix
-        if os.path.exists(p):
-            os.remove(p)
-    os.replace(tmp, DB_PATH)
-    db = sqlite3.connect(DB_PATH, check_same_thread=False)
-    db.row_factory = sqlite3.Row
-    db.execute("pragma busy_timeout=5000")
-    db.execute("pragma journal_mode=wal")
-    db.execute("pragma synchronous=normal")
-    init_db(db)
-    auth.init(db)
-    _canon_days()
-    log.info("база восстановлена из бэкапа (%s байт)", len(data))
-
-
-async def backup_targets(b: Bot) -> list:
-    """Кому слать бэкап: числовые ID + @ники (резолвим в чаты), без дублей."""
-    ids = set(auth.ALLOWED_IDS)
-    for name in sorted(auth.USERNAMES):
-        try:
-            ids.add((await b.get_chat(f"@{name}")).id)
-        except Exception as e:
-            log.debug("бэкап: @%s недоступен: %s", name, e)
-    return sorted(ids)
-
-
-async def send_backup(b: Bot, chat_id: int):
-    await b.send_document(chat_id=chat_id,
-                          document=BufferedInputFile(db_snapshot(), filename=f"tutor-{date.today().isoformat()}.db"),
-                          caption="💾 Бэкап базы (tutor.db).\n"
-                                  "Восстановление: пришлите файл мне обратно или ответьте на это сообщение командой /restore.")
-
-
-async def backup_loop(b: Bot):
-    """Каждые BACKUP_H часов шлёт файл базы всем, у кого есть доступ."""
-    while True:
-        try:
-            if _has_data():
-                for chat_id in await backup_targets(b):
-                    try:
-                        await send_backup(b, chat_id)
-                    except Exception as e:
-                        log.warning("бэкап: не отправлено %s: %s", chat_id, e)
-        except Exception as e:
-            log.warning("бэкап: %s", e)
-        await asyncio.sleep(BACKUP_H * 3600)
-
-
-async def fresh_notice(b: Bot):
-    """База создана с нуля (контейнер пересоздан) — просим прислать последний бэкап."""
-    text = ("⚠️ База данных пустая: сервис перезапустился, а диск на free-тарифе не сохраняется.\n\n"
-            "Пришлите мне последний файл-бэкап (tutor-ГГГГ-ММ-ДД.db) — восстановлю все данные и входы.\n"
-            "Либо ответьте командой /restore на моё сообщение с бэкапом.\n"
-            "Если бэкапа ещё нет — просто продолжайте работу, база создана заново.")
-    for chat_id in await backup_targets(b):
-        try:
-            await b.send_message(chat_id, text)
-        except Exception as e:
-            log.warning("fresh: не отправлено %s: %s", chat_id, e)
-
-
-async def _offer_restore(m: Message, d):
-    name = d.file_name or "tutor.db"
-    if not name.lower().endswith(".db"):
-        await m.answer("Пришлите файл бэкапа базы (tutor-ГГГГ-ММ-ДД.db).")
-        return
-    if (d.file_size or 0) > MAX_RESTORE_FILE:
-        await m.answer("⚠️ Файл больше 20 МБ — Telegram не отдаст его боту для скачивания.")
-        return
-    try:
-        data = (await m.bot.download(d.file_id)).read()
-    except Exception as e:
-        log.warning("restore: файл не скачался: %s", e)
-        await m.answer("Не получилось скачать файл. Попробуйте ещё раз.")
-        return
-    if not data.startswith(b"SQLite format 3\x00"):
-        await m.answer("Это не файл базы SQLite — восстановление отменено.")
-        return
-    _pending[m.from_user.id] = data
-    await m.answer(f"Восстановить базу из «{name}»?\n⚠️ Текущие данные будут полностью заменены содержимым файла.",
-                   reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                       InlineKeyboardButton(text="✅ Восстановить", callback_data="bk:y"),
-                       InlineKeyboardButton(text="Отмена", callback_data="bk:n")]]))
-
-
-@r.message(F.document)
-async def h_backup_doc(m: Message):
-    await _offer_restore(m, m.document)
-
-
-@r.message(Command("restore"))
-async def h_restore_cmd(m: Message):
-    d = m.reply_to_message.document if m.reply_to_message else None
-    if not d:
-        await m.answer("Ответьте этой командой на моё сообщение с бэкапом — или просто пришлите файл tutor-*.db.")
-        return
-    await _offer_restore(m, d)
-
-
-@r.message(Command("backup"))
-async def h_backup_now(m: Message):
-    await send_backup(m.bot, m.from_user.id)
-
-
-@r.callback_query(F.data.startswith("bk:"))
-async def h_restore_cb(c: CallbackQuery):
-    data = _pending.pop(c.from_user.id, None)
-    if c.data == "bk:n":
-        await c.answer("Отменено")
-        if c.message: await c.message.edit_text("Восстановление отменено.")
-        return
-    if data is None:
-        await c.answer("Данные файла не сохранились — пришлите бэкап ещё раз.", show_alert=True)
-        return
-    try:
-        restore_db(data)
-    except ValueError as e:
-        await c.answer(f"Не восстановлено: {e}", show_alert=True)
-        return
-    except Exception:
-        log.exception("restore: сбой восстановления")
-        await c.answer("Не восстановлено — смотрите лог сервиса.", show_alert=True)
-        return
-    await c.answer("Готово")
-    if c.message:
-        await c.message.edit_text("✅ База восстановлена из бэкапа. Данные и входы — как на момент файла.\n"
-                                  "Если кабинет попросит войти снова — просто войдите через /start.")
-
-
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
@@ -1671,9 +1486,6 @@ async def main():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     ka = asyncio.create_task(keepalive())   # анти-сон: пинг каждые 3 мин (ссылку держим, чтобы задачу не собрал GC)
-    bk = asyncio.create_task(backup_loop(bot))    # бэкап базы в чат: на free-тарифе диск эфемерный
-    if DB_FRESH:
-        asyncio.create_task(fresh_notice(bot))    # база пустая после перезапуска — просим прислать бэкап
     if URL:
         btn = MenuButtonWebApp(text="Кабинет", web_app=WebAppInfo(url=URL))   # синяя кнопка слева от строки ввода
         await bot.set_chat_menu_button(menu_button=btn)
