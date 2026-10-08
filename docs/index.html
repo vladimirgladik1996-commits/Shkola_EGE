@@ -1,11 +1,14 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Кабинет репетитора</title>
+<meta name="theme-color" content="#FBF7E9">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap">
+<title>Надежда · Кабинет репетитора</title>
 <style>
-:root{--bg:#fff;--tx:#1b1b1b;--hint:#7b7f86;--card:#f1f2f4;--acc:#1f7a6d;--on:#fff;--red:#d64545;--grn:#2e9e5b;--ln:#e2e4e8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17191c;--tx:#eceef0;--hint:#8f959c;--card:#23262a;--acc:#3aa896;--on:#0d1a17;--ln:#2f3338}}
-:root[data-theme="dark"]{--bg:#17191c;--tx:#eceef0;--hint:#8f959c;--card:#23262a;--acc:#3aa896;--on:#0d1a17;--ln:#2f3338}
+:root{--bg:#FBF7E9;--tx:#0E2250;--hint:#66719A;--card:#fff;--acc:#0F2E6E;--on:#fff;--red:#D64545;--grn:#1F9A5B;--ln:#E9E1C8;--yel:#FFC93C;--yon:#0E2250;--bbg:#0F2E6E;--sh:rgba(15,46,110,.22);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B1836;--tx:#F2F5FF;--hint:#9AA8CC;--card:#132452;--acc:#FFC93C;--on:#0E2250;--red:#FF7B7B;--grn:#3FCB82;--ln:#243A70;--bbg:#1B3470;--sh:rgba(0,0,0,.5)}}
+:root[data-theme="dark"]{--bg:#0B1836;--tx:#F2F5FF;--hint:#9AA8CC;--card:#132452;--acc:#FFC93C;--on:#0E2250;--red:#FF7B7B;--grn:#3FCB82;--ln:#243A70;--bbg:#1B3470;--sh:rgba(0,0,0,.5)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box;margin:0}
 body{font:15px/1.4 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:12px 10px 150px;max-width:560px;margin:0 auto}
@@ -67,9 +70,6 @@ h2{font-size:15px;margin:14px 2px 8px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
 .stat{background:var(--card);border-radius:14px;padding:10px}.stat small{display:block;color:var(--hint);font-size:12px}
 .empty{color:var(--hint);text-align:center;padding:18px 0}
-nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--bg);border-top:1px solid var(--ln);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
-nav button{flex:1;padding:10px 0;border-radius:12px;color:var(--hint);font-weight:600}
-nav button.on{color:var(--acc);background:var(--card)}
 #fab{position:fixed;right:14px;bottom:calc(72px + env(safe-area-inset-bottom,0px));padding:13px 20px;border-radius:99px;background:var(--acc);color:var(--on);font-weight:600;box-shadow:0 4px 14px #0003}
 #sheet,#pr{display:none;position:fixed;inset:0}
 #sheet{z-index:10}#pr{z-index:20;background:var(--card);flex-direction:column}
@@ -132,25 +132,147 @@ select,input{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;f
 .fbars i{display:block;width:100%;max-width:24px;border-radius:6px 6px 2px 2px;background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 45%,transparent))}
 .fbars em{font-style:normal;font-size:9.5px;color:var(--hint);white-space:nowrap;min-height:11px}
 .fh{font-size:13px;font-weight:700;margin:14px 0 2px}
-#top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);z-index:40;border-bottom:1px solid var(--ln)}
-#burger{width:42px;height:42px;flex:none;border-radius:12px;background:var(--card);font-size:20px;line-height:1;margin:0}
-#pttl{font-size:16px}
-#app{padding-top:58px}
-#menu{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none}
-#menu.on{display:block}
-#menu .mbox{position:absolute;left:0;top:0;bottom:0;width:76%;max-width:300px;background:var(--bg);padding:18px 12px;display:flex;flex-direction:column;gap:6px;box-shadow:3px 0 28px rgba(0,0,0,.28)}
-#menu .mbox button{text-align:left;padding:14px 16px;border-radius:12px;font-size:15px;font-weight:600;background:var(--card)}
-#menu .mbox button.on{background:var(--acc);color:var(--on)}
+
+/* ===================== Бренд «Надежда» ===================== */
+html,body{overflow-x:clip}
+body{font-family:"Nunito",-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;padding:72px 10px 112px}
+h3,h2{font-weight:800}
+.pill,.seg button,.dseg button,.btn{font-weight:700}
+:focus-visible{outline:2.5px solid var(--yel);outline-offset:2px}
+.row,.feed,.srow,.stat,.avgc,.hb,.pc,.kp,.d{box-shadow:0 0 0 1px var(--ln)}
+.row,.feed,.srow{border-radius:16px}
+.pc{border-radius:24px}
+.sc{background:var(--card);border-radius:16px}.paper .sc{background:#fff}
+.d.tod{background:color-mix(in srgb,var(--yel) 34%,var(--card));outline:2px solid var(--yel)}
+.wh b.td em{background:var(--yel);color:var(--yon)}
+.hero{background:radial-gradient(120% 140% at 100% 0,#FFC93C47,transparent 55%),linear-gradient(135deg,#1B4AAE,#0B2257);box-shadow:0 16px 32px -18px #0B2257}
+.btn.pri,.pill.on,.seg button.on{box-shadow:0 6px 14px -8px var(--sh)}
+#fab{bottom:calc(22px + env(safe-area-inset-bottom,0px));right:16px;z-index:6;padding:14px 22px;background:var(--yel);color:var(--yon);font-weight:900;font-size:15.5px;box-shadow:0 10px 22px -8px rgba(15,46,110,.55),inset 0 -3px 0 rgba(0,0,0,.1);transition:transform .15s}
+#fab:active{transform:scale(.95)}
+#toast{background:#0E2250;color:#fff;top:calc(env(safe-area-inset-top,0px) + 66px);z-index:70;border:1px solid #ffffff30;box-shadow:0 8px 22px -8px #0008}
+
+/* --- верхняя панель --- */
+#top{position:fixed;z-index:5;top:0;left:0;right:0;height:calc(56px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 14px 0 68px;display:flex;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:box-shadow .25s}
+#top.scr{box-shadow:0 1px 0 var(--ln),0 10px 18px -14px var(--sh)}
+#ttl{display:inline-block;font-size:21px;font-weight:900;letter-spacing:-.01em;white-space:nowrap}
+#tmk{width:36px;height:36px;border-radius:50%;object-fit:cover;background:#fff;box-shadow:0 0 0 2px var(--yel)}
+
+/* --- кнопка-гамбургер --- */
+#burger{position:fixed;z-index:60;left:10px;top:calc(env(safe-area-inset-top,0px) + 6px);width:44px;height:44px;border-radius:14px;background:var(--bbg);display:grid;place-content:center;box-shadow:0 6px 14px -8px var(--sh);transition:background .3s,transform .2s,box-shadow .3s}
+#burger:active{transform:scale(.92)}
+#burger i{display:block;width:22px;height:3px;border-radius:3px;background:#fff;transition:transform .42s cubic-bezier(.5,1.6,.4,1),opacity .2s,width .3s}
+#burger i+i{margin-top:4.5px}
+#burger i:nth-child(2){width:14px;background:var(--yel);justify-self:start}
+#burger.on{box-shadow:0 0 0 1.5px #ffffff38}
+#burger.on i:nth-child(1){transform:translateY(7.5px) rotate(45deg)}
+#burger.on i:nth-child(2){transform:scaleX(0);opacity:0}
+#burger.on i:nth-child(3){transform:translateY(-7.5px) rotate(-45deg)}
+body:has(#sheet.on) #burger,body:has(#pr.on) #burger{z-index:6}
+
+/* --- выезжающее меню --- */
+#scrim{position:fixed;inset:0;z-index:40;background:rgba(8,22,60,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+#scrim.on{opacity:1;visibility:visible;transition-delay:0s}
+#drawer{position:fixed;z-index:50;top:0;bottom:0;left:0;width:min(84vw,330px);display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;background:var(--bg);border-radius:0 28px 28px 0;box-shadow:12px 0 40px -10px rgba(5,14,40,.5);transform:translateX(-104%);visibility:hidden;transition:transform .28s cubic-bezier(.4,0,1,1),visibility 0s .28s}
+#drawer.on{transform:none;visibility:visible;transition:transform .46s cubic-bezier(.22,1,.36,1),visibility 0s}
+.mn-head{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 62px) 20px 22px;color:#fff;border-radius:0 0 28px 0;background:radial-gradient(90% 120% at 100% 0,#FFC93C33,transparent 60%),linear-gradient(150deg,#1B4AAE,#0B2257)}
+.mn-logo{flex:none;width:64px;height:64px;border-radius:50%;object-fit:cover;background:#fff;box-shadow:0 0 0 3px var(--yel);transform:rotate(-16deg) scale(.7);transition:transform .6s cubic-bezier(.3,1.6,.5,1) .12s}
+#drawer.on .mn-logo{transform:none}
+.mn-head b{display:block;font-size:24px;font-weight:900;line-height:1.1}
+.mn-head small{display:block;margin-top:3px;font-size:13px;font-weight:700;color:var(--yel)}
+.mn-paw{position:absolute;right:-12px;bottom:-16px;width:96px;height:96px;fill:#FFC93C;opacity:.16;transform:rotate(-18deg);pointer-events:none}
+#nv{position:relative;display:flex;flex-direction:column;gap:6px;padding:18px 14px}
+#nvi{position:absolute;left:14px;right:14px;top:0;height:56px;border-radius:18px;background:var(--yel);box-shadow:0 8px 16px -10px #C58A00;pointer-events:none;transition:transform .5s cubic-bezier(.34,1.45,.5,1),height .3s}
+.mn-it{position:relative;z-index:1;display:flex;align-items:center;gap:14px;height:56px;padding:0 16px;border-radius:18px;font-size:17px;font-weight:800;text-align:left;color:var(--tx);transition:color .25s}
+.mn-it.on{color:var(--yon)}
+.mn-it svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.mn-it.on svg{transform:scale(1.14) rotate(-6deg)}
+@keyframes mnIn{from{opacity:0;transform:translateX(-18px)}}
+#drawer.on .mn-it{animation:mnIn .5s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.12s + var(--i)*60ms)}
+.mn-foot{margin-top:auto;padding:0 20px calc(22px + env(safe-area-inset-bottom,0px))}
+.mn-note{display:inline-block;padding:10px 14px;border-radius:6px 14px 8px 14px;background:var(--yel);color:var(--yon);font-size:14px;font-weight:800;transform:rotate(-2deg);box-shadow:0 8px 14px -10px var(--sh)}
+.mn-foot small{display:block;margin-top:10px;color:var(--hint);font-size:12.5px;font-weight:600}
+@media (prefers-reduced-motion:reduce){#drawer,#scrim,#burger,#burger i,#nvi,.mn-logo,.mn-it,.mn-it svg{transition-duration:.01ms!important;transition-delay:0s!important}#drawer.on .mn-it{animation:none}}
+/* ===== Патч: форма занятия, список классов, календарь, анимация «карточка → ячейка дня» ===== */
+@keyframes shUp{from{transform:translateY(46px);opacity:0}}
+@keyframes bdIn{from{opacity:0}}
+#sheet.on .sh{animation:shUp .42s cubic-bezier(.22,1,.36,1)}
+#sheet.on .bd{animation:bdIn .25s both}
+.sh{border-radius:28px 28px 0 0;box-shadow:0 -12px 40px -14px rgba(5,14,40,.5)}
+.hid{display:none!important}
+input,select{box-shadow:0 0 0 1px var(--ln)}
+/* выбор ученика */
+.stc{display:flex;flex-wrap:wrap;gap:6px;max-height:128px;overflow-y:auto;padding:2px;margin:0 -2px 8px}
+.stc button{display:flex;align-items:center;gap:8px;max-width:100%;padding:4px 14px 4px 4px;border-radius:99px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-weight:800;font-size:13.5px;transition:background .2s,color .2s,box-shadow .2s,transform .15s}
+.stc button:active{transform:scale(.95)}
+.stc button.on{background:var(--acc);color:var(--on);box-shadow:0 6px 14px -8px var(--sh)}
+.stc .av{width:28px;height:28px;font-size:11px}
+.stc .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stc button.add{padding:4px 14px;color:var(--acc)}.stc button.add.on{color:var(--on)}
+.hint0{display:flex;flex-direction:column;gap:2px;margin-bottom:12px;padding:12px 14px;border-radius:16px;background:color-mix(in srgb,var(--yel) 28%,var(--card));font-size:13.5px}
+.hint0 b{font-weight:800;font-size:14.5px}
+/* раскрывающиеся блоки */
+.fold{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .38s cubic-bezier(.22,1,.36,1),opacity .25s}
+.fold.on{grid-template-rows:1fr;opacity:1}
+.fold>div{min-height:0;overflow:hidden;padding:0 2px}
+.fold .in{background:var(--card);border-radius:18px;padding:14px 14px 6px;margin:0 0 12px;box-shadow:0 0 0 1px var(--ln)}
+.fold .in input{background:var(--bg)}
+.fold .in .sub{margin:-2px 0 10px}
+/* сетка классов */
+.gg{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px}
+.gg button{padding:11px 0;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;transition:background .2s,color .2s,transform .15s,box-shadow .2s}
+.gg button:active{transform:scale(.93)}
+.gg button.on{background:var(--acc);color:var(--on);box-shadow:0 6px 14px -8px var(--sh)}
+.gg button.no{font-size:13px;color:var(--hint)}
+.gg button:disabled{opacity:.35}
+.gg sup{margin-left:2px;font-size:9.5px;font-weight:700;opacity:.7}
+.fold .in .gg button{background:var(--bg)}.fold .in .gg button.on{background:var(--acc)}
+.fold .in .pill{background:var(--bg)}.fold .in .pill.on{background:var(--acc)}
+.srow .info b{overflow:hidden;text-overflow:ellipsis}
+/* строка ученика */
+.srow{transition:transform .15s}.srow:active{transform:scale(.985)}
+.gt{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--yel);color:var(--yon);font-size:11px;font-weight:800;vertical-align:1px}
+.bp{flex:none;padding:5px 10px;border-radius:99px;background:var(--bg);color:var(--hint);font-size:12px;font-weight:800;white-space:nowrap}
+.bp.neg{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
+.bp.pos{background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn)}
+.empty0{text-align:center;background:var(--card);border-radius:24px;padding:28px 18px 20px;box-shadow:0 0 0 1px var(--ln)}
+.empty0 .e0i{font-size:38px;margin-bottom:6px}.empty0 b{display:block;font-size:17px;font-weight:800}
+.empty0 p{color:var(--hint);margin:4px 0 16px}
+/* поле даты и мини-календарь */
+.dbtn{display:flex;align-items:center;gap:10px;width:100%;margin:4px 0 2px;padding:12px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-size:16px;font-weight:700;text-align:left}
+.dbtn svg{flex:none;color:var(--acc)}
+.dbtn i{margin-left:auto;font-style:normal;color:var(--hint);transition:transform .3s}.dbtn.on i{transform:rotate(90deg)}
+.dpc{background:var(--card);border-radius:18px;padding:10px;margin:8px 0 4px;box-shadow:0 0 0 1px var(--ln)}
+/* календарь в брендовом стиле (форма занятия + фильтр по дате) */
+.calg{gap:5px}
+.calg i{font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.calg button.cd{border-radius:14px;font-size:15px;font-weight:700;box-shadow:0 0 0 1px var(--ln);transition:background .2s,color .2s,transform .15s}
+.calg button.cd:active{transform:scale(.9)}
+.calg .cd.rng{background:color-mix(in srgb,var(--yel) 38%,var(--card));box-shadow:none}
+.calg .cd.sel{background:var(--acc);color:var(--on);box-shadow:0 6px 14px -8px var(--sh)}
+.calg .cd.tdy{outline:0}
+.calg .cd.tdy:not(.sel){background:color-mix(in srgb,var(--yel) 34%,var(--card));box-shadow:0 0 0 2px var(--yel)}
+.calg .cd u{bottom:5px;width:5px;height:5px;margin-left:-2.5px;background:var(--yel);opacity:1}
+.dpc .calg button.cd{aspect-ratio:auto;height:40px;background:var(--bg);box-shadow:none}
+.dpc .calg button.cd.sel{background:var(--acc);color:var(--on)}
+.dpc .calg button.cd.tdy:not(.sel){background:color-mix(in srgb,var(--yel) 34%,var(--bg));box-shadow:0 0 0 2px var(--yel)}
+.bar .ttl{font-weight:900;text-transform:capitalize}
+/* анимация: карточка добавления сворачивается в ячейку дня */
+.sh.fly{position:fixed;right:auto;bottom:auto;max-height:none;max-width:none;margin:0;overflow:hidden;z-index:80;pointer-events:none;animation:none;box-shadow:0 14px 34px -10px rgba(5,14,40,.55)}
+.sh.fly>*{transition:opacity .2s}.sh.fly.go>*{opacity:0}
+.fly-bd{position:fixed;inset:0;z-index:79;background:#0006;pointer-events:none}
+@keyframes pop{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--yel) 85%,transparent)}35%{transform:scale(1.07)}100%{box-shadow:0 0 0 16px transparent}}
+.pop{z-index:3;animation:pop .75s cubic-bezier(.22,1,.36,1)}
+.pop .c{animation:fdi .45s both}
+@media (prefers-reduced-motion:reduce){#sheet.on .sh,#sheet.on .bd,.pop,.pop .c{animation:none}.fold,.gg button,.stc button,.dbtn i{transition-duration:.01ms}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
-<header id="top"><button id="burger" aria-label="Меню" onclick="menuTg()">☰</button><b id="pttl">Расписание</b></header>
-<div id="menu" onclick="if(event.target.id=='menu')menuTg()"><div class="mbox">
-  <button data-t="c" class="on" onclick="go('c')">Расписание</button>
-  <button data-t="p" onclick="go('p')">Оплаты</button>
-  <button data-t="s" onclick="go('s')">Ученики</button>
-  <button data-t="ch" onclick="go('ch')">Чат</button>
-  <button data-t="mt" onclick="go('mt')">Материалы</button>
-  <button data-t="kn" onclick="go('kn')">Канал</button>
-</div></div>
+<header id="top"><span id="ttl" aria-live="polite">Расписание</span><img id="tmk" alt="" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwQDAwQEBAQFBQQFBwsHBwYGBw4KCggLEA4RERAOEA8SFBoWEhMYEw8QFh8XGBsbHR0dERYgIh8cIhocHRz/2wBDAQUFBQcGBw0HBw0cEhASHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBz/wAARCACQAJADASIAAhEBAxEB/8QAHQAAAwACAwEBAAAAAAAAAAAABgcIBAUAAgkDAf/EAEQQAAEDAgQEBAQCBggEBwAAAAECAwQFEQAGEiEHEzFBCCJRYRQycYFCkRUjM1Kh8BZDYoKSscHRJDRy0hc1U2OiwuH/xAAbAQADAQEBAQEAAAAAAAAAAAAEBQYDAgEAB//EADMRAAIBAwEGAwUJAQEAAAAAAAECAwAEESEFEhMxQVEiYXEygZGx0QYUI0KhweHw8UNi/9oADAMBAAIRAxEAPwBo8UuKND4kVWnw8r1huo0ujByRIfjXLZkqshABIGopQVm4uPN7YE48eRHSFtSHEOAhYUg2vb/W2MKp5OpGRs5ZjoGWYi4lMhOMsIQ46Xdaw0FLUpRN7krGDGPTQqOhSgCnTuRviTvMTXb7vIHA91V1kDFaoDzIz8a+VJzHLAeZeqkynypKOT8fBXy3LG4ssdCRfY9QfywN5f8AC4xxFqUk5v4l16pTmlF0R1JClrZJ8q0uOKUCNwDZIsdrDGdU4bespAFwb39cZeX8wSW5LEcyFxpkd3mxJSRctqA7j8ST0UnoRjW0vp9mkmI+E8x+47VjeWEV8PEPEOR+tHFH8GfCimBPxFOqVTUO8yoLsfs3pGDGD4deFVOtych0Q27vMl0/msnGtmeI7JGX4DScxVByFWgk86ntxnHXAobFSdKbFB6gkjY4WuYfHLlKnhYpVHkySPxzpLbAv/0o5iv4DFPHLd3SiRSSD1zpUu8UUDFGABFPhnhHw/YSEt5Iy2ke1NZ/7ccc4ScP5AsvI+W1+o/RjX/biJ8yeO7NE3WiltwYKPwmLDLiv8byrf8Awwocx+JjPOZStMutVN1td7ocnLSj/A1oT/DBC2s35pMe8mszJH0WvQTM3CbgZTAo17L2UKaOp560RT/BSThS1Xhz4XarIWxHnKgrAJU/AlS+SgfvFxSVNgb9SbYhGRnituFam5iY6lG5MdpKFf4rav441SMw1ZEz4sVOaZFrcwvrKiPQ77j26YJRCn/RqybDflFehUvwOUNwIqOUM+1aCVpDjDq0ofSQdwQ42UEj3F8YiuGHiZ4d2Xl3PDGY4jfyx5EgLUR6aJCf8l4QHA3xQV/h7MZhKdadpa1Xdp0hZTGcJO5bVvyFn1AKCeqe49EeHnFPLnEymKl0WUeeyB8TBesmRGJ6a036HsoXSrsTjia4niGXw6+Y+dfJDG3s6HyqbW/FlxH4fOoj8TOGT7LQ8pmRULjg+41am1fZYw4cjeKbhjnotNNV9NKnOWAi1dPw6ifQLJKFfZWHG421JaWy6hDjSxZTawClQ9CDthOZ68LHDLPQedcoKKTPcuTKpB+HUT6lABQr7pwPxbWX213T3H0rTcmT2Tn1pyNrQ62lxCwttYulSTcKHqD3x+4jB7gRxq4IOLl8Ms2rrlHbOo0p6yVEenIWS2r6oUk+gwS5F8Z0FFQNB4m0GVlissnQ6+llZZB9VtqHMb+vmHvjxrJmG9Cd8eXP4V8LgA4kGPl8aqrHMYVIrNOzBTo9RpU6NOgSE6mpEZwONrHsobYzrYDII0NEc6jGRLbquc86SnHApC63JR5R1CdKQfySMMOFGSYCVI31J3Kh3wsWGHG63m1LSf2FZlBfM3IPNV/GxGGVTnVu0tst6jqFwPT1xLwnMz57mq9lPBTHYUKVtIStaVEWF+mA9yQpKythetSNyBtYeuCHNKHBzCV2A6W64Xjst74pCUKssqshd7b+n36Y3kXNaRjIzWw44ZHRxFyMH4iL16nMiRHFrKdQL62vr1tiIviFMqUhQ0qSSkgixBHXHpFDCYdAp01aSXG1gAX6X/zHT8iMRt4lcit5Wz2qoUxnTSKyOe0EpsEOXspA/IH74M2FemORrRuXMfSlG2bMMouV9DSkMwW3tfHQPqVuEOH6JOO6IikEISAV2upWM5iHcgalqUegGK5UZqlywFa1TqgbqQ4B7pOO7bybjSQTjft0SYsjQlQv0BUMZj+Un9IEhMfXbusA404D9K54i0M6gv2wcZD4n13ItShTKfNfYeiE8iQyqzrIPVIJ2Ug90Kuk+mBOXQJcRJW0CtKeqbhVvuMa1D1laVDSodQcceJDhq60YZFerPBzxMULiNTIzE51qPW0oAdDY0odI6rSk7j3Tcke43w+WZPMbQ42tLjagFJUDcEeoOPEKk1qZSZTb0CSth4qTZSTbe/XHonI8Sh4c58iZaqbXx9Kdp8Z9aEICH2VrB1LaJNnBtu2bEfhPbE9NA6XghiOQ4JA6jGMjzGunX1pgrKYDIwwQQD76rJL6VbHY4Fc/cLsp8Tad8FmejRpwSLNPkaX2fdDgspP2NvUYyst5no+cKQzVqHPZnU964S60eih1SoHdKh3SoAjuMbN6e1TmubIfaYYBtreWEJv9Tj1J3jbXQivDGHHeo3r3APid4f6k/mLhJW5VVo1+Y/SXEhTpT6LZ+V8W7p0rHYd8M/g34tct8QnmqLmNtGXM0auVyX12jvrGxShat0qv+Bdj2BOGs5xcyS2vlnMtOW5q0aWHOcb3t+AHCg4vcLuFPG0OyG6vEo+aSn9XU0NlrmnsHkrCQ4Pe4UOx7YYLtC3n8FwRnuMZ9461gbOePxRKcdsHFayu0R2k8ZszUl0oMfMDaKowoAJJuAhYNu6VIBv7i++DSiU5EZpDRQOWNjbt2OOeJFia1lmg1OjNMnMESqNpiOLSSrSpKuYjbfSoJFx7A9sBWW88y8zJTT5tHepNXdi/FFtxWpJIsFaVD6jbErJGI52I61V2kjSwKO2lZWfo9Mo0Nxcp8KUo2QhCbrPsMIScpUioJDUZSGSocxKiSQk7Em3TDKzhPdVHdVLPnii4N73Se/52wo4VaUxVo9Qfac5Ta7kkBKVDve6gbW73/PHWc60wRN1aa2ca0xSss06E68PjVvjWOh1dDt7qTe47qJ74QvHfMLdUyjTG3WiZ6JRS0vT0ChdW/8Adw5/6KI4g5mireUr9EQ0BxCxuCn0Pt6HptYkbYZWZeGOTM3ZdTSK1AbeiNrDiVtXQtDg6LSobi4JBG4NzgG3kWG5WZ+hzQ1yDJA0K8yK82IUJ1xQSEKUPxKt1wSxYaGUJDaLE9bDqcWCPDHw5cRqZoLqU6VDV8Y7v9PN/P2xpqn4UMvuI5mX61WqO/a+kuiS0Dv+FYv/ABxXw/am0BwykVMybBuMZVganOkQg9IBUDpT5rj/ACxsajTWpCShVtQ3SfTBzmLgbxEyqsmCinZpa31FhJjSEgdNj1P0vhdGrtfFKiTkSKbVGjZcOoo5a7+yuhxQWm07S7GIXBPbrSm4sZ7c/iLihmTELSnG1hQRfzAdR7jApWYamXSlyxUN0uDuPXDAqrgcc3bKV9FXwG1lQfitK7tqKD9O2NLhAVNZRnBrSU1WuoQ0LKUDntgqULgeYbn2w/vFe6k8VIyUKT5aPDHlVdV7L6nuff0thacHspxs38T6PTJr6mYSHOe6UkalBG4Av6mw+l8UL4ycnU1FPypnGPPkP1CSE02QlzTuhKCtChYbkHUL+lvTEbcXkabXhhJ13WHxxj5U8jgY2TvjQkfp/tKbh3xozJkV11NPrEuC7ISG3JTJCitI6BxBuF27K+dPY9sUfl7PdIzryChgy6sEFazVJSpi1jqpTSleUpv1sAR3AxFdFoNRrr/JpUWZOkfuR0FdvqbWH3Iw+eGPA7NbEyHNn1NimRmn0Pqitq5z6tKgdinyoJta9ybE7YP2pFbXC/jHDDl/I61zs17iJ8xLkHn/ALVASlzHGEIEhUZCRuI/kSPYAe2Bp/MFYpsxCGZkpba1W0FRVe/se2DaqtIjMFWkDbYAbDASwxIrdXiU+CCuZPfREYCeoWs+ZX91IUon+ziQlhUeFRVWkh5sdKpXjxBmv5ManQoTstdJlomuIZ3cS2EqSpSR3sFXI9AcBFKXAlUKPJpakJkutBSn1W1rv83vb2G3TFDONoebU24hK0LFlJULgj0IxOefuAEykVByvZAWhqOVcyRQVPclkbbqYUdkKPdKrJ9xhldwOx4kfPtSbZ92kf4cmg71o820h6oNMxo7Lb8x1Chy7+V9Fjqsextf74C6bw6g1qiU+JmGKoTYqzZ0gocCEnZDgFwbDb7dcY2XM9U0iRUarKcZciLKmUu+RbBF9QJvbrt7++PvT84PV8PVBT7qmJiv1RNrBPba2FvGbHLBp656A0zYXwbMFinUlgx6cwPIlJKiPpcmw++M+nMKeOvS4lsbkXuL36j0+2B6n0Kqv08CFBfebcIHNCClNve9rj88GdApE5oNMPQltFCv1lyVWPYg7XG2ByGbnWJZVHOiGFSklKNOyNO4/n64zHY7DduXa/ewx+L1wyoldwR5knsfbGlm1dbQB/DfqNscsypoRWSK8hyDpWS+0w86kDZRIubdvTAvn3hJlriJB+Hq9MZkJtZLltLiNrXCuo+mMuBPW9MWVLBCTYbbYL4LqXU6SrYjrjyJ8nK6GtJlKDXUV588VuBGZOGQckUv4mtZabuo3TeRFT36dU4RU9xLrB5R1IURY2/nfHrVmBTKEWWkr2tviFfEhweYy1qzdl6MpqmzFkzYiTdKF3+dPpv1GKzZe3HY/d7k57H60gvtlru8eAY7j6UquDlGlVXijS0xE3S02t1061JAToIuSnfqRtit+LmQ4U+hZfqNUp8WRFhOqZDSHHlI1KBspSFLIN9BHt98I/wqxUKzJXphAUW47LSFf9SlLP8ABvFiZqitSshVVMhsOfDpL+m//puIJ/gtWJzbV4RtgdN3A+P+0z2dEFs0B1DHP7ftSZy+lMVllmHDajx020ttoCUD7DbDUpdhF1LSkLI7Y+WX8rROS3IYIMZxNwSemMivLagRy20sAkWGGBbGpotgD4RQRmydzSppK/1pOhIQb/ng98O+VFzq5UMyyWgY1MSqDDWF7LfUAXlW9k6U3PcqwrUUOo1WtRKTTVIcrVSWW4zbxASna6nFW6JSnc+tgO+LIydleHkvLdPokEfqIjekuaQC6s7qcVb8SlEk/XHFpGZZOIeQ+dB7QmEcfDXm3y/mt4DjhAIsdx74/Mfow3pFUm+K/gnl79CKzpTfhqTNbeaalstM6G5gWsJv5dgvfqQL9zhY0nN+V+HzD03MCwpEVaW4cRN7uL9bDcpA7epxVfiGZ+K4eGJqsJc+KwoEXCklwEg/lcehAxEHiApYaajssNjUlKnVOIG4uVBRPsLt/bftgCaNXlCHlTW1kZYSedNaj+OOhy6iiHJYlwYazyg641pbRvsdQJKfuMMXKnEOpVziKunSprjsRTaVx3o+zahuoBQG1ykWuNj2x54Zdq+ZMrtVRiNymoE+IuDN5jDawtlZBIGoHfYWIsQQLHFFcBswzILEBkuc74ZIhvq3UW9BJSNu4Sq32x1e2yRqDGxIr6ykMhYOgBqws3TjDUgdQ4CCoHoRvf8AgcL+sZiZSwsB+9yAADvvjIzVMfqaEPNr5cZlvUbkebtY/bE9N5klVbMqokfUpxpZ3/eI2xNSIZHJFP7cCNADzp/0t1cgJKNWm29+n5YY1GZKW2hrKu5UTt9MK7J8CRUS2FqCIrd+aq/zEHcD/fBhmPP9NyaqHAZVzp8pxKExm2C4oovv06fX2x9BGd7JrO6fI3V51s801BtprlX8xOoafb/XC1z62zMy/UIy2wtooClJI2sep/1w16rQzXaUKhTS628E6uQ8wW1K9bAi49sILiPWUQaNUHVOkpDJCtRJFvfBLI6uM9axgdHjwOnOgbg7k5rJa8wNthJaee1tLBJJSlh0i5P17bDFKoZ/ScWpwV/I8ZbB+7SCMIrIEpmdTOdH/YqbdA9Lhi3/ANsPSmSEt1aWhQ8qaoUf4mAf9MINoSs907sdcj9P8orhhIVVB0P9/WhHKkp+PFapxZcbYQmySo3P8+2PrXnjEUxGjQlTKtLWG4kVNtby+1r9AOpJ2A3OPhmiiz41BVMaqzsNyKVtgMFIB82yjtfbvhp8DMjIy1ldFYmKfk1ytf8AEuypay48GT+zbuflATYlIsLqOLCJDP4c4HOgLy4WEb4GayuFPDH+hTD9Vqq25OaKikCU82btspvcNN+w7n8R36WGGXjmOWNr2NvW2GyIqLuqNKnZJGkYsx1Ndcft/THOg3OFFxl8RGVuDkZbUwqqNb0hSadHWAUA9C4s7IB7DdR7DvjWON5G3UGTWTOqDLGsHxPTzTMgQZakuKQxVoq7oQFW3PW56f8A5idszQ2M0OIQpQEhY5rDrdwULtv9iMLHP3i5zlxXlNUVbMGnUdbqXDGhMhSl6TdOpawpR3A+XTg5pU5UObSpjF1pkJugOAgtkp+W4/he2AL+FopACfhTXZ0gaLI712yl4f6nVqgJS4EFiK0u5kutIIH9pKblP3sMbJGU3KVnF0ZfqDMtHlQ6OXZCLXBCQLar3vc+mwxsk1nMOZoqMvU5TqpLzulYSLBtsbkqPp/nhlUvJYynTbobCqno1I5ltKlDrt2P1wmnuJeWacxRoNTWLU8uOP0ZMJDi0mx1KKtyT1wC5Y4eu0uZIkutBI1FWtQuVHDAXIVToqpdUfd5rlglDe6bnG4hTEopEwtkPOtJ5lk90nABYqDnrRVBMvNqcs04vR1I0WtdagDex6j63/LE68ROM1URU1/omciJJlJSs1F5N+Wg3IS2PSwJ1HrtbDcqXDmbmh+VXESQUUtC3Fw7/tLgFKtPQgb3GERxCyvFrjrj8dTXOeQ3dgWb0lKQkcsmwIsLFBIII2uDs72fwTul9aXXglw3D50UZO8Slf4dZwXEqOYY2aKEHUpFUjtKbLibDzaVAEp7G4Ctrg+pd4i81xquzJh0vmPPVGQFstoRdfL2UrpuUi9rn1wp+HPChuZITJqLATTIZ5kpwkK0pG9iQbXPZNySbbAXOPRXgxkCn5WypAmKp7LVXnNhx50p1ONtn9m1qVuAhNhbubnvg2WOKSccLQDX6UuWWSCHMmpOlStwpo1UoWWmIlXiPQ57bUxbkZ9Glbdy2BqHbykH74diJHJqWYHOpj1VhYH1YT/vgezO3LYzPmGTJgzWEyPiihTsVYSol5Pym1iAhIN+lsZ4kOVWoZiFJhzZxqC48iKuNHWtDqUNoSshVrWBBH1xAXkckk8m6pyScaef81RIy8NMnTAz+lHWXuFLlXqU2oV6oty6JIlKkR6ay2pItquA6snex7JsD3v0w4gLW9sabKsWdDorDVRaQ1KvqUhDmsJ2G17DfY43WL+xiEcCjdwcDPripG6maSQ7xzjlSe8SXGBzg7w8XUIAQqv1J34KnJWnUEOEEqcKe4QkXt3JSO+JazjQ+KvAmiZT4pVfPNSm1uozUIn0p95am0JWguBtd1aVXSlSVAJASSNPS+GL4zQh7P3BmPL/APLl1FfMB+U3fjg3/u4aHij4TZi4w5VodEy85CQpirCRJVLcKAlvlrRqFgb2Kr26ntiktikKR5xhs5J7dqUyhnZsdOVSZxH8VvEqryWFQaumkUWSTZ6lJCAAOqdZBXq9N/fE25xzdIzJWJMqZJfcW+srddcUVuOE9Sok7k+pxl0yvvRo64T7aZERzZTbo1JP+2Ok7KtMfaVLiS3EKWdmXxcf4huPvfDV4vBi3AAP999Cqw3vxDWsy080msxXWYbYaQsBT8hZUAT0v0H2scVTDdDdAhaXWyWCErCWUISpIN9tW+JRcbdYeYRyAZIUEMNjdCf7X8/U4ofh3XWapRZzb7o+IbShu5+dRF7EnsDYgfTElta3dXD88c6pdmSAxlT3qjeEDMOlNrnyZfxCnF8zW40NSVXOg6gBYFJtsOt/U4n/AIt8Y3anxHnNzJ81imxpAitx4zpbFv3lW6k/6YL8lZxU1Tn4Mq6XmtQaW3dRUn9w9ydyR1/PCdz1TVTanMqLLTEphxQeUAkFbawLXHcX9MA28aHU60ZKzA6aU4Wp7LUNbtKzQHW2khXwky4UrbfSSTf874ePC2qxc7Zf+PQS08yVxJTKEixUkdz7ggjpiEKHl2fmqZEZCJ6Z7BOlDaLNqJPVZNrAff6Yv3hlSoXD3IMakJfCpSiXJD+gq5rqj5tIHUbEbnYAYHvLaMjPWt47l8YFAOXswMZZrVUgrAcddUpghVwNIJABvt/PfA1UKLlUVtS3mW3SkaniXNCEH92wO5ta+M9uQ1WplVfpcQrckuqAnKSUoWAdJ02O2w9NsKnifnKnZPimhwmA7Ul35ykAKWgW3O/zD1tvgO1t2ZhGvM1vczgAyNoBVOcKcqM53fYlMxkRsmUt0LZbQ3pTPkD0/wDbSdyfxH2GKRTcYSPhr4yQuJuU26ctliJW6QwhLrDA0tutdEuISd0jaxT2JFtiMPDFALQ2pMbDWpyS6+8HfHKuXNrXNvTHAAlISkAJHYbDHMIDiP4lWafXjkzhvSlZvzu4SgtRrqixFDqXFj5rdwCEjuodMbxQvKcIKHeRUGTT/wAcwIcM42c42UYqc/TqfMzIta3HTAaCGmkk3S3tsopGxUBv72uS/HDLukjOa6ByM1Lfjoy29O4bUXMcVP8AxGX6mlZWPwIdGm/2cS3hm1zj7lbKvCii57q0sFqrQm34sNkgvynVIBU2hPsq4JOybb4M+IOUI+fskV/LMrSGqrDcjhauiFkXQv8AuqCT9sSxwZ8G89ifCqnFOY1UGaUOTT6G1ILzASFFV1q2GjUSoNp6k3V6YPiaF4AJT7J95Bodw6yEp1rz6TUpMNdwkaL9cbSPmxCv1c+NdrsUYyXoCn6a4hxKbt+bUkg6vbbGjRHamxXWxcPMjY9lDDk8WM+E0GNxhqK39JkR1VymPpdHIU+lCgofKFeW/wBtV8GuTal/QrNiXakwXYBUYs+Pa+pF7EgeoI1D6W74UsKG66WhGdQlxRIKVqsAR74Mn8wqn1cJqA5T0kJCj2LgAFwffCm4nMd0srLlSMMPLy+fqKoNmRJPbvaM26SQVPZumfl76oPOFEXlurxp0J4qy/UUB2HMbWQm5F9Or6bj1HuDj4SWaLm3lJzHSEuPg6UzYjnJdWO2rayvqd/fGTwXzbS5sFzh7m79ZSJyrQJClW+FeJuEhR+W6t0nsrborHyzXlys5IzOqi1lKW203eZkhOlMhm9gpPoeyh2Nx6XVbTsTZuHiOUbUEdRW9pOZcwTjDqcEHuK3VLpMCE9emyJzshjZC5qEK3t6jc26YYLMaqZxCGahKUGbBKozI5bbqbdFi/m3/k4W9JrDEqQy5HcHLSSoq+g74P6NnBdQnRaRl5kSqzKNksDcIt8yyeyUiyr9wfXCZ5Xc7vM0xEaoM13z/X2ciUBx15Q+I02Q1HFi4SPX16/liI6vMer9ekT5z+txLhUwsGxVv8o/nY39cP8A4vRplSzNIhSHCWqSCZb5V5ecN1geybAfVJwg6dE50xamQFKcUXFrX0bBN9vTFTsrZRt5BxNXIBP/AJzyHrjWk207oS2okX2SxA893GT6ZOB6Gjnh5xBzbw8nqzVQYyY81KFJAeSkpfQqwKS2SNzpH3AI3x6CcAuN8jiszUYFWhxYtcpzTTznwiiWnELuOh3SoKFiLkbgjHmfOzQiZUipRU6mOnlsNpuokjqv64orwXZrkQuLLVPNPlJbrcF9lb7oNiUDmpsf7lre+HN9DFJCzc2A+VIIHZXA6VavFLItY4h0iLRYGapWXqY66f0mqEyDIlMaf2SHCf1dz1NjcbexzeH/AAyytwwoopuWaS1CYsOc9bU6+R+Jxw7qP12HYDBdhTZ88POWOI1dkVauVPMylPhIMRiruNxkBKQPK1ayb2ubd7nE9HJleG7YXyFMWXXeAyaYE7N2X6WSJ1epUUjqH5rSLfmrHwpee8rVuamDTMzUWdNWCUx4s5pxxQG5ISlRJthQRvBjwhYXrcoc6Qrvzqk8b/kRg0yjwA4b5ErEar0HKkSLVYurky1OOOON3BSSCtRsbEi9u+O2W2A8LEn0H1rwGUnUCmXgQ4nZ6Z4c5Nn191pD7rSm2Y7K16UuPOLCEAkAkJubkgXsk4L8Tt4l6giqVzIWUSsFl+U7VZifRllOkX+61n+7jGFN9wDWjHAry/mPhLxUyPh5DfzN38q/phu8N+AtRr86FNzAH6fBk2UmC1/zLyOtyP6tNu539B3wyMtcMKdkr4aVXZia1XypLgabRpZjd/Kk/MofvK2HYd8ZtU4hzWs3U5iOUwUvOBi6VjV5lblR9bYy2jtppSUszp3+lMLHZIQb90Pd9aP2uDWSqGNMSgU9DekGz6A44bd9RuSd8KTjTwAgT6S/mTJq0tvwmS7MpayfOhO5cZPqLbp6Ht6YpqX8Eii0yYtgyW3nG4q3QdgVG1z7XFr++CFtDtFqVLjttwgmbzEhaRq0qSkKCLd7i/T0OJmC7uYZuKGJ751zTyeCCSLhkY9NK818p5gRNY+CmOATGk3bWf61P+/+eKUy1n1/jhlE5FqtNlVGuUlHOh1lFtUdAFgtxZ2FtgdRAWn+0AcLHxX8MYWR8302r0aP8IituP8ANYZ2abkIUk3bH4QpLiFaegN7bbCo+E2SKXkzKlHo0lgLVIbZlVK4/wCdluDUEr9UNoKbJ6FRJ7Yob7bS2tjuAZV9VB/KeuPLuPfSrg/e5VeTSWPQsPzL0z5joe2hpTUbgzVobLa15uhF4DzGBTpcthPrd1KQk+m18bOlVCq8BMrVyt0yJGq1Uqp+DVmGCorap6SdkqQoBbR6EagLqtc2SAaazXm6oUyoZfhQW4kalyZLbCyPM4u/VNrWSAO/X6YEs6Mw23ZMxlltb5QoPR3BdE+P/WMuD8QKb2J3SbEd8S1rt1rS5SUgOO2KMkszdRGNiVz5/wBxUL5/4hvO0ZVFYUHJUohct29zo6hJPqo9fa/rgANQkQoKmAsB6RsogWt/IwUcWMlw+HXEKr0tp1b8FLiJkJa1XU5HdSHGtR7kBWkn1TgFTUFSpqpckam2/lQkbe2P1C0fK8YtlpNSfX+NAOlS+0Z+NIEVN1IxuqvYD5knUnqTRNSPgMuQkynkhc1z9mi/QepwT0CoT4wZlxHn4L4UFoWXAlAINwQLhQ+oww+Bnh0lZ3DeZcxpksQnAHI0NHkceb7KKj8iDbY2uqxtYbmooGWqLl1AiwaBHpzTCdKXWmgpavUlw3USe9zgG9+01vZMYo13iO2g+OtaWuw5roB3bdB+Pwr84U+LLLM+gUmnZxqPw+YW2+XKmIRzI7mk2DhUndOoWJ8tgb72xSrLzUllt5lxDrLqQtDiFBSVJIuCCOoI3vidp/Dag1+C0KrSYExJHlD7YukdfKsWUk/Q478Ps+f+FGYaPwyrbchVBfTpodYfXfSlSjpjOq6HSo6Eq22KARvfCq3vYdoEiFCr88ZyCPLly7URcWclmAXYMvLPL41ROOY5jmOqyrl7b4j7iNVv6QcX861IHWxQ4rFDjnsFnzO2+63B9sVtVKkxRqZNqUpWmLCZXIdV6IQkqV/AHEIUGTKk5bbqMskTK7MkVV+/Ulajp/iV4Ns1ySaylPSv/9k="></header>
+<button id="burger" aria-label="Открыть меню" aria-expanded="false" aria-controls="drawer"><i></i><i></i><i></i></button>
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Разделы" aria-hidden="true">
+<div class="mn-head"><img class="mn-logo" alt="" src="data:image/jpeg;base64,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"><div><b>Надежда</b><small>Кабинет репетитора</small></div><svg class="mn-paw" viewBox="0 0 64 64" aria-hidden="true"><circle cx="14" cy="26" r="7"/><circle cx="27" cy="14" r="7.5"/><circle cx="41" cy="14" r="7.5"/><circle cx="54" cy="26" r="7"/><path d="M32 30c-9 0-17 9-17 17 0 6 5 8 10 7 3-.6 5-1.5 7-1.5s4 .9 7 1.5c5 1 10-1 10-7 0-8-8-17-17-17z"/></svg></div>
+<nav id="nv"><i id="nvi"></i><button class="mn-it on" data-t="c" style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span>Расписание</span></button><button class="mn-it" data-t="p" style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 16.5V7.5h3.2a2.6 2.6 0 010 5.2H8.5M8.5 15h5"/></svg><span>Оплаты</span></button><button class="mn-it" data-t="s" style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z"/><path d="M6.5 11.8v4c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4M21.5 9.5v5"/></svg><span>Ученики</span></button><button class="mn-it" data-t="ch" style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v7a2.5 2.5 0 01-2.5 2.5H12l-4.5 4v-4h-1A2.5 2.5 0 014 13.5z"/></svg><span>Чат</span></button><button class="mn-it" data-t="mt" style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span>Материалы</span></button><button class="mn-it" data-t="kn" style="--i:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a1 1 0 001 1h2l5 4V6L6 10H4a1 1 0 00-1 1z"/><path d="M15.5 8.5a5 5 0 010 7"/></svg><span>Канал</span></button></nav>
+<div class="mn-foot"><span class="mn-note">Пиши. Думай. Побеждай!</span><small>Профессор Вишенка всегда рядом</small></div>
+</aside>
 <main id="app"></main>
 <button id="fab" onclick="fabGo()">+ Занятие</button>
 <div id="sheet"></div>
@@ -167,13 +289,19 @@ const WD=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"],WDF=["Понедел
 const mins=t=>+t.slice(0,2)*60+ +t.slice(3);
 const hm=m=>pad(Math.floor(m/60))+":"+pad(m%60);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const hue=id=>`hsl(${id*67%360} 45% 38%)`;
+const BRAND_COLORS=["#143A82","#2F6FD0","#16966A","#7B4FD6","#C9651A","#C13A63","#0E8497","#8A6A00"];
+const hue=id=>BRAND_COLORS[Math.abs(parseInt(id,10)||0)%BRAND_COLORS.length];
 const money=n=>Math.abs(n).toLocaleString("ru-RU")+"\u00A0"+cur;
 const ini=n=>n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
 const safePhoto=p=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/]+={0,2}$/.test(p||"")?p:"";
 const av=(s,c="")=>{const ph_=safePhoto(s.photo);return `<span class="av ${c}" style="background:${ph_?`url(${ph_}) center/cover`:hue(s.id)}">${ph_?"":esc(ini(s.name))}</span>`};
 
 const tg=window.Telegram.WebApp;tg.ready();tg.expand();
+/* тема берётся из самого Telegram (а не из системной), а шапка и фон окна красятся в цвет бренда */
+function brand(){if(tg.initData)document.documentElement.dataset.theme=tg.colorScheme==="dark"?"dark":"light";
+  const c=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  try{tg.setHeaderColor(c);tg.setBackgroundColor(c);if(tg.setBottomBarColor)tg.setBottomBarColor(c)}catch(e){}}
+brand();if(tg.onEvent)tg.onEvent("themeChanged",brand);
 let S=[],L=[],P=[],cur="₽";const w0=mon(T);
 // API_BASE — откуда брать backend API.
 // ""  → тот же домен (бот сам раздаёт страницу и API, всё как раньше);
@@ -246,11 +374,11 @@ function grid(start,bw){
   let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${!bw&&iso(d)==iso(T)?"td":""}">${bw?WDF[i]:WD[i]}<em>${bw?d.toLocaleDateString("ru-RU"):d.getDate()}</em></b>`).join("")}</div>
   <div class="wb" style="height:${(H1-H0)*hh}px"><div class="tl">${[...Array(H1-H0)].map((_,i)=>`<i style="top:${i*hh}px">${pad(H0+i)}:00</i>`).join("")}</div>`;
   days.forEach(d=>{
-    h+=`<div class="col">`+L.filter(l=>l.day==iso(d)).map(l=>{
+    h+=`<div class="col" data-k="${iso(d)}">`+L.filter(l=>l.day==iso(d)).map(l=>{
       const s=mins(l.time),top=(s-H0*60)/60*hh,ht=l.dur/60*hh-.8,st=stName(l.sid);
       if(bw){const g=stGrade(l.sid),np=nameParts(l.sid);
         return `<div class="ls" style="top:${top}px;height:${ht}px"><span class="r1">${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""} <small>(${l.dur} мин)</small></span><span class="nm" data-full="${esc(np.full)}" data-short="${esc(np.short)}"><span class="t">${esc(np.full)}</span>${g?" "+esc(g):""}</span></div>`}
-      return `<div class="ls" style="top:${top}px;height:${ht}px;background:${hue(l.sid)}" onclick="form(${l.id})">${esc(st.split(" ")[0])}<small>${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""}</small></div>`}).join("")+`</div>`});
+      return `<div class="ls" data-day="${l.day}" data-sid="${l.sid}" data-t="${l.time}" style="top:${top}px;height:${ht}px;background:${hue(l.sid)}" onclick="form(${l.id})">${esc(st.split(" ")[0])}<small>${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""}</small></div>`}).join("")+`</div>`});
   return h+"</div></div>";
 }
 function sched(){
@@ -264,7 +392,7 @@ function sched(){
     h+=`<div class="bar"><button class="pill" onclick="mo=new Date(${y},${m-1},1);render()">‹</button><b class="ttl">${mo.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="mo=new Date(${y},${m+1},1);render()">›</button></div><div class="g">${WD.map(d=>`<i>${d}</i>`).join("")}${"<span></span>".repeat(off)}`;
     for(let d=1;d<=n;d++){
       const k=`${y}-${pad(m+1)}-${pad(d)}`,ls=L.filter(l=>l.day==k).sort((a,b)=>a.time<b.time?-1:1),sh=ls.length>3?ls.slice(0,2):ls;
-      h+=`<div class="d ${k==iso(T)?"tod":""}" onclick="dayCard('${k}')"><span class="n">${d}</span>${sh.map(l=>`<span class="c" style="background:${hue(l.sid)}">${+l.time.slice(0,2)}:${l.time.slice(3)} ${esc(stName(l.sid).split(" ")[0])}</span>`).join("")}${ls.length>sh.length?`<span class="more">+${ls.length-sh.length}</span>`:""}</div>`}
+      h+=`<div class="d ${k==iso(T)?"tod":""}" data-k="${k}" onclick="dayCard('${k}')"><span class="n">${d}</span>${sh.map(l=>`<span class="c" style="background:${hue(l.sid)}">${+l.time.slice(0,2)}:${l.time.slice(3)} ${esc(stName(l.sid).split(" ")[0])}</span>`).join("")}${ls.length>sh.length?`<span class="more">+${ls.length-sh.length}</span>`:""}</div>`}
     h+="</div>";
   }
   return h;
@@ -277,41 +405,103 @@ function printIt(){
   const start=ws,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
   $("#pr").classList.add("on");fitNames($("#paper"));
-  pdfBlob=null;                                          /* забираем PDF сразу: шаринг должен идти без сетевой паузы */
+  pdfBlob=null;                          /* забираем PDF сразу: шаринг должен идти без сетевой паузы */
   fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:{"X-Init":tg.initData}})
     .then(r=>r.ok?r.blob():null).then(b=>{pdfBlob=b}).catch(()=>{pdfBlob=null});
 }
 
 /* ---------- Форма занятия ---------- */
-let fd=60,F=null;
-function form(id,day,from,pre){
-  const l=id?L.find(x=>x.id==id):null;
-  F={id:id||0,from:from||"",day:l?l.day:(day||iso(T)),time:l?l.time:"08:00",dur:l?l.dur:60,rep:false,sid:pre||(l?String(l.sid):"")};
-  formR();
-}
-function formR(){
-  const l=F.id?L.find(x=>x.id==F.id):null;fd=F.dur;
-  /* бот предлагает 45…180 мин с шагом 15; здесь — основные чипы 45/60/90/120/150/180.
-     Своя длительность существующего занятия (например 75 мин) показывается отдельным чипом и сохраняется */
-  const durs=[45,60,90,120,150,180];if(F.dur&&!durs.includes(F.dur))durs.push(F.dur);durs.sort((a,b)=>a-b);
-  open(`${F.from?`<button class="pen" aria-label="Назад" onclick="dayCard('${F.from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
-  <label>Ученик<select id="fs" ${l?"disabled":""} onchange="fsCh(this.value)">${S.filter(s=>!s.deleted||(l&&l.sid==s.id)).map(s=>`<option value="${s.id}" ${String(s.id)==String(F.sid)?"selected":""}>${esc(s.name)}</option>`).join("")}${l?"":'<option value="new">＋ Новый ученик…</option>'}</select></label>
-  <label>Дата<button class="pill" style="width:100%;text-align:left;margin:0" onclick="datePick()">📅 ${dmy2(F.day)}</button></label>
-  <label>Время начала (любые минуты)<input type="time" id="ft" step="60" value="${F.time}" oninput="F.time=this.value;upd()"></label>
-  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==F.dur?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
-  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0" onchange="F.rep=this.checked">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" onclick="save()">Сохранить</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${F.id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${F.id})">Отменить урок</button>`:""}</div>`);
+let fd=60,fSid=null,fNew=null,fdm=null,saving=false;
+const dateTxt=k=>{const x=new Date(k+"T00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"long"});return x[0].toUpperCase()+x.slice(1)};
+const CAL_ICO='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>';
+function form(id,day,from){
+  const l=id?L.find(x=>x.id==id):null;fd=l?l.dur:60;fNew=null;
+  const sts=act(),none=!l&&!sts.length,cd=l?l.day:day||iso(T);
+  /* Логика выбора ученика:
+     • редактирование — ученик фиксирован;
+     • есть ученики — чипы с учениками + «＋ Новый» (раскрывает мини-анкету);
+     • учеников ещё нет — чипов нет, анкета нового ученика раскрыта сразу, а сохранение создаёт ученика и сразу ставит ему занятие */
+  fSid=l?l.sid:none?"new":sts[0].id;
+  const durs=[45,60,90,120,150,180];if(fd&&!durs.includes(fd))durs.push(fd);durs.sort((a,b)=>a-b);
+  const stBlock=l?`<label>Ученик</label><div class="row" style="cursor:default;margin-bottom:10px">${av(S.find(x=>x.id==l.sid)||{id:l.sid,name:stName(l.sid)},"sm")}<span class="info"><b>${esc(stName(l.sid))}</b></span></div>`
+    :none?`<div class="hint0"><b>Учеников пока нет</b><span>Добавьте первого — он сразу появится в разделе «Ученики», а занятие встанет в расписание.</span></div>`
+    :`<label>Ученик</label><div class="stc" id="fst">${sts.map((s,i)=>`<button type="button" data-v="${s.id}" class="${i==0?"on":""}" onclick="pickSt('${s.id}')">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}<button type="button" class="add" data-v="new" onclick="pickSt('new')">＋ Новый</button></div>`;
+  const nsb=l?"":`<div class="fold ${none?"on":""}" id="nsb"><div><div class="in">
+    <p class="sub">Новый ученик · обязательно только имя</p>
+    <label>Имя и фамилия *<input id="fn" placeholder="Как зовут ученика?" autocomplete="off"></label>
+    <label>Класс</label>${gradeSel("fg","")}
+    <label>Предмет<input id="fsb" placeholder="Например: ЕГЭ по русскому"></label>${priceField("fp","")}
+  </div></div></div>`;
+  open(`${from?`<button class="pen" aria-label="Назад" onclick="dayCard('${from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
+  ${stBlock}${nsb}
+  <label>Дата</label><button type="button" class="dbtn" id="dbtn" onclick="dpToggle()">${CAL_ICO}<b id="dtxt">${dateTxt(cd)}</b><i>›</i></button><input type="hidden" class="hid" id="fdte" value="${cd}">
+  <div class="fold" id="dpw"><div><div class="dpc" id="dpc"></div></div></div>
+  <label style="margin-top:10px">Время начала (любые минуты)<input type="time" id="ft" step="60" value="${l?l.time:"08:00"}" oninput="upd()"></label>
+  <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==fd?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
+  ${l?"":'<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="frep" style="width:20px;margin:0">Повторять каждую неделю</label>'}<div class="btns"><button class="btn pri" id="fsv" onclick="save(${id||0})">${none?"Сохранить ученика и занятие":"Сохранить"}</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${id})">Отменить урок</button>`:""}</div>`);
+  const d0=new Date(cd+"T00:00");fdm=new Date(d0.getFullYear(),d0.getMonth(),1);$("#dpc").innerHTML=dpHtml();
   upd();
 }
-function fsCh(v){F.sid=v;if(v=="new"){F.sid="";studNew(1)}}   // полная карточка нового ученика, потом возврат в форму
-function datePick(){cal={m:new Date(+F.day.slice(0,4),+F.day.slice(5,7)-1,1),a:F.day,b:"",t:"l"};calShow()}
-function setD(d){F.dur=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
-function upd(){const t=F.time;$("#fend").textContent=t?`${t}–${hm(mins(t)+F.dur)} · ${F.dur} мин`:""}
-async function save(){
-  if(!F.time||!F.day)return toast("Укажите дату и время");
-  if(!F.sid)return toast("Выберите ученика");
-  const r=F.id?await api("/api/lesson/move",{id:F.id,day:F.day,time:F.time,dur:F.dur}):await api("/api/lesson/add",{student_id:+F.sid,day:F.day,time:F.time,dur:F.dur,regular:F.rep});
-  if(!r)return;close_();ws=mon(new Date(F.day+"T00:00"));F=null;await load();
-  if(r.skipped)toast("Часть повторов не поставлена — время занято: "+r.skipped)
+function pickSt(v){
+  fSid=v;document.querySelectorAll("#fst button").forEach(b=>b.classList.toggle("on",b.dataset.v==v));
+  $("#nsb").classList.toggle("on",v=="new");$("#fsv").textContent=v=="new"?"Сохранить ученика и занятие":"Сохранить";
+  if(v=="new")setTimeout(()=>{const n=$("#fn");if(n)n.focus({preventScroll:true})},300)}
+function pickGrade(id,btn){const box=btn.parentNode;box.querySelectorAll("button").forEach(b=>b.classList.remove("on"));
+  if(btn.dataset.g)btn.classList.add("on");box.querySelector("input").value=btn.dataset.g||""}
+/* мини-календарь выбора даты */
+function dpHtml(){
+  const y=fdm.getFullYear(),m=fdm.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),val=$("#fdte").value,has=new Set(L.map(l=>l.day));
+  let g=WD.map(d=>`<i>${d}</i>`).join("")+"<span></span>".repeat(off);
+  for(let d=1;d<=n;d++){const k=`${y}-${pad(m+1)}-${pad(d)}`;
+    g+=`<button type="button" class="cd ${k==val?"sel":""} ${k==iso(T)?"tdy":""}" onclick="dpPick('${k}')">${d}${has.has(k)?"<u></u>":""}</button>`}
+  return `<div class="bar" style="margin-bottom:8px"><button type="button" class="pill" onclick="dpGo(-1)">‹</button><b class="ttl">${fdm.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button type="button" class="pill" onclick="dpGo(1)">›</button></div><div class="g calg">${g}</div>`}
+function dpGo(n){fdm=new Date(fdm.getFullYear(),fdm.getMonth()+n,1);$("#dpc").innerHTML=dpHtml()}
+function dpToggle(){const o=!$("#dpw").classList.contains("on");$("#dpw").classList.toggle("on",o);$("#dbtn").classList.toggle("on",o)}
+function dpPick(k){$("#fdte").value=k;$("#dtxt").textContent=dateTxt(k);$("#dpc").innerHTML=dpHtml();setTimeout(dpToggle,170)}
+function setD(d){fd=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
+function upd(){const t=$("#ft").value;$("#fend").textContent=t?`${t}–${hm(mins(t)+fd)} · ${fd} мин`:""}
+async function save(id){
+  if(saving)return;
+  const t=$("#ft").value,day=$("#fdte").value;if(!t||!day)return toast("Укажите дату и время");
+  saving=true;
+  try{
+    let sid=id?(L.find(x=>x.id==id)||{}).sid:fSid;
+    if(!id&&sid=="new"){
+      if(!fNew){                                   // ученик создаётся один раз — при повторе после «время занято» дубля не будет
+        const n=$("#fn").value.trim();if(!n){$("#fn").focus();return toast("Введите имя ученика")}
+        const r0=await api("/api/student/add",{name:n,grade:$("#fg").value,subject:$("#fsb").value.trim(),price:Math.max(0,parseInt($("#fp").value,10)||0)});
+        if(!r0)return;fNew={id:r0.id}}
+      sid=fNew.id}
+    const r=id?await api("/api/lesson/move",{id,day,time:t,dur:fd}):await api("/api/lesson/add",{student_id:+sid,day,time:t,dur:fd,regular:!!($("#frep")&&$("#frep").checked)});
+    if(!r){if(fNew)load();return}                  // занятие не встало (время занято) — окно остаётся, ученик уже сохранён
+    const dd=new Date(day+"T00:00");ws=mon(dd);mo=new Date(dd.getFullYear(),dd.getMonth(),1);
+    await foldInto(day,+sid,t);
+    toast(r.skipped?"Часть повторов не поставлена — время занято: "+r.skipped:id?"Занятие перенесено":"Занятие добавлено");
+  }finally{saving=false}
+}
+/* Карточка «сворачивается» в ячейку дня: клон окна летит в нужную клетку календаря,
+   по пути меняя цвет на цвет ученика, а в конце клетка коротко «вспыхивает». */
+async function foldInto(day,sid,time){
+  const sh=$("#sheet .sh"),from=sh&&sh.getBoundingClientRect();let fly=null,bd=null;
+  if(!REDUCE&&from&&from.width>0&&sh.animate){
+    fly=sh.cloneNode(true);fly.classList.add("fly");fly.setAttribute("aria-hidden","true");fly.querySelectorAll("[id]").forEach(e=>e.removeAttribute("id"));
+    Object.assign(fly.style,{left:from.left+"px",top:from.top+"px",width:from.width+"px",height:from.height+"px"});
+    bd=document.createElement("div");bd.className="fly-bd";document.body.append(bd,fly)}
+  close_();await load();
+  if(!fly)return;
+  try{
+    const el=$(view=="m"?`.d[data-k="${day}"]`:`.ls[data-day="${day}"][data-sid="${sid}"][data-t="${time}"]`)||$(`.col[data-k="${day}"]`)||$(`.d[data-k="${day}"]`);
+    if(!el)return;
+    el.scrollIntoView({block:"center",inline:"center"});
+    const to=el.getBoundingClientRect(),cs=getComputedStyle(fly),box=r=>({left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px"});
+    fly.classList.add("go");
+    const opt={duration:620,easing:"cubic-bezier(.5,0,.15,1)",fill:"forwards"};
+    await Promise.all([
+      fly.animate([{...box(from),padding:cs.padding,borderRadius:"28px 28px 0 0",backgroundColor:cs.backgroundColor},
+                   {...box(to),padding:"0px",borderRadius:el.classList.contains("d")?"12px":"7px",backgroundColor:hue(sid)}],opt).finished,
+      bd.animate([{opacity:1},{opacity:0}],{duration:480,fill:"forwards"}).finished]);
+    el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),800);
+  }catch(e){}finally{fly.remove();bd.remove()}
 }
 function cancelL(id){const l=L.find(x=>x.id==id);
   if(!l.rep)return del("/api/lesson/cancel",id,"Отменить урок?");
@@ -361,7 +551,7 @@ async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return 
 function payDel(id){tg.showConfirm("Удалить платёж? Баланс пересчитается.",async ok=>{if(ok&&await api("/api/payment/delete",{id})){close_();load()}})}
 
 /* ---------- Оплаты ---------- */
-const PAL=["#1f7a6d","#d0813a","#5b6fd6","#c5486b","#7a9a2e","#8a5fb5"];
+const PAL=["#2F6FD0","#FFC93C","#2FB37F","#9A6BF0","#F08A3C","#E0527A"];
 let ps="",pst="all",pd1="",pd2="",pty="all",cal;   // поиск, (резерв), период, тип записи, состояние календаря
 /* Долги: оплата закрывает занятия от старых к новым; не закрытая часть прошедшего занятия — запись «долг» на дату занятия */
 function debtEntries(){const out=[];
@@ -395,17 +585,17 @@ function payFeed(){
 function payCal(){const base=pd1?new Date(pd1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:pd1,b:pd1==pd2?"":pd2,t:"p"};calShow()}
 function dashCal(){const on=dp=="c"&&dc1,base=on?new Date(dc1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:on?dc1:"",b:on&&dc1!=dc2?dc2:"",t:"d"};calShow()}
 function calShow(){
-  const y=cal.m.getFullYear(),m=cal.m.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),has=new Set(cal.t=="l"?L.map(l=>l.day):allEntries().map(e=>iso(e.at)));
+  const y=cal.m.getFullYear(),m=cal.m.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),has=new Set(allEntries().map(e=>iso(e.at)));
   const lo=cal.a,hi=cal.b||cal.a;let g=WD.map(d=>`<i>${d}</i>`).join("")+"<span></span>".repeat(off);
   for(let d=1;d<=n;d++){const k=`${y}-${pad(m+1)}-${pad(d)}`,ed=k==lo||k==hi,inr=lo&&k>lo&&k<hi;
     g+=`<button class="cd ${ed?"sel":inr?"rng":""} ${k==iso(T)?"tdy":""}" onclick="calPick('${k}')">${d}${has.has(k)?'<u></u>':""}</button>`}
-  open(`${cal.t=="l"?`<button class="pen" aria-label="Назад" onclick="formR()">‹</button>`:""}<h3>${cal.t=="d"?"Выбор периода":cal.t=="l"?"Выбор даты":"Фильтр по дате"}</h3><p class="sub">${!lo?"Нажмите день в календаре":lo==hi?dmy2(lo):dmy2(lo)+" – "+dmy2(hi)}</p>
+  open(`<h3>${cal.t=="d"?"Выбор периода":"Фильтр по дате"}</h3><p class="sub">${!lo?"Нажмите дату или две даты для периода":lo==hi?dmy2(lo):dmy2(lo)+" – "+dmy2(hi)}</p>
   <div class="bar"><button class="pill" onclick="cal.m=new Date(${y},${m-1},1);calShow()">‹</button><b class="ttl">${cal.m.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="cal.m=new Date(${y},${m+1},1);calShow()">›</button></div>
   <div class="g calg">${g}</div>
-  <div class="btns">${cal.t=="l"?`<button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Выбрать</button><button class="btn" onclick="calReset()">Сегодня</button>`:`<button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Применить</button><button class="btn" onclick="calReset()">${cal.t=="d"?"Текущая неделя":"Сбросить"}</button>`}</div>`)}
-function calPick(k){if(cal.t=="l"){cal.a=k;cal.b="";calShow();return}if(!cal.a||cal.b){cal.a=k;cal.b=""}else if(k<cal.a){cal.b=cal.a;cal.a=k}else cal.b=k;calShow()}
-function calApply(){if(cal.t=="l"){F.day=cal.a;formR();return}if(cal.t=="d"){dp="c";dc1=cal.a;dc2=cal.b||cal.a;dsel=-1;dpi=-1;close_();render();return}pd1=cal.a;pd2=cal.b||cal.a;close_();payUpd()}
-function calReset(){if(cal.t=="l"){F.day=iso(T);formR();return}if(cal.t=="d"){dp="w";dsel=-1;dpi=-1;close_();render();return}pd1=pd2='';close_();payUpd()}
+  <div class="btns"><button class="btn pri" ${lo?"":"disabled"} onclick="calApply()">Применить</button><button class="btn" onclick="calReset()">${cal.t=="d"?"Текущая неделя":"Сбросить"}</button></div>`)}
+function calPick(k){if(!cal.a||cal.b){cal.a=k;cal.b=""}else if(k<cal.a){cal.b=cal.a;cal.a=k}else cal.b=k;calShow()}
+function calApply(){if(cal.t=="d"){dp="c";dc1=cal.a;dc2=cal.b||cal.a;dsel=-1;dpi=-1;close_();render();return}pd1=cal.a;pd2=cal.b||cal.a;close_();payUpd()}
+function calReset(){if(cal.t=="d"){dp="w";dsel=-1;dpi=-1;close_();render();return}pd1=pd2='';close_();payUpd()}
 /* ---------- Дашборд ---------- */
 let dp="w",dc1="",dc2="",dsel=-1,dpi=-1,fp="m";   // dp: w/m/q/y — период, c — свои даты (dc1…dc2)
 const kfmt=v=>v>=1000?(v/1000).toFixed(1).replace(".",",").replace(/,0$/,"")+" тыс.":String(Math.round(v));
@@ -542,21 +732,29 @@ async function payAdd(a){
 
 /* ---------- Ученики: поиск, фильтр по классу, добавление, карточка ---------- */
 const GRADES=[...Array(11)].map((_,i)=>i+1),PRICE_QUICK=[3000,4000,5000];
-let sq="",sg="all",ph,nsBack=0;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать), возврат из нового ученика в форму занятия
+let sq="",sg="all",ph;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать)
 const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
 function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
 function stu(){
   const gs=stuGrades();
   return `<div class="sbar"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
-  <label class="ib ${sg!="all"?"on":""}" id="sfl" title="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
-    <select onchange="sg=this.value;stuUpd();$('#sfl').classList.toggle('on',sg!='all')" aria-label="Класс"><option value="all">Все классы</option>${gs.map(g=>`<option value="${esc(g)}" ${sg==g?"selected":""}>${esc(gtxt(g))}</option>`).join("")}<option value="none" ${sg=="none"?"selected":""}>Без класса</option></select></label>
+  <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
   <button class="ib acc" onclick="studNew()" aria-label="Добавить ученика">＋</button></div><div id="slist">${stuList()}</div>`}
 function stuUpd(){$("#slist").innerHTML=stuList()}
+function gradeFilter(){
+  const cnt=g=>act().filter(s=>(s.grade||"").trim()==g).length,none=act().filter(s=>!(s.grade||"").trim()).length,
+        all=[...new Set([...GRADES.map(String),...stuGrades()])];
+  open(`<h3>Класс</h3><p class="sub">Показать учеников выбранного класса</p>
+  <div class="gg">${all.map(g=>{const c=cnt(g);return `<button type="button" class="${sg==g?"on":""}" data-g="${esc(g)}" ${c?"":"disabled"} onclick="setSg(this.dataset.g)">${esc(g)}${c?`<sup>${c}</sup>`:""}</button>`}).join("")}</div>
+  <div class="btns" style="margin-top:4px"><button class="btn ${sg=="all"?"pri":""}" onclick="setSg('all')">Все классы · ${act().length}</button>${none?`<button class="btn ${sg=="none"?"pri":""}" onclick="setSg('none')">Без класса · ${none}</button>`:""}</div>`)}
+function setSg(v){sg=v;close_();stuUpd();$("#sfl").classList.toggle("on",sg!="all")}
 function stuList(){
+  if(!act().length)return '<div class="empty0"><div class="e0i">🎓</div><b>Учеников пока нет</b><p>Добавьте первого — потом его можно будет выбрать в расписании.</p><button class="btn pri" style="width:100%" onclick="studNew()">+ Добавить ученика</button></div>';
   const q_=sq.trim().toLowerCase(),f=act().map(bal).filter(s=>(!q_||nameMatch(s.name,q_))&&(sg=="all"||(sg=="none"?!(s.grade||"").trim():(s.grade||"").trim()==sg)));
   if(!f.length)return '<p class="empty">Учеников по этому запросу нет.</p>';
-  return f.map(s=>{const t=!s.price?"цена не указана":s.b<0?"долг "+money(s.b):s.b>0?"наперёд "+money(s.b):"всё оплачено",g=gtxt(s.grade);
-    return `<div class="srow" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>${g?esc(g)+" · ":""}${s.price?money(s.price)+" / занятие · ":""}проведено ${s.done}</small></span><b class="${s.b<0?"neg":s.b>0?"pos":""}">${t}</b></div>`}).join("")}
+  return f.map(s=>{const t=!s.price?"цена не указана":s.b<0?"долг "+money(s.b):s.b>0?"наперёд "+money(s.b):"всё оплачено",g=(s.grade||"").trim()?stGrade(s.id):"",
+      sub=[(s.subject||"").trim(),s.price?money(s.price)+" / занятие":"","проведено "+s.done].filter(Boolean).map(esc).join(" · ");
+    return `<div class="srow" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}${g?`<span class="gt">${esc(g)}</span>`:""}</b><small>${sub}</small></span><span class="bp ${s.b<0?"neg":s.b>0?"pos":""}">${t}</span></div>`}).join("")}
 
 /* фото: центр-квадрат 360×360, JPEG — сервер принимает data-URL до ~500 КБ */
 function cropPhoto(f,cb){if(!f)return;const r=new FileReader();
@@ -581,13 +779,13 @@ function phShow(){const v=$("#phv");if(!v)return;v.style.background=ph?`url(${ph
 function photoField(cur){ph=undefined;cur=safePhoto(cur);
   return `<div class="phw"><span id="phv" class="av" style="${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
   <button class="phb2" title="Изменить фото" onclick="photoMenu()">📷</button></div>`}
-const gradeSel=(id,cur)=>{cur=(cur||"").trim();const L_=GRADES.map(String);return `<select id="${id}"><option value="">Не указан</option>${(cur&&!L_.includes(cur)?[cur]:[]).concat(L_).map(g=>`<option value="${esc(g)}" ${g==cur?"selected":""}>${esc(gtxt(g))}</option>`).join("")}</select>`};
+const gradeSel=(id,cur)=>{cur=(cur||"").trim();const base=GRADES.map(String),all=base.concat(cur&&!base.includes(cur)?[cur]:[]);
+  return `<div class="gg"><input type="hidden" class="hid" id="${id}" value="${esc(cur)}">${all.map(g=>`<button type="button" class="${g==cur?"on":""}" data-g="${esc(g)}" onclick="pickGrade('${id}',this)">${esc(g)}</button>`).join("")}<button type="button" class="no" data-g="" onclick="pickGrade('${id}',this)">Нет</button></div>`};
 const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
-function studNew(back){
-  nsBack=back||0;
+function studNew(){
   open(`<h3>Новый ученик</h3><p class="sub">Обязательно только имя</p>${photoField("")}
   <label>Имя и фамилия *<input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label>
-  <label>Класс${gradeSel("ng","")}</label>
+  <label>Класс</label>${gradeSel("ng","")}
   <label>Предмет<input id="nsb" placeholder="Например: ЕГЭ по русскому"></label>${priceField("np","")}
   <div class="btns"><button class="btn pri" onclick="studAdd()">Сохранить</button></div>`);
 }
@@ -595,14 +793,12 @@ async function studAdd(){
   const name=$("#nn").value.trim();if(!name)return toast("Введите имя ученика");
   const b={name,grade:$("#ng").value,subject:$("#nsb").value.trim(),price:Math.max(0,parseInt($("#np").value,10)||0)};if(ph)b.photo=ph;
   const r=await api("/api/student/add",b);if(!r)return;
-  await load();
-  if(nsBack){nsBack=0;F.sid=String(r.id);formR();toast("Ученик добавлен: "+name);return}   // вернулись в форму занятия
-  close_();toast("Ученик добавлен: "+name);
+  close_();await load();toast("Ученик добавлен: "+name);
 }
 function card(id,ed){
   const s=bal(S.find(x=>x.id==id));
   if(ed)return open(`<h3>Редактирование профиля</h3><p class="sub">${esc(s.name)}</p>${photoField(s.photo)}
-    <label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Класс${gradeSel("eg",s.grade)}</label>
+    <label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Класс</label>${gradeSel("eg",s.grade)}
     <label>Предмет<input id="es" value="${esc(s.subject||"")}"></label>${priceField("ep",s.price)}<p class="sub" style="margin-top:6px">Новая цена применится к будущим занятиям. Уже проведённые останутся по прежней цене.</p>
     <div class="btns"><button class="btn pri" onclick="saveS(${id})">Сохранить</button><button class="btn" onclick="card(${id})">Отмена</button></div>`);
   const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
@@ -631,10 +827,61 @@ async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Вв�
 /* ---------- каркас ---------- */
 function open(h){$("#sheet").innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){$("#sheet").classList.remove("on")}
-function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():soon();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";$("#pttl").textContent=TITLES[tab]||"";document.querySelectorAll("#menu button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
-const TITLES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат",mt:"Материалы",kn:"Канал"};
-function soon(){return `<h2>${TITLES[tab]||""}</h2><p class="empty">Раздел «${TITLES[tab]||""}» появится позже.</p>`}
-function menuTg(){$("#menu").classList.toggle("on")}
-function go(t){tab=t;$("#menu").classList.remove("on");render();scrollTo(0,0)}
+function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():soon();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";syncNav()}
+function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
+
+/* ---------- меню-гамбургер ---------- */
+const ORDER=["c","p","s","ch","mt","kn"],NAMES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат",mt:"Материалы",kn:"Канал"};
+const REDUCE=matchMedia("(prefers-reduced-motion:reduce)").matches;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let navOpen=false,navBusy=false;
+function moveInd(b){const i=$("#nvi");if(b&&i){i.style.height=b.offsetHeight+"px";i.style.transform=`translateY(${b.offsetTop}px)`}}
+function syncNav(){
+  document.querySelectorAll(".mn-it").forEach(b=>{const on=b.dataset.t==tab;b.classList.toggle("on",on);on?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current")});
+  moveInd($(".mn-it.on"));const t=$("#ttl");if(t&&t.textContent!==NAMES[tab])t.textContent=NAMES[tab]}
+function setNav(on){
+  if(navOpen===on)return;navOpen=on;
+  const bg=$("#burger"),dw=$("#drawer");
+  bg.classList.toggle("on",on);bg.setAttribute("aria-expanded",on);bg.setAttribute("aria-label",on?"Закрыть меню":"Открыть меню");
+  dw.classList.toggle("on",on);$("#scrim").classList.toggle("on",on);dw.inert=!on;dw.setAttribute("aria-hidden",!on);
+  try{on?tg.BackButton.show():tg.BackButton.hide()}catch(e){}
+  if(on){syncNav();setTimeout(()=>{const a=$(".mn-it.on");if(navOpen&&a)a.focus({preventScroll:true})},80)}
+  else if(dw.contains(document.activeElement))bg.focus({preventScroll:true})}
+/* переход между разделами: подсветка «переезжает» на выбранный пункт → меню уезжает →
+   старый раздел уходит в сторону, новый приезжает с противоположной (в зависимости от порядка пунктов) */
+async function go(t,btn){
+  if(navBusy)return;
+  if(t===tab){setNav(false);return}
+  navBusy=true;
+  const app=$("#app"),ttl=$("#ttl"),dir=ORDER.indexOf(t)>ORDER.indexOf(tab)?1:-1;
+  try{
+    document.querySelectorAll(".mn-it").forEach(b=>b.classList.toggle("on",b===btn));moveInd(btn);
+    if(!REDUCE)await sleep(150);
+    setNav(false);
+    if(!REDUCE){
+      const out={duration:150,easing:"cubic-bezier(.4,0,1,1)",fill:"forwards"};
+      await Promise.all([
+        app.animate([{opacity:1,transform:"none"},{opacity:0,transform:`translateX(${-dir*22}px) scale(.985)`}],out).finished,
+        ttl.animate([{opacity:1,transform:"none"},{opacity:0,transform:"translateY(-10px)"}],out).finished])}
+    tab=t;render();scrollTo(0,0);
+    if(!REDUCE){
+      app.getAnimations().forEach(a=>a.cancel());ttl.getAnimations().forEach(a=>a.cancel());
+      const inn={duration:380,easing:"cubic-bezier(.22,1,.36,1)"};
+      app.animate([{opacity:0,transform:`translateX(${dir*34}px) scale(.985)`},{opacity:1,transform:"none"}],inn);
+      ttl.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"none"}],{...inn,duration:340});
+      const fb=$("#fab");if(fb.style.display==="block")fb.animate([{transform:"scale(.4)",opacity:0},{transform:"scale(1)",opacity:1}],{duration:420,easing:"cubic-bezier(.34,1.56,.64,1)",delay:120,fill:"backwards"})}
+  }catch(e){app.getAnimations().forEach(a=>a.cancel());ttl.getAnimations().forEach(a=>a.cancel());tab=t;render()}
+  finally{navBusy=false}}
+$("#drawer").inert=true;
+$("#burger").onclick=()=>setNav(!navOpen);
+$("#scrim").onclick=()=>setNav(false);
+$("#nv").onclick=e=>{const b=e.target.closest(".mn-it");if(b)go(b.dataset.t,b)};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&navOpen)setNav(false)});
+try{tg.BackButton.onClick(()=>setNav(false))}catch(e){}
+(()=>{let sx=null;const d=$("#drawer");
+  d.addEventListener("touchstart",e=>{sx=e.touches[0].clientX},{passive:true});
+  d.addEventListener("touchend",e=>{if(sx!==null&&e.changedTouches[0].clientX-sx<-60)setNav(false);sx=null},{passive:true})})();
+addEventListener("scroll",()=>{const t=$("#top");if(t)t.classList.toggle("scr",scrollY>4)},{passive:true});
+addEventListener("resize",syncNav);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(syncNav);
 load();
 </script></body></html>
