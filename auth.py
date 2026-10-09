@@ -137,6 +137,7 @@ create table if not exists auth_links(h text primary key, tg_id integer not null
 create table if not exists auth_pins(username text primary key, tg_id integer not null);
 create table if not exists auth_sessions(tg_id integer primary key, exp real not null);
 create table if not exists auth_fails(tg_id integer not null, ts real not null);
+create table if not exists api_tokens(h text primary key, tg_id integer not null, exp real not null);
 """)
     for stmt in ("alter table auth_sessions add column fp text",       # сессии версии 1 без отпечатка — недействительны
                  "alter table auth_links add column uname text"):
@@ -183,7 +184,35 @@ def is_authorized(tg_id):
     return True
 
 def logout(tg_id):
-    _db.execute("delete from auth_sessions where tg_id=?", (tg_id,)); _db.commit()
+    _db.execute("delete from auth_sessions where tg_id=?", (tg_id,))
+    _db.execute("delete from api_tokens where tg_id=?", (tg_id,))       # и токены standalone-приложения
+    _db.commit()
+
+# ---------- API-токены для standalone-приложения (APK вне Telegram) ----------
+# Вход тот же (одноразовая ссылка из бота + логин и пароль), но приложение получает токен
+# и передаёт его в заголовке X-Session вместо подписи Telegram initData.
+# В БД — только хэш токена; срок как у сессии, продлевается при использовании.
+def issue_token(tg_id):
+    now = time.time()
+    t = secrets.token_urlsafe(32)
+    _db.execute("delete from api_tokens where exp<?", (now,))
+    _db.execute("insert or replace into api_tokens(h, tg_id, exp) values(?,?,?)", (_h(t), tg_id, now + SESSION_SEC))
+    _db.commit()
+    return t
+
+def check_token(raw):
+    """tg_id — токен валиден и человек всё ещё в белом списке; иначе None."""
+    if not isinstance(raw, str) or not TOKEN_RE.fullmatch(raw):
+        return None
+    now, h = time.time(), _h(raw)
+    row = _db.execute("select tg_id, exp from api_tokens where h=?", (h,)).fetchone()
+    if row is None or row[1] < now or not allowed(row[0]):
+        if row is not None:                                        # истёк или исключён из списка — токен гасим
+            _db.execute("delete from api_tokens where h=?", (h,)); _db.commit()
+        return None
+    if row[1] < now + SESSION_SEC - 3600:                          # продлеваем не чаще раза в час
+        _db.execute("update api_tokens set exp=? where h=?", (now + SESSION_SEC, h)); _db.commit()
+    return row[0]
 
 def new_link(tg_id, username=""):
     """Одноразовая ссылка. Токен в #фрагменте: не попадает ни в логи сервера, ни в Referer."""
@@ -317,8 +346,11 @@ def setup(app, on_login=None, on_alert=None):
     if BASE.startswith("https://"):
         headers["Strict-Transport-Security"] = "max-age=31536000"
 
-    def out(code, msg=""):
-        return web.json_response({"ok": code == 200, "error": msg}, status=code, headers=headers)
+    def out(code, msg="", token=None):
+        body = {"ok": code == 200, "error": msg}
+        if token:
+            body["token"] = token                              # для standalone-приложения; веб-страница поле игнорирует
+        return web.json_response(body, status=code, headers=headers)
 
     async def page(request):
         n = secrets.token_urlsafe(16)
@@ -341,7 +373,7 @@ def setup(app, on_login=None, on_alert=None):
         if code == 200 and on_login:
             try: await on_login(tg_id)
             except Exception: pass                                 # сбой уведомления не отменяет вход
-        return out(code, msg)
+        return out(code, msg, issue_token(tg_id) if code == 200 else None)
 
     app.router.add_get("/login", page)
     app.router.add_post("/api/login", login)

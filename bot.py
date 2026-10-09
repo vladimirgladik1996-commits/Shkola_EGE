@@ -1149,10 +1149,13 @@ async def m_price_bad(m: Message):
 INIT_MAX_AGE = 24 * 3600     # initData старше суток не принимаем: украденную строку нельзя воспроизводить вечно
 
 def authorized(request):
-    """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой."""
+    """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой.
+    Два способа: X-Init (Telegram Mini App, подпись initData) или X-Session (токен standalone-приложения)."""
     try:
         raw = request.headers.get("X-Init", "")
-        if not raw or len(raw) > 8192:
+        if not raw:
+            return 200 if auth.check_token(request.headers.get("X-Session", "")) else 403
+        if len(raw) > 8192:
             return 403
         d = dict(parse_qsl(raw))
         got = d.pop("hash", "")
@@ -1263,7 +1266,12 @@ async def api_data(request):
     return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR})
 
 def user_id(request):
-    return json.loads(dict(parse_qsl(request.headers.get("X-Init", ""))).get("user", "{}")).get("id")
+    """Кто спрашивает: из подписи initData (Telegram) или из токена X-Session (standalone)."""
+    try:
+        uid = json.loads(dict(parse_qsl(request.headers.get("X-Init", ""))).get("user", "{}")).get("id")
+    except (ValueError, RecursionError, TypeError):
+        uid = None
+    return uid if uid is not None else auth.check_token(request.headers.get("X-Session", ""))
 
 def monday(s):
     if not isinstance(s, str) or not DAY_FMT.fullmatch(s):

@@ -374,10 +374,13 @@ const safePhoto=p=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/]+={0,2}$/.test(p||"")
 const av=(s,c="")=>{const ph_=safePhoto(s.photo);return `<span class="av ${c}" style="background:${ph_?`url(${ph_}) center/cover`:hue(s.id)}">${ph_?"":esc(ini(s.name))}</span>`};
 
 const tg=window.Telegram.WebApp;tg.ready();tg.expand();
-
+const APP=!tg.initData;   // открыто не из Telegram (standalone-приложение/APK): вход по ссылке из бота + паролю
+if(APP){tg.showConfirm=(q,cb)=>cb(window.confirm(q));tg.showAlert=(m,cb)=>{window.alert(m);if(cb)cb()};
+  tg.showPopup=(o,cb)=>{window.alert((o&&o.message)||"");if(cb)cb(o&&o.buttons&&o.buttons[0]&&o.buttons[0].id||"ok")};}
 (function(){const u=(tg.initDataUnsafe&&tg.initDataUnsafe.user)||{},nm=[u.first_name,u.last_name].filter(Boolean).join(" ")||u.username||"Профиль";
   $("#mnname").textContent=nm;$("#mnini").textContent=(nm[0]||"?").toUpperCase();
   if(u.photo_url){const im=new Image();im.alt="";im.referrerPolicy="no-referrer";im.onload=()=>$("#mnav").appendChild(im);im.src=u.photo_url}})();
+if(APP&&localStorage.sesName){const n=localStorage.sesName;$("#mnname").textContent=n;$("#mnini").textContent=(n[0]||"?").toUpperCase()}
 /* тема берётся из самого Telegram (а не из системной), а шапка и фон окна красятся в цвет бренда */
 function brand(){if(tg.initData)document.documentElement.dataset.theme=tg.colorScheme==="dark"?"dark":"light";
   const c=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
@@ -389,12 +392,41 @@ let S=[],L=[],P=[],cur="₽";const w0=mon(T);
 // URL → мини-апп на GitHub Pages, а бот работает отдельно (нужен ALLOW_ORIGIN на боте).
 const API_BASE=(window.__API_BASE__||"").replace(/\/+$/,"");
 let locked=false;
-function lockScreen(code){locked=true;document.body.textContent="";const d=document.createElement("div");
+function lockScreen(code){locked=true;
+  if(APP){loginScreen(code);return}
+  document.body.textContent="";const d=document.createElement("div");
   d.style.cssText="padding:64px 28px;text-align:center;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
   const t=document.createElement("div");
   t.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом, нажмите /start → «Войти» и введите логин и пароль. Затем вернитесь сюда — кабинет обновится сам."
     :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет (✕) и откройте его заново из чата с ботом.";d.appendChild(t);
   document.body.appendChild(d)}
+/* standalone-вход: вместо Telegram-подписи — одноразовая ссылка из бота + логин/пароль → API-токен в localStorage */
+function loginScreen(code){document.body.textContent="";const d=document.createElement("div");
+  d.style.cssText="max-width:420px;margin:0 auto;padding:44px 22px;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
+  const inp="width:100%;padding:12px;font:inherit;border:1px solid #d5dbe3;border-radius:10px;box-sizing:border-box";
+  const lab="display:block;font-size:13px;color:#6b7785;margin:14px 0 4px";
+  d.innerHTML=`<h2 style="margin:0 0 8px">🔐 Вход в кабинет</h2>
+  <p style="color:#6b7785;font-size:14px">В Telegram-боте нажмите <b>/start</b> → <b>«Войти»</b>, скопируйте ссылку и вставьте её ниже. Затем — логин и пароль.</p>
+  <label style="${lab}">Ссылка из бота</label><input id="lg_t" style="${inp}" placeholder="https://…/login#…" autocapitalize="off" autocomplete="off">
+  <label style="${lab}">Логин</label><input id="lg_l" style="${inp}" autocomplete="username" autocapitalize="off" maxlength="64">
+  <label style="${lab}">Пароль</label><input id="lg_p" type="password" style="${inp}" autocomplete="current-password" maxlength="128">
+  <button id="lg_b" style="width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:#0F2E6E;border:0;border-radius:10px">Войти</button>
+  <div id="lg_m" role="alert" style="min-height:20px;margin-top:12px;font-size:14px;color:#d93025"></div>`;
+  document.body.appendChild(d);
+  const q=id=>document.getElementById(id);
+  q("lg_b").onclick=async()=>{
+    const raw=q("lg_t").value.trim(),m=raw.match(/#([A-Za-z0-9_-]{20,64})\s*$/)||raw.match(/^([A-Za-z0-9_-]{20,64})$/);
+    if(!m){q("lg_m").textContent="Вставьте ссылку из бота целиком (или токен после #)";return}
+    q("lg_b").disabled=true;q("lg_m").textContent="";
+    try{const r=await fetch(API_BASE+"/api/login",{method:"POST",credentials:"omit",cache:"no-store",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({t:m[1],login:q("lg_l").value.trim(),password:q("lg_p").value})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.token){localStorage.sesTok=j.token;location.reload();return}
+      q("lg_m").textContent=j.error||"Ошибка. Попробуйте ещё раз.";
+    }catch(e){q("lg_m").textContent="Нет связи с сервером."}
+    q("lg_p").value="";q("lg_b").disabled=false;
+  };
+}
 /* Вход происходит на странице /login (другая вкладка/браузер), а эта страница уже загружена и «заперта».
    Поэтому при возврате в кабинет (свернули-развернули, вернулись из браузера) пробуем обновиться сами —
    один раз за возврат, чтобы не зациклиться. */
@@ -402,7 +434,9 @@ let autoRetry=false;
 const wake=()=>{if(locked&&!autoRetry&&document.visibilityState==="visible"){autoRetry=true;location.reload()}};
 document.addEventListener("visibilitychange",wake);
 if(tg.onEvent)tg.onEvent("activated",wake);
-async function api(p,b){const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:{"X-Init":tg.initData,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});
+async function api(p,b){const h={"X-Init":tg.initData,"Content-Type":"application/json"};
+  if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
+  const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:h,body:b?JSON.stringify(b):undefined});
   if(r.status==401||r.status==403){lockScreen(r.status);return null}
   if(r.status==409){toast("Время занято или пересекается с другим занятием");return null}
   if(!r.ok){toast("Не получилось, попробуйте ещё раз");return null}return r.json()}
@@ -487,7 +521,7 @@ function printIt(){
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
   $("#pr").classList.add("on");fitNames($("#paper"));
   pdfBlob=null;                          /* забираем PDF сразу: шаринг должен идти без сетевой паузы */
-  fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:{"X-Init":tg.initData}})
+  fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
     .then(r=>r.ok?r.blob():null).then(b=>{pdfBlob=b}).catch(()=>{pdfBlob=null});
 }
 
