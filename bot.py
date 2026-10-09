@@ -1277,15 +1277,6 @@ async def api_week_pdf(request):
     return web.Response(body=pdf, content_type="application/pdf")
 
 @guarded
-async def api_week_send(request):
-    start = monday((await request.json())["start"])
-    pdf = week_pdf(start)
-    await request.app["bot"].send_document(
-        user_id(request), BufferedInputFile(pdf, filename=f"raspisanie_{start}.pdf"),
-        caption=f"Расписание на неделю {start:%d.%m} – {start + timedelta(days=6):%d.%m}. Перешлите файл в нужный мессенджер.")
-    return web.json_response({"ok": True})
-
-@guarded
 async def api_add(request):
     j = await request.json(); check_slot(j)
     sid = int(j["student_id"])
@@ -1395,6 +1386,101 @@ async def api_payment_delete(request):
     delete_payment(int((await request.json())["id"]))
     return web.json_response({"ok": True})
 
+# ---------- голосовой помощник ----------
+# Мини-апп шлёт запись и КОНТЕКСТ: на какой вкладке и экране пользователь нажал «Голосовая команда»,
+# какой фильтр/период выбран, какая карточка открыта. Контекст приходит от клиента, поэтому проверяется
+# по белому списку: лишние ключи отбрасываются, неверный тип или значение → 400.
+VOICE_TABS = {"c": "Расписание", "p": "Оплаты", "s": "Ученики", "ch": "Чат", "mt": "Материалы", "kn": "Канал"}
+VOICE_SCREENS = {"lesson_form", "day_card", "student_card", "student_new", "payment_card", "payment_edit",
+                 "payment_new", "balance", "debts", "print_preview", "grade_filter", "period_calendar",
+                 "payment_student_pick", "payment_sort"}
+VOICE_VIEWS = {"w", "m"}
+VOICE_MAX_B64 = 1_500_000            # ~1,1 МБ звука; запись на фронте ограничена 45 секундами и сжата (~150 КБ)
+VOICE_MAX_SEC = 60
+
+def _int_id(x):
+    if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x <= 2_000_000_000:
+        raise ValueError
+    return x
+
+def _day(x):
+    if not isinstance(x, str) or not DAY_FMT.fullmatch(x):
+        raise ValueError
+    return date.fromisoformat(x).isoformat()
+
+def voice_context(raw):
+    """Очищенный контекст страницы: {tab, tab_name, screen, screen_args, ...поля вкладки}."""
+    if not isinstance(raw, dict) or raw.get("tab") not in VOICE_TABS:
+        raise ValueError
+    tab = raw["tab"]
+    ctx = {"tab": tab, "tab_name": VOICE_TABS[tab], "screen": None, "screen_args": []}
+    scr = raw.get("screen")
+    if scr is not None:
+        if scr not in VOICE_SCREENS:
+            raise ValueError
+        ctx["screen"] = scr
+        args = raw.get("screen_args") or []
+        if not isinstance(args, list) or len(args) > 4:
+            raise ValueError
+        for a in args:                                   # id (число) или день (YYYY-MM-DD); остальное — мимо
+            try: ctx["screen_args"].append(_int_id(a))
+            except ValueError: ctx["screen_args"].append(_day(a))
+    if tab == "c":
+        if raw.get("view") is not None:
+            if raw["view"] not in VOICE_VIEWS: raise ValueError
+            ctx["view"] = raw["view"]
+        for k in ("week_start", "month"):
+            if raw.get(k) is not None: ctx[k] = _day(raw[k])
+    elif tab == "p":
+        if raw.get("student_id") not in (None, "all"): ctx["student_id"] = _int_id(raw["student_id"])
+        for k in ("date_from", "date_to"):
+            if raw.get(k): ctx[k] = _day(raw[k])
+    elif tab == "s":
+        g = raw.get("filter")
+        if g is not None:
+            if not isinstance(g, str) or len(g) > MAX_GRADE: raise ValueError
+            ctx["filter"] = g
+    return ctx
+
+def voice_audio(j):
+    """(байты звука | None, mime). Звук необязателен: можно прислать уже распознанный текст."""
+    import base64, binascii
+    b64 = j.get("audio")
+    if b64 in (None, ""):
+        return None, ""
+    mime = j.get("mime") or ""
+    if not isinstance(b64, str) or len(b64) > VOICE_MAX_B64 or not isinstance(mime, str) or not mime.startswith("audio/") or len(mime) > 60:
+        raise ValueError
+    try:
+        return base64.b64decode(b64, validate=True), mime
+    except binascii.Error:
+        raise ValueError
+
+def voice_handle(ctx, audio, mime, text):
+    """Точка расширения. Сейчас — заглушка: подключить распознавание речи (audio → text) и разбор
+    команды (text + ctx → действие) можно здесь, не трогая фронт и проверку контекста."""
+    where = ctx["tab_name"] + (f" · {ctx['screen']}" if ctx["screen"] else "")
+    return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Распознавание речи пока не подключено."}
+
+@guarded
+async def api_voice(request):
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    ctx = voice_context(j.get("ctx"))
+    audio, mime = voice_audio(j)
+    text = j.get("text")
+    if text is not None and (not isinstance(text, str) or len(text) > 1000):
+        raise ValueError
+    dur = j.get("dur")
+    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not 0 <= dur <= VOICE_MAX_SEC):
+        raise ValueError
+    if audio is None and not text:
+        raise ValueError
+    res = voice_handle(ctx, audio, mime, (text or "").strip())
+    log.info("voice: tg_id=%s tab=%s screen=%s audio=%sB", user_id(request), ctx["tab"], ctx["screen"], len(audio or b""))
+    return web.json_response({"ok": True, "context": ctx, **res})
+
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
 # либо "*". Если ALLOW_ORIGIN не задан, заголовки не добавляются и всё работает как раньше
@@ -1425,7 +1511,6 @@ def make_app():
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
-    app.router.add_post("/api/week/send", api_week_send)
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)
     app.router.add_post("/api/lesson/cancel", api_cancel)
@@ -1437,6 +1522,7 @@ def make_app():
     app.router.add_post("/api/payment/add", api_payment_add)
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
+    app.router.add_post("/api/voice", api_voice)
     return app
 
 
