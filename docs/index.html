@@ -634,7 +634,7 @@ function cancelL(id){const l=L.find(x=>x.id==id);
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
 let pdfStart="",pdfBlob=null;
 /* Подписанная ссылка на PDF (живёт 10 минут): нативный загрузчик Telegram (downloadFile)
-   и DownloadManager в APK идут по URL без заголовков X-Init/X-Session."""
+   и DownloadManager в APK идут по URL без заголовков X-Init/X-Session. */
 async function pdfLink(){
   try{
     const r=await fetch(API_BASE+"/api/pdf_link?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}});
