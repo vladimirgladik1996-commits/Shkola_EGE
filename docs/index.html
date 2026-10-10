@@ -632,7 +632,7 @@ let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
       открывает системный chooser «Переслать файл»;
    2) браузер/WebView с Web Share API — скачивание + navigator.share с файлом;
    3) Telegram WebApp — нативное окно сохранения файла (Telegram ≥ 8.0), оттуда его можно переслать. */
-const NATIVE_SHARE=(()=>{try{return !tg.initData&&!!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
+const NATIVE_SHARE=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
 const pdfName=()=>"raspisanie_"+pdfStart+".pdf";
 function dlBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)}
@@ -644,7 +644,8 @@ async function sharePdf(){
       const r=await api("/api/pdf_link",{start:pdfStart});
       if(r&&r.url){Android.sharePdf((API_BASE||location.origin)+r.url,pdfName());return}
       throw new Error("pdf_link")}
-    /* 2) Браузер: файл скачивается И сразу уходит в системное окно шаринга */
+    /* 2) Клиент с Web Share API (браузер, часть WebView/клиентов Telegram): файл скачивается
+       И сразу уходит в системное окно шаринга */
     if(NATIVE_SHARE&&pdfBlob){
       dlBlob(pdfBlob,pdfName());
       const f=new File([pdfBlob],pdfName(),{type:"application/pdf"});
