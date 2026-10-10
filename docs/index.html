@@ -626,12 +626,15 @@ function cancelL(id){const l=L.find(x=>x.id==id);
     async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
 let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
-/* «Поделиться PDF»: файл скачивается И одновременно открывается системное окно шаринга
-   («Переслать в мессенджеры»). Никакой отправки файла в чат с ботом.
+/* «Поделиться PDF»: файл скачивается И одновременно открывается окно шаринга
+   («Переслать в мессенджеры»).
    1) APK (Android) — нативный мост: DownloadManager сохраняет файл в «Загрузки» и сразу
       открывает системный chooser «Переслать файл»;
-   2) браузер/WebView с Web Share API — скачивание + navigator.share с файлом;
-   3) Telegram WebApp — нативное окно сохранения файла (Telegram ≥ 8.0), оттуда его можно переслать. */
+   2) клиент с Web Share API (браузер, часть WebView/клиентов Telegram) — скачивание +
+      navigator.share с файлом;
+   3) Telegram WebApp — файл приходит в чат с ботом: из диалога работает родное окно
+      Telegram «⋮ → Поделиться» в любые мессенджеры (нативно открыть его из веб-страницы
+      Telegram не позволяет — есть только downloadFile/shareMessage/shareToStory). */
 const NATIVE_SHARE=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
 const pdfName=()=>"raspisanie_"+pdfStart+".pdf";
 function dlBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name;
@@ -650,10 +653,16 @@ async function sharePdf(){
       dlBlob(pdfBlob,pdfName());
       const f=new File([pdfBlob],pdfName(),{type:"application/pdf"});
       await navigator.share({files:[f]});return}
-    /* 3) Telegram WebApp: нативное окно сохранения файла */
-    if(!APP&&tg.downloadFile){
-      const r=await api("/api/pdf_link",{start:pdfStart});
-      if(r&&r.url){tg.downloadFile({url:(API_BASE||location.origin)+r.url,file_name:pdfName()},ok=>{if(!ok)toast("Не получилось сохранить файл")});return}}
+    /* 3) Telegram WebApp: файл уходит в чат с ботом — из диалога работает родное окно
+       Telegram «Поделиться» в любые мессенджеры (⋮ над файлом) */
+    if(!APP&&tg.initData){
+      btn.textContent="Отправляю…";
+      const r=await api("/api/week/send",{start:pdfStart});
+      if(r){
+        const tip="Файл уже в чате с ботом. Нажмите на него → в правом верхнем углу «Поделиться» → выберите мессенджер.";
+        try{tg.showPopup({title:"PDF в чате",message:tip,buttons:[{id:"open",type:"default",text:"Открыть чат"},{id:"ok",type:"cancel",text:"Понятно"}]},id=>{if(id=="open")tg.close()})}
+        catch(e){toast(tip)}}
+      return}
     /* 4) запасной вариант — просто скачать */
     if(pdfBlob){dlBlob(pdfBlob,pdfName());toast("Файл сохранён — перешлите его из «Загрузок»");return}
     toast("Не получилось подготовить файл — попробуйте ещё раз");
