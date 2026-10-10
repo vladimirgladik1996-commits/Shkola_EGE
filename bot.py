@@ -8,6 +8,7 @@ from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
                            MenuButtonWebApp, Message, ReplyKeyboardRemove, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
@@ -809,6 +810,11 @@ def weeks_kb():
     b.adjust(1)
     return b.as_markup()
 
+def week_doc(start):
+    """PDF недели как документ для отправки в Telegram + подпись (бот в чате и кнопка «Поделиться PDF» в мини-аппе)."""
+    return (BufferedInputFile(week_pdf(start), filename=f"raspisanie_{start}.pdf"),
+            f"📅 Расписание на неделю {start:%d.%m} – {start + timedelta(days=6):%d.%m.%Y}\nФормат A4, готово к печати.")
+
 @r.message(F.text == "Расписание")
 async def week_schedule(m: Message, state: FSMContext):
     await state.clear()
@@ -818,10 +824,8 @@ async def week_schedule(m: Message, state: FSMContext):
 async def c_week(c: CallbackQuery):
     start = monday(c.data[3:])
     await c.answer()
-    pdf = week_pdf(start)
-    await c.message.answer_document(
-        BufferedInputFile(pdf, filename=f"raspisanie_{start}.pdf"),
-        caption=f"📅 Расписание на неделю {start:%d.%m} – {start + timedelta(days=6):%d.%m.%Y}\nФормат A4, готово к печати.")
+    doc, caption = week_doc(start)
+    await c.message.answer_document(doc, caption=caption)
 
 @r.message(F.text == "Новое занятие")
 async def new_lesson(m: Message, state: FSMContext):
@@ -1330,6 +1334,23 @@ async def api_week_pdf(request):
                                  "Access-Control-Allow-Origin": "https://web.telegram.org"})
 
 @guarded
+async def api_week_send(request):
+    """«Поделиться PDF» из мини-аппа. В WebView Telegram нет системного шаринга файлов (navigator.share с файлами)
+    и не работает сохранение blob-ссылок, поэтому бот сам присылает PDF недели в чат с пользователем —
+    оттуда файл пересылается любому контакту обычной кнопкой «Переслать»."""
+    start = monday((await request.json())["start"])
+    uid, tg_bot = user_id(request), request.app.get("bot")
+    if not isinstance(uid, int) or tg_bot is None:
+        return web.json_response({"error": "unavailable"}, status=503)
+    doc, caption = week_doc(start)
+    try:
+        await tg_bot.send_document(uid, doc, caption=caption)
+    except TelegramAPIError as e:
+        log.warning("week pdf send failed: tg_id=%s err=%s", uid, e)
+        return web.json_response({"error": "send_failed"}, status=502)
+    return web.json_response({"ok": True})
+
+@guarded
 async def api_pdf_link(request):
     """Подписанная ссылка на PDF для нативного скачивания (Telegram ≥ 8.0 «Сохранить в Загрузки»
     и DownloadManager в APK): загрузчики идут по URL без заголовков авторизации."""
@@ -1560,7 +1581,7 @@ async def cors_mw(request, handler):
     origin = request.headers.get("Origin", "")
     if allow and origin and (allow == "*" or origin in [o.strip() for o in allow.split(",")]):
         resp.headers["Access-Control-Allow-Origin"] = "*" if allow == "*" else origin
-        resp.headers["Access-Control-Allow-Headers"] = "X-Init, Content-Type"
+        resp.headers["Access-Control-Allow-Headers"] = "X-Init, X-Session, Content-Type"
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         resp.headers["Vary"] = "Origin"
     return resp
@@ -1573,6 +1594,7 @@ def make_app():
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_get("/api/pdf_link", api_pdf_link)
+    app.router.add_post("/api/week/send", api_week_send)
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)
     app.router.add_post("/api/lesson/cancel", api_cancel)

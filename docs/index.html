@@ -353,7 +353,7 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 <main id="app"></main>
 <button id="fab" onclick="fabGo()">+ Занятие</button><button id="chw" type="button" aria-label="Чат с Вишенкой" onclick="chatOpen()"><span class="chi"><img id="chimg" alt=""></span><i class="cht"></i></button>
 <div id="sheet"></div>
-<div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="$('#pr').classList.remove('on')">Назад</button><button class="btn pri" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
+<div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="$('#pr').classList.remove('on')">Назад</button><button class="btn pri" id="prs" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
 <div id="toast"></div>
 <script>
 const $=s=>document.querySelector(s);
@@ -520,9 +520,10 @@ function printIt(){
   const start=ws,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
   $("#pr").classList.add("on");fitNames($("#paper"));
-  pdfBlob=null;                          /* забираем PDF сразу: шаринг должен идти без сетевой паузы */
-  fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
-    .then(r=>r.ok?r.blob():null).then(b=>{pdfBlob=b}).catch(()=>{pdfBlob=null});
+  pdfBlob=null;const tok=++pdfTok,sb=$("#prs");pdfBusy=false;sb.disabled=false;sb.textContent="Поделиться PDF";
+  if(NATIVE_SHARE)                       /* PDF забираем заранее: системный share должен вызываться сразу по тапу, без сетевой паузы */
+    fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
+      .then(r=>r.ok?r.blob():null).then(b=>{if(tok==pdfTok)pdfBlob=b}).catch(()=>{if(tok==pdfTok)pdfBlob=null});   /* tok: ответ по закрытой/другой неделе не подменяет файл */
 }
 
 /* ---------- Форма занятия ---------- */
@@ -632,35 +633,24 @@ function cancelL(id){const l=L.find(x=>x.id==id);
     buttons:[{id:"one",type:"default",text:"Только этот урок"},{id:"all",type:"destructive",text:"Этот и все последующие"},{type:"cancel"}]},
     async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
-let pdfStart="",pdfBlob=null;
-/* Подписанная ссылка на PDF (живёт 10 минут): нативный загрузчик Telegram (downloadFile)
-   и DownloadManager в APK идут по URL без заголовков X-Init/X-Session. */
-async function pdfLink(){
-  try{
-    const r=await fetch(API_BASE+"/api/pdf_link?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}});
-    if(!r.ok)return "";
-    const j=await r.json();
-    return j&&j.url?(API_BASE||location.origin)+j.url:"";
-  }catch(e){return ""}
-}
+let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
+/* Системное «Поделиться файлом» (navigator.share) есть только в обычных браузерах/WebView вне Telegram. В WebView Telegram его нет, а сохранение
+   blob-ссылки не срабатывает — поэтому там (и везде, где системного шаринга нет) PDF присылает бот: /api/week/send → чат, оттуда «Переслать»
+   и/или системное «Поделиться» из сообщения — в сторонние мессенджеры. */
+const NATIVE_SHARE=(()=>{try{return !tg.initData&&!!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
 async function sharePdf(){
-  if(!pdfBlob){toast("PDF ещё готовится — секунду");return}
-  const name="raspisanie_"+pdfStart+".pdf";
-  const f=new File([pdfBlob],name,{type:"application/pdf"});
-  if(navigator.canShare&&navigator.canShare({files:[f]})){
-    try{await navigator.share({files:[f]});return}   /* обычный браузер: системное меню «Поделиться» */
-    catch(e){if(e&&e.name=="AbortError")return}}
-  /* В веб-вью Telegram Web Share API с файлами недоступен — системное меню «Поделиться»
-     открыть нельзя. Рабочий путь: сохранить файл на устройство, дальше пользователь
-     сам отправляет его из «Файлов»/«Загрузок» в любой мессенджер."*/
-  const u=await pdfLink();
-  if(!u){tg.showAlert("Не удалось подготовить файл. Попробуйте ещё раз.");return}
-  if(!APP&&tg.downloadFile&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){
-    tg.downloadFile({url:u,file_name:name},ok=>{if(!ok)tg.showAlert("Скачивание не завершено. Попробуйте ещё раз.")});
-    return}                                          /* Telegram ≥ 8.0: нативное окно «Сохранить в Загрузки» */
-  if(APP){location.href=u;return}                    /* APK-обёртка: WebView скачает файл в «Загрузки» */
-  tg.openLink(u);                                    /* старый Telegram: файл откроется во внешнем браузере */
-}
+  if(pdfBusy)return;
+  if(NATIVE_SHARE&&pdfBlob){
+    const f=new File([pdfBlob],"raspisanie_"+pdfStart+".pdf",{type:"application/pdf"});
+    try{await navigator.share({files:[f]});return}
+    catch(e){if(e&&e.name=="AbortError")return}}          /* системный шаринг не удался — не молчим, шлём через бота */
+  pdfBusy=true;const btn=$("#prs");btn.disabled=true;btn.textContent="Отправляю…";
+  const r=await api("/api/week/send",{start:pdfStart});
+  pdfBusy=false;btn.disabled=false;btn.textContent="Поделиться PDF";
+  if(!r)return;                                              /* api() уже показал ошибку */
+  try{tg.showPopup({title:"PDF отправлен",message:"Файл пришёл в чат с ботом. Откройте чат и нажмите «Переслать», чтобы отправить его контакту или в сторонний мессенджер.",
+    buttons:[{id:"open",type:"default",text:"Открыть чат"},{id:"ok",type:"cancel",text:"Остаться"}]},id=>{if(id=="open"&&!APP)tg.close()})}   /* в standalone-версии showPopup — это alert(), закрывать нечего */
+  catch(e){toast("PDF отправлен в чат с ботом в Telegram — перешлите его контакту")}}
 /* Распределение оплат: все оплаты ученика идут по порядку и закрывают его занятия от старых к новым (каждое по своей цене).
    Результат для каждой оплаты: на какие занятия она пошла, полностью или частично; остаток — предоплата без занятия. */
 function allocate(sid){
