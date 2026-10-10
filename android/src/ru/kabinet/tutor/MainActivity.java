@@ -3,16 +3,20 @@ package ru.kabinet.tutor;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -83,6 +87,8 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
 
+        web.addJavascriptInterface(new ShareBridge(), "Android");   // «Поделиться PDF»: скачивание + системный chooser
+
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
@@ -135,6 +141,50 @@ public class MainActivity extends Activity {
         });
 
         web.loadUrl(url);
+    }
+
+    /**
+     * JS-мост «Поделиться PDF» (страница вызывает Android.sharePdf(url, name)).
+     * Файл скачивается в «Загрузки» через DownloadManager И по завершении загрузки
+     * открывается системное окно «Переслать файл» — одновременно скачивание и шаринг.
+     */
+    private class ShareBridge {
+        @JavascriptInterface
+        public void sharePdf(String url, String name) {
+            try {
+                final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+                req.setMimeType("application/pdf");
+                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                String fn = (name == null || name.trim().isEmpty()) ? "raspisanie.pdf" : name.trim();
+                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fn);
+                final long id = dm.enqueue(req);
+                BroadcastReceiver rc = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context c, Intent i) {
+                        long rid = (i == null) ? -1 : i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                        if (rid != id) return;
+                        try { unregisterReceiver(this); } catch (Exception ignored) {}
+                        Uri u = dm.getUriForDownloadedFile(id);
+                        if (u == null) return;
+                        Intent s = new Intent(Intent.ACTION_SEND);
+                        s.setType("application/pdf");
+                        s.putExtra(Intent.EXTRA_STREAM, u);
+                        s.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(s, "Переслать файл"));
+                    }
+                };
+                IntentFilter f = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(rc, f, Context.RECEIVER_NOT_EXPORTED);
+                else registerReceiver(rc, f);
+            } catch (Exception e) {
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Не получилось поделиться файлом", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }
     }
 
     @Override

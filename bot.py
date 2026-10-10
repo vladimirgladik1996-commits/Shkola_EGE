@@ -534,10 +534,11 @@ def week_pdf(start):
 
 # ---------- клавиатуры ----------
 def menu_kb():
+    # «Занятия сегодня» и «Фин. отчет» убраны из меню по требованию владельца —
+    # их текстовые обработчики оставлены (доступны прямым вводом команды).
     b = ReplyKeyboardBuilder()
-    b.row(KeyboardButton(text="Занятия сегодня"), KeyboardButton(text="Новое занятие"))
-    b.row(KeyboardButton(text="Новая оплата"), KeyboardButton(text="Фин. отчет"))
-    b.row(KeyboardButton(text="Расписание"), KeyboardButton(text="Новый ученик"))
+    b.row(KeyboardButton(text="📅 Расписание"), KeyboardButton(text="➕ Новое занятие"))
+    b.row(KeyboardButton(text="💰 Новая оплата"), KeyboardButton(text="🎓 Новый ученик"))
     return b.as_markup(resize_keyboard=True)
 
 def pager(b, prefix, page, pages, label=None):
@@ -815,7 +816,7 @@ def week_doc(start):
     return (BufferedInputFile(week_pdf(start), filename=f"raspisanie_{start}.pdf"),
             f"📅 Расписание на неделю {start:%d.%m} – {start + timedelta(days=6):%d.%m.%Y}\nФормат A4, готово к печати.")
 
-@r.message(F.text == "Расписание")
+@r.message(F.text == "📅 Расписание")
 async def week_schedule(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Выберите неделю:", reply_markup=weeks_kb())
@@ -827,7 +828,7 @@ async def c_week(c: CallbackQuery):
     doc, caption = week_doc(start)
     await c.message.answer_document(doc, caption=caption)
 
-@r.message(F.text == "Новое занятие")
+@r.message(F.text == "➕ Новое занятие")
 async def new_lesson(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Кого записываем?", reply_markup=students_kb("lp", "lpp", 0, "lpn"))
@@ -853,12 +854,12 @@ async def c_dur(c: CallbackQuery, state: FSMContext):
     await state.update_data(dur=int(d))
     await c.message.edit_text(f"{pretty(day, hm(t))}, {d} мин\nКакое занятие?", reply_markup=mode_kb(day, t))
 
-@r.message(F.text == "Новая оплата")
+@r.message(F.text == "💰 Новая оплата")
 async def new_pay(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("Выберите ученика:", reply_markup=students_kb("pa", "pu", 0, "pn"))
 
-@r.message(F.text == "Новый ученик")
+@r.message(F.text == "🎓 Новый ученик")
 async def new_student(m: Message, state: FSMContext):
     await state.clear()
     await ns_show(m, state, "name")
@@ -1170,7 +1171,7 @@ def check_pdf_token(raw, start):
     except (ValueError, AttributeError):
         return None
     now = time.time()
-    if not (now <= exp <= now + PDF_TTL) or not (0 < uid <= 2_000_000_000):
+    if not (now <= exp <= now + PDF_TTL) or not (0 <= uid <= 2_000_000_000):
         return None
     want = hmac.new(TOKEN.encode(), f"pdf:{uid}:{start}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
     return uid if hmac.compare_digest(sig, want) else None
@@ -1194,8 +1195,8 @@ def authorized(request):
         if not raw:
             ses = request.headers.get("X-Session", "")
             if ses:
-                return 200 if auth.check_token(ses) else 403
-            return 200 if _pdf_link_uid(request) else 403
+                return 200 if auth.check_token(ses) is not None else 403   # 0 — валидный standalone-пользователь (APK)
+            return 200 if _pdf_link_uid(request) is not None else 403
         if len(raw) > 8192:
             return 403
         d = dict(parse_qsl(raw))
@@ -1315,7 +1316,10 @@ def user_id(request):
         uid = None
     if uid is not None:
         return uid
-    return auth.check_token(request.headers.get("X-Session", "")) or _pdf_link_uid(request)
+    ses = auth.check_token(request.headers.get("X-Session", ""))
+    if ses is not None:
+        return ses                                    # 0 — standalone-вход (APK), не путать с «нет пользователя»
+    return _pdf_link_uid(request)
 
 def monday(s):
     if not isinstance(s, str) or not DAY_FMT.fullmatch(s):

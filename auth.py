@@ -1,7 +1,11 @@
 """Авторизация бота и мини-аппа.
 
-Схема: /start → бот шлёт одноразовую ссылку (10 минут, привязана к Telegram-ID) →
-страница /login → логин и пароль → сессия на Telegram-ID. Бот и API пускают только с сессией.
+Два независимых входа:
+  • Telegram-мини-апп: /start → бот шлёт одноразовую ссылку (10 минут, привязана к Telegram-ID) →
+    страница /login → логин и пароль → сессия на Telegram-ID;
+  • standalone-приложение (APK вне Telegram): только логин и пароль → API-токен (tg_id=0).
+    Сессия отдельная от Telegram; данные — та же база того же сервера.
+Бот и API пускают только с сессией/токеном.
 Пароль в коде и репозитории НЕ хранится — только scrypt-хэш в .env на сервере.
 Сгенерировать хэш:  python auth.py   (или  python auth.py --gen  — случайный сильный пароль)
 """
@@ -140,7 +144,8 @@ create table if not exists auth_fails(tg_id integer not null, ts real not null);
 create table if not exists api_tokens(h text primary key, tg_id integer not null, exp real not null);
 """)
     for stmt in ("alter table auth_sessions add column fp text",       # сессии версии 1 без отпечатка — недействительны
-                 "alter table auth_links add column uname text"):
+                 "alter table auth_links add column uname text",
+                 "alter table api_tokens add column fp text"):        # токены без отпечатка — недействительны
         try:
             db.execute(stmt)
         except Exception:
@@ -196,18 +201,21 @@ def issue_token(tg_id):
     now = time.time()
     t = secrets.token_urlsafe(32)
     _db.execute("delete from api_tokens where exp<?", (now,))
-    _db.execute("insert or replace into api_tokens(h, tg_id, exp) values(?,?,?)", (_h(t), tg_id, now + SESSION_SEC))
+    _db.execute("insert or replace into api_tokens(h, tg_id, exp, fp) values(?,?,?,?)",
+                (_h(t), tg_id, now + SESSION_SEC, _fp()))
     _db.commit()
     return t
 
 def check_token(raw):
-    """tg_id — токен валиден и человек всё ещё в белом списке; иначе None."""
+    """tg_id (0 — standalone-пользователь APK) — токен валиден; иначе None.
+    Telegram-токены дополнительно сверяются с белым списком; standalone-токены —
+    только с отпечатком учётных данных (смена пароля гасит их)."""
     if not isinstance(raw, str) or not TOKEN_RE.fullmatch(raw):
         return None
     now, h = time.time(), _h(raw)
-    row = _db.execute("select tg_id, exp from api_tokens where h=?", (h,)).fetchone()
-    if row is None or row[1] < now or not allowed(row[0]):
-        if row is not None:                                        # истёк или исключён из списка — токен гасим
+    row = _db.execute("select tg_id, exp, fp from api_tokens where h=?", (h,)).fetchone()
+    if row is None or row[1] < now or (row[2] or "") != _fp() or (row[0] != STANDALONE_UID and not allowed(row[0])):
+        if row is not None:                                        # истёк, сменился пароль или исключён из списка — токен гасим
             _db.execute("delete from api_tokens where h=?", (h,)); _db.commit()
         return None
     if row[1] < now + SESSION_SEC - 3600:                          # продлеваем не чаще раза в час
@@ -280,12 +288,42 @@ async def attempt(token, login, password):
     return 200, "", tg_id
 
 
+# ---------- standalone-вход (APK вне Telegram): только логин и пароль ----------
+# Не зависит от Telegram и мини-аппа: нет ни ссылки из бота, ни Telegram-ID.
+# Учёт неудачных попыток — в общем «ведре» tg_id=0; токен сессии привязан к
+# отпечатку учётных данных и гаснет при смене логина/пароля.
+STANDALONE_UID = 0
+
+async def attempt_standalone(login, password):
+    """Одна попытка standalone-входа → (http-код, текст ошибки, tg_id=0)."""
+    now, uid = time.time(), STANDALONE_UID
+    if _locked(uid, now):
+        log.warning("standalone login blocked (too many attempts)")
+        return 429, "Слишком много попыток. Подождите немного и попробуйте снова.", uid
+    # попытка засчитывается ДО проверки — параллельный залп не обойдёт лимит
+    _db.execute("insert into auth_fails(tg_id, ts) values(?,?)", (uid, now))
+    _db.commit()
+    async with _sem:
+        ok = await asyncio.get_running_loop().run_in_executor(None, check_credentials, login, password)
+    if not ok:
+        if _locked(uid, time.time()):
+            await _alert(uid, "⚠️ Заблокирован вход в приложение: слишком много неверных паролей. "
+                              "Если это были не вы — смените пароль на сервере.")
+        log.warning("standalone login failed")
+        return 401, "Неверный логин или пароль.", uid
+    _db.execute("delete from auth_fails where tg_id=?", (uid,))
+    _db.commit()
+    log.info("standalone login ok")
+    return 200, "", uid
+
+
 # ---------- разбор запроса (чистая функция — легко тестировать) ----------
 TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{20,64}")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 def parse_login(raw):
-    """Байты тела → (токен, логин, пароль) или ValueError. Только строки заданной длины и формата."""
+    """Байты тела → (токен | None, логин, пароль) или ValueError.
+    Токен опущен или пуст → standalone-вход (APK): только логин и пароль, без Telegram."""
     try:
         j = json.loads(raw)
     except RecursionError:                                         # «[[[[…» в 4 КБ
@@ -293,9 +331,13 @@ def parse_login(raw):
     if not isinstance(j, dict):
         raise ValueError
     t, lg, pw = j.get("t"), j.get("login"), j.get("password")
-    if not all(isinstance(x, str) for x in (t, lg, pw)):
+    if not all(isinstance(x, str) for x in (lg, pw)):
         raise ValueError
-    if not TOKEN_RE.fullmatch(t) or not 0 < len(lg) <= 64 or not 0 < len(pw) <= 128 or CTRL_RE.search(lg + pw):
+    if t is not None and (not isinstance(t, str) or not TOKEN_RE.fullmatch(t)):
+        raise ValueError                                            # токен передан, но неверного формата
+    if t == "":
+        t = None
+    if not 0 < len(lg) <= 64 or not 0 < len(pw) <= 128 or CTRL_RE.search(lg + pw):
         raise ValueError
     lg.encode(); pw.encode()                                       # одиночные суррогаты → UnicodeError ⊂ ValueError
     return t, lg, pw
@@ -317,7 +359,7 @@ button{width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;colo
 button:disabled{opacity:.6}#msg{min-height:20px;margin-top:12px;font-size:14px;color:var(--er)}#msg.ok{color:var(--ac)}
 </style></head><body><main><h1>🔐 Вход</h1><p>Кабинет репетитора</p>
 <form id="f" method="post" action="/login"><label for="l">Логин</label><input id="l" autocomplete="username" autocapitalize="off" maxlength="64" required>
-<label for="p">Пароль</label><input id="p" type="password" autocomplete="current-password" maxlength="128" required>
+<label for="p">Пароль</label><input id="p" type="text" autocomplete="current-password" maxlength="128" required>
 <button id="b" type="submit">Войти</button><div id="msg" role="alert"></div></form></main>
 <script nonce="__N__">(()=>{const t=location.hash.slice(1);history.replaceState(null,"",location.pathname);
 const $=i=>document.getElementById(i),say=(s,ok)=>{$("msg").textContent=s;$("msg").className=ok?"ok":""};
@@ -369,8 +411,11 @@ def setup(app, on_login=None, on_alert=None):
             t, lg, pw = parse_login(await request.read())
         except ValueError:
             return out(400, "Проверьте введённые данные")
-        code, msg, tg_id = await attempt(t, lg, pw)
-        if code == 200 and on_login:
+        if t:
+            code, msg, tg_id = await attempt(t, lg, pw)               # вход из Telegram по одноразовой ссылке
+        else:
+            code, msg, tg_id = await attempt_standalone(lg, pw)       # standalone (APK): только логин и пароль
+        if code == 200 and on_login and tg_id:
             try: await on_login(tg_id)
             except Exception: pass                                 # сбой уведомления не отменяет вход
         return out(code, msg, issue_token(tg_id) if code == 200 else None)

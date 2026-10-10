@@ -1,4 +1,5 @@
-"""Standalone-вход (APK вне Telegram): одноразовая ссылка + пароль → API-токен, запросы с X-Session."""
+"""Standalone-вход (APK вне Telegram): только логин и пароль — отдельная от Telegram сессия;
+плюс устаревший вход по одноразовой ссылке. Запросы с X-Session — тот же API, что и мини-апп."""
 import asyncio, hashlib, hmac, json, os, sqlite3, sys, time
 from urllib.parse import urlencode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,6 +89,43 @@ async def main():
         auth.logout(42)
         assert n >= 2 and mem.execute("select count(*) from api_tokens where tg_id=?", (42,)).fetchone()[0] == 0
         ok("повторные входы дают новые токены; logout чистит все сразу")
+
+        # --- standalone-вход (APK): ТОЛЬКО логин и пароль, без ссылки из бота и Telegram ---
+        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+                         headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
+        j = await r.json()
+        assert r.status == 200 and j["ok"] and j.get("token"), (r.status, j)
+        stok = j["token"]
+        r = await c.get("/api/data", headers={"X-Session": stok})
+        assert r.status == 200, r.status
+        assert mem.execute("select tg_id from api_tokens where h=?", (auth._h(stok),)).fetchone()[0] == 0
+        ok("standalone: вход только по логину и паролю выдаёт токен (tg_id=0), тот же API работает")
+
+        # --- независимость от Telegram: logout Telegram-пользователя не трогает standalone-токены ---
+        auth.issue_token(42); auth.logout(42)
+        r = await c.get("/api/data", headers={"X-Session": stok}); assert r.status == 200, r.status
+        ok("вход/выход в Telegram-мини-аппе не влияет на standalone-сессию и наоборот")
+
+        # --- неверные пароли → 401, после лимита → 429; смена пароля гасит standalone-токены ---
+        for i in range(auth.MAX_FAILS):
+            r = await c.post("/api/login", json={"login": "Admin", "password": "wrong-pass"},
+                             headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
+            assert r.status == 401, r.status
+        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+                         headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
+        assert r.status == 429, r.status
+        mem.execute("delete from auth_fails where tg_id=?", (auth.STANDALONE_UID,)); mem.commit()
+        old_hash = auth.PW_HASH; auth.PW_HASH = auth.make_hash("Other-Standalone-Pw-1!")
+        r = await c.get("/api/data", headers={"X-Session": stok}); assert r.status == 403
+        auth.PW_HASH = old_hash
+        ok("standalone: лимит попыток работает, смена пароля гасит выданные токены")
+
+        # --- неполные данные входа → 400 без траты попыток ---
+        for b in (b"{}", b'{"login":"Admin"}', b'{"password":"x"}', b'{"t":"","login":"","password":""}'):
+            rr = await c.post("/api/login", data=b, headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin",
+                                                             "Content-Type": "application/json"})
+            assert rr.status == 400, (b, rr.status)
+        ok("неполные данные входа → 400")
 
 asyncio.run(main())
 print("OK")

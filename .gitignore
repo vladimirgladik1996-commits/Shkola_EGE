@@ -6,3 +6,7 @@ tutor.db
 __pycache__/
 *.pyc
 .venv/
+# локальный тулчейн сборки APK (см. android/build.sh): JDK и Android SDK кладутся рядом с репозиторием
+jdk
+android-sdk
+android/build/

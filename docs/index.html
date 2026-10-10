@@ -21,11 +21,11 @@ h2{font-size:15px;margin:14px 2px 8px}
 .pill.on{background:var(--acc);color:var(--on)}
 .chips{display:flex;gap:6px;overflow-x:auto;flex:1}
 .sc{overflow-x:auto;border:1px solid var(--ln);border-radius:12px}
-.wg{min-width:560px}
+.wg{min-width:680px}
 .wh,.wb{display:grid;grid-template-columns:38px repeat(7,1fr)}
-.wh b{font-size:11px;text-align:center;padding:5px 0;border-left:1px solid var(--ln);font-weight:600}
-.wh em{display:block;font-style:normal;font-size:14px;font-weight:700}
-.wh b.td em{background:var(--acc);color:var(--on);border-radius:50%;width:24px;margin:0 auto;line-height:24px}
+.wh b{font-size:11px;text-align:center;padding:5px 2px;border-left:1px solid var(--ln);font-weight:700;white-space:nowrap;display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.1}
+.wh em{display:block;font-style:normal;font-size:9.5px;font-weight:500;color:var(--hint);margin-top:3px;line-height:1.1}
+.wh b.td em{background:var(--yel);color:var(--yon);border-radius:99px;padding:1px 6px}
 .tl{position:relative}
 .tl i{position:absolute;right:4px;font-style:normal;font-size:10px;color:var(--hint);transform:translateY(-6px)}
 .col{position:relative;border-left:1px solid var(--ln);background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hh) - 1px),var(--ln) calc(var(--hh) - 1px),var(--ln) var(--hh))}
@@ -57,9 +57,8 @@ h2{font-size:15px;margin:14px 2px 8px}
 .info{flex:1;min-width:0}.info b{display:block;font-size:15px}.info small{color:var(--hint);font-size:12.5px}
 .av{flex:none;width:40px;height:40px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
 .av.big{width:76px;height:76px;font-size:26px;margin:0 auto 10px}
-.phw{position:relative;width:96px;height:96px;margin:2px auto 12px}
-.phw .av{width:96px;height:96px;font-size:34px;margin:0;box-shadow:0 6px 18px rgba(0,0,0,.15)}
-.phb2{position:absolute;right:-2px;bottom:-2px;width:36px;height:36px;border-radius:50%;background:var(--acc);color:var(--on);border:2.5px solid var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer}
+.phc{display:flex;flex-direction:column;align-items:center;gap:10px;margin:2px auto 12px}
+.phc .av{width:96px;height:96px;font-size:34px;margin:0;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.seg button{padding:11px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}.seg button.on{background:var(--acc);color:var(--on)}
 .srch{margin:0 0 8px}.sbar{display:flex;gap:6px;margin-bottom:10px}.sbar .srch{flex:1;min-width:0;margin:0}.ib{position:relative;flex:none;width:46px;height:46px;border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;cursor:pointer;margin:0;color:var(--tx)}.ib.on,.ib.acc{background:var(--acc);color:var(--on)}.ib select{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;padding:0}.pdr{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--hint)}.pdr:not(:empty){margin:-4px 2px 8px}.pdr button{color:var(--acc);font-weight:600;font-size:13px}.calg button.cd{position:relative;aspect-ratio:1;border-radius:10px;font-size:14px;background:var(--card)}.calg .cd.rng{background:color-mix(in srgb,var(--acc) 25%,var(--card))}.calg .cd.sel{background:var(--acc);color:var(--on);font-weight:700}.calg .cd.tdy{outline:1.5px solid var(--acc)}.calg .cd u{position:absolute;bottom:4px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.6}.btn:disabled{opacity:.45}.gauge{display:block;width:100%;border-radius:14px;padding:13px;font-size:22px;font-weight:800;text-align:center;color:#fff;margin-top:12px}.gauge.gzero{background:#2e9e5b}.gauge.gpos{background:#14573a}.gauge.gneg{background:#d64545}.gcap{text-align:center;font-weight:600;margin:6px 0 14px}.phr{display:flex;align-items:center;gap:12px;margin-bottom:12px}.phb{display:flex;gap:6px;flex-wrap:wrap}.bal.neg{border-color:var(--red);color:var(--red)}.flt{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.flt select{margin:0;padding:11px;font-size:14px}
 .dstats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px}.dstats .stat b{font-size:16px}
@@ -155,7 +154,7 @@ h3,h2{font-weight:800}
 #top{position:fixed;z-index:5;top:0;left:0;right:0;height:calc(56px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 14px 0 68px;display:flex;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:box-shadow .25s}
 #top.scr{box-shadow:0 1px 0 var(--ln),0 10px 18px -14px var(--sh)}
 #ttl{display:inline-block;font-size:21px;font-weight:900;letter-spacing:-.01em;white-space:nowrap}
-#tmk{width:36px;height:36px;border-radius:50%;object-fit:cover;background:#fff;box-shadow:0 0 0 2px var(--yel)}
+#tmk{display:none}
 
 /* --- кнопка-гамбургер --- */
 #burger{position:fixed;z-index:60;left:10px;top:calc(env(safe-area-inset-top,0px) + 6px);width:44px;height:44px;border-radius:14px;background:var(--bbg);display:grid;place-content:center;box-shadow:0 6px 14px -8px var(--sh);transition:background .3s,transform .2s,box-shadow .3s}
@@ -269,10 +268,9 @@ input,select{box-shadow:0 0 0 1px var(--ln)}
 .tg button{padding:10px 0;font-size:14.5px}
 .dpc .tg button{background:var(--bg)}.dpc .tg button.on{background:var(--acc);color:var(--on)}
 .tph{font-size:11.5px;font-weight:800;color:var(--hint);text-transform:uppercase;letter-spacing:.04em;margin:2px 2px 6px}
-.tpm{display:flex;align-items:center;justify-content:center;gap:14px;margin:4px 0 6px}
-.tpm span{min-width:86px;text-align:center;font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
-.tpm button{width:44px;height:44px;border-radius:50%;background:var(--bg);box-shadow:0 0 0 1px var(--ln);font-size:22px;font-weight:800;color:var(--acc);transition:transform .15s}
-.tpm button:active{transform:scale(.9)}
+.tmi{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 8px}
+.tmi input{width:84px;margin:0;text-align:center;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.tmi span{font-size:22px;font-weight:800}
 /* галочка «повторять» */
 label.rep{display:flex;align-items:center;gap:12px;margin:4px 0 0;padding:12px 14px;border-radius:14px;background:var(--card);box-shadow:0 0 0 1px var(--ln);color:var(--tx);cursor:pointer}
 label.rep input{position:absolute;opacity:0;width:0;height:0;margin:0;padding:0;pointer-events:none}
@@ -294,10 +292,10 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 #chw:active{transform:scale(.93)}
 #chw .chi{position:absolute;inset:4px;border-radius:50%;overflow:hidden;background:#FBF7E9;box-shadow:0 0 0 2px var(--yon)}
 #chw .chi img{width:100%;height:100%;object-fit:cover;object-position:50% 30%;display:block}
-#chw .cht{position:absolute;right:-3px;bottom:-4px;width:20px;height:18px;background:var(--yel);clip-path:path('M1 0H17Q17 13 20 18Q8 18 0 9Z');z-index:-1;pointer-events:none}
+#chw .cht{position:absolute;right:-3px;bottom:-3px;width:30px;height:30px;background:var(--yel);border-radius:50% 50% 8px 50%;z-index:-1;pointer-events:none}
 @keyframes chp{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--yel) 70%,transparent),0 10px 22px -8px rgba(15,46,110,.55)}70%,100%{box-shadow:0 0 0 14px transparent,0 10px 22px -8px rgba(15,46,110,.55)}}
 #chw{animation:chp 3.2s ease-out 1.2s infinite}
-#chw{z-index:45}
+#chw{z-index:8}
 #sheet.on .sh,#pr.on>div:last-child{padding-bottom:calc(86px + env(safe-area-inset-bottom,0px))}
 .chs{text-align:center;padding:6px 0 4px}
 .chs .chb{width:104px;height:104px;margin:0 auto 12px;border-radius:50%;overflow:hidden;background:#FBF7E9;box-shadow:0 0 0 4px var(--yel),0 14px 28px -12px var(--sh)}
@@ -400,26 +398,25 @@ function lockScreen(code){locked=true;
   t.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом, нажмите /start → «Войти» и введите логин и пароль. Затем вернитесь сюда — кабинет обновится сам."
     :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет (✕) и откройте его заново из чата с ботом.";d.appendChild(t);
   document.body.appendChild(d)}
-/* standalone-вход: вместо Telegram-подписи — одноразовая ссылка из бота + логин/пароль → API-токен в localStorage */
+/* standalone-вход (APK вне Telegram): только логин и пароль → API-токен в localStorage.
+   Авторизация отдельная от Telegram-мини-аппа; данные — та же база на том же сервере. */
 function loginScreen(code){document.body.textContent="";const d=document.createElement("div");
   d.style.cssText="max-width:420px;margin:0 auto;padding:44px 22px;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
   const inp="width:100%;padding:12px;font:inherit;border:1px solid #d5dbe3;border-radius:10px;box-sizing:border-box";
   const lab="display:block;font-size:13px;color:#6b7785;margin:14px 0 4px";
   d.innerHTML=`<h2 style="margin:0 0 8px">🔐 Вход в кабинет</h2>
-  <p style="color:#6b7785;font-size:14px">В Telegram-боте нажмите <b>/start</b> → <b>«Войти»</b>, скопируйте ссылку и вставьте её ниже. Затем — логин и пароль.</p>
-  <label style="${lab}">Ссылка из бота</label><input id="lg_t" style="${inp}" placeholder="https://…/login#…" autocapitalize="off" autocomplete="off">
+  <p style="color:#6b7785;font-size:14px">Введите логин и пароль кабинета.</p>
   <label style="${lab}">Логин</label><input id="lg_l" style="${inp}" autocomplete="username" autocapitalize="off" maxlength="64">
-  <label style="${lab}">Пароль</label><input id="lg_p" type="password" style="${inp}" autocomplete="current-password" maxlength="128">
+  <label style="${lab}">Пароль</label><input id="lg_p" type="text" style="${inp}" autocomplete="current-password" maxlength="128">
   <button id="lg_b" style="width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:#0F2E6E;border:0;border-radius:10px">Войти</button>
   <div id="lg_m" role="alert" style="min-height:20px;margin-top:12px;font-size:14px;color:#d93025"></div>`;
   document.body.appendChild(d);
   const q=id=>document.getElementById(id);
   q("lg_b").onclick=async()=>{
-    const raw=q("lg_t").value.trim(),m=raw.match(/#([A-Za-z0-9_-]{20,64})\s*$/)||raw.match(/^([A-Za-z0-9_-]{20,64})$/);
-    if(!m){q("lg_m").textContent="Вставьте ссылку из бота целиком (или токен после #)";return}
+    if(!q("lg_l").value.trim()||!q("lg_p").value){q("lg_m").textContent="Введите логин и пароль";return}
     q("lg_b").disabled=true;q("lg_m").textContent="";
     try{const r=await fetch(API_BASE+"/api/login",{method:"POST",credentials:"omit",cache:"no-store",
-      headers:{"Content-Type":"application/json"},body:JSON.stringify({t:m[1],login:q("lg_l").value.trim(),password:q("lg_p").value})});
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({login:q("lg_l").value.trim(),password:q("lg_p").value})});
       const j=await r.json().catch(()=>({}));
       if(r.ok&&j.token){localStorage.sesTok=j.token;location.reload();return}
       q("lg_m").textContent=j.error||"Ошибка. Попробуйте ещё раз.";
@@ -486,7 +483,7 @@ function grid(start,bw){
   let H0=8,H1=21;const hh=bw?37.9:46,days=[...Array(7)].map((_,i)=>addD(start,i));
   const dk=days.map(iso),wl=L.filter(l=>dk.includes(l.day));   // сетка всегда 08–21, расширяется только если занятие выходит за границы
   if(wl.length){H0=Math.min(H0,Math.max(0,Math.min(...wl.map(l=>Math.floor(mins(l.time)/60)))));H1=Math.max(H1,Math.min(24,Math.max(...wl.map(l=>Math.ceil((mins(l.time)+l.dur)/60)))))}
-  let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${!bw&&iso(d)==iso(T)?"td":""}">${bw?WDF[i]:WD[i]}<em>${bw?d.toLocaleDateString("ru-RU"):d.getDate()}</em></b>`).join("")}</div>
+  let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${!bw&&iso(d)==iso(T)?"td":""}">${WDF[i]}<em>${d.toLocaleDateString("ru-RU")}</em></b>`).join("")}</div>
   <div class="wb" style="height:${(H1-H0)*hh}px"><div class="tl">${[...Array(H1-H0)].map((_,i)=>`<i style="top:${i*hh}px">${pad(H0+i)}:00</i>`).join("")}</div>`;
   days.forEach(d=>{
     h+=`<div class="col" data-k="${iso(d)}">`+L.filter(l=>l.day==iso(d)).map(l=>{
@@ -521,48 +518,45 @@ function printIt(){
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
   $("#pr").classList.add("on");fitNames($("#paper"));
   pdfBlob=null;const tok=++pdfTok,sb=$("#prs");pdfBusy=false;sb.disabled=false;sb.textContent="Поделиться PDF";
-  if(NATIVE_SHARE)                       /* PDF забираем заранее: системный share должен вызываться сразу по тапу, без сетевой паузы */
-    fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
+  /* PDF забираем заранее: шаринг/скачивание должны срабатывать сразу по тапу, без сетевой паузы */
+  fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
       .then(r=>r.ok?r.blob():null).then(b=>{if(tok==pdfTok)pdfBlob=b}).catch(()=>{if(tok==pdfTok)pdfBlob=null});   /* tok: ответ по закрытой/другой неделе не подменяет файл */
 }
 
 /* ---------- Форма занятия ---------- */
-let fd=60,fSid=null,fNew=null,fdm=null,saving=false;
+let fd=60,fSid=null,fdm=null,saving=false,nsAfter=null,fFrom="";
 const dateTxt=k=>{const x=new Date(k+"T00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"long"});return x[0].toUpperCase()+x.slice(1)};
 const CAL_ICO='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>';
-function form(id,day,from){
-  const l=id?L.find(x=>x.id==id):null;fd=l?l.dur:60;fNew=null;
-  const sts=act(),none=!l&&!sts.length,cd=l?l.day:day||iso(T);
+function form(id,day,from,opt){
+  const l=id?L.find(x=>x.id==id):null;fd=l?l.dur:(opt&&opt.dur)||60;fFrom=from||"";
+  const sts=act(),none=!l&&!sts.length,cd=l?l.day:day||iso(T),t0=l?l.time:(opt&&opt.t)||"08:00";
   /* Логика выбора ученика:
      • редактирование — ученик фиксирован;
-     • есть ученики — чипы с учениками + «＋ Новый» (раскрывает мини-анкету);
-     • учеников ещё нет — чипов нет, анкета нового ученика раскрыта сразу, а сохранение создаёт ученика и сразу ставит ему занятие */
-  fSid=l?l.sid:none?"new":sts[0].id;
+     • есть ученики — чипы с учениками + «＋ Новый» (отдельный поп-ап, не встроенный в карточку);
+     • учеников ещё нет — надпись «Учеников пока нет» и кнопка добавления нового ученика
+       (тоже отдельным поп-апом); после сохранения форма продолжается с новым учеником */
+  fSid=l?l.sid:((opt&&opt.sid)||(sts[0]?sts[0].id:null));
   const durs=[45,60,90,120,150,180];if(fd&&!durs.includes(fd))durs.push(fd);durs.sort((a,b)=>a-b);
   const stBlock=l?`<label>Ученик</label><div class="row" style="cursor:default;margin-bottom:10px">${av(S.find(x=>x.id==l.sid)||{id:l.sid,name:stName(l.sid)},"sm")}<span class="info"><b>${esc(stName(l.sid))}</b></span></div>`
-    :none?`<div class="hint0"><b>Учеников пока нет</b><span>Добавьте первого — он сразу появится в разделе «Ученики», а занятие встанет в расписание.</span></div>`
-    :`<label>Ученик</label><div class="stc" id="fst">${sts.map((s,i)=>`<button type="button" data-v="${s.id}" class="${i==0?"on":""}" onclick="pickSt('${s.id}')">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}<button type="button" class="add" data-v="new" onclick="pickSt('new')">＋ Новый</button></div>`;
-  const nsb=l?"":`<div class="fold ${none?"on":""}" id="nsb"><div><div class="in">
-    <p class="sub">Новый ученик · обязательно только имя</p>
-    <label>Имя и фамилия *<input id="fn" placeholder="Как зовут ученика?" autocomplete="off"></label>
-    <label>Класс</label>${gradeSel("fg","")}
-    <label>Предмет<input id="fsb" placeholder="Например: ЕГЭ по русскому"></label>${priceField("fp","")}
-  </div></div></div>`;
+    :none?`<div class="hint0"><b>Учеников пока нет</b><span>Нажмите «Добавить ученика» внизу — он сразу появится в разделе «Ученики», а занятие встанет в расписание.</span></div>`
+    :`<label>Ученик</label><div class="stc" id="fst">${sts.map(s=>`<button type="button" data-v="${s.id}" class="${s.id==fSid?"on":""}" onclick="pickSt('${s.id}')">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}<button type="button" class="add" onclick="nsFromLesson()">＋ Новый</button></div>`;
   open(`${from?`<button class="pen" aria-label="Назад" onclick="dayCard('${from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
-  ${stBlock}${nsb}
+  ${stBlock}
   <label>Дата</label><button type="button" class="dbtn" id="dbtn" onclick="dpToggle()">${CAL_ICO}<b id="dtxt">${dateTxt(cd)}</b><i>›</i></button><input type="hidden" class="hid" id="fdte" value="${cd}">
   <div class="fold" id="dpw"><div><div class="dpc" id="dpc"></div></div></div>
-  <label style="margin-top:10px">Время начала</label><button type="button" class="dbtn" id="tbtn" onclick="tpToggle()">${CLK_ICO}<b id="ttxt">${l?l.time:"08:00"}</b><i>›</i></button><input type="hidden" class="hid" id="ft" value="${l?l.time:"08:00"}">
+  <label style="margin-top:10px">Время начала</label><button type="button" class="dbtn" id="tbtn" onclick="tpToggle()">${CLK_ICO}<b id="ttxt">${t0}</b><i>›</i></button><input type="hidden" class="hid" id="ft" value="${t0}">
   <div class="fold" id="tpw"><div><div class="dpc" id="tpc"></div></div></div>
   <label>Длительность</label><div class="chips" id="fdur" style="margin-bottom:10px">${durs.map(d=>`<button class="pill ${d==fd?"on":""}" onclick="setD(${d})">${d} мин</button>`).join("")}</div>
-  ${l?"":'<label class="rep"><input type="checkbox" id="frep"><span class="bx"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="rt"><b>Повторять каждую неделю</b><small>Занятие появится в этот день и время каждую неделю</small></span></label>'}<div class="btns"><button class="btn pri" id="fsv" onclick="save(${id||0})">${none?"Сохранить ученика и занятие":"Сохранить"}</button>${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${id})">Отменить урок</button>`:""}</div>`);
+  ${l?"":'<label class="rep"><input type="checkbox" id="frep"><span class="bx"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="rt"><b>Повторять каждую неделю</b><small>Занятие появится в этот день и время каждую неделю</small></span></label>'}<div class="btns">${none?`<button class="btn pri" onclick="nsFromLesson()">＋ Добавить ученика</button>`:`<button class="btn pri" id="fsv" onclick="save(${id||0})">Сохранить</button>`}${l?(l.rep?"":`<button class="btn" onclick="del('/api/lesson/regular',${id},'Ставить занятие каждую неделю?')">🔁 Сделать регулярным</button>`)+`<button class="btn dng" onclick="cancelL(${id})">Отменить урок</button>`:""}</div>`);
   const d0=new Date(cd+"T00:00");fdm=new Date(d0.getFullYear(),d0.getMonth(),1);$("#dpc").innerHTML=dpHtml();$("#tpc").innerHTML=tpHtml();
   upd();
 }
-function pickSt(v){
-  fSid=v;document.querySelectorAll("#fst button").forEach(b=>b.classList.toggle("on",b.dataset.v==v));
-  $("#nsb").classList.toggle("on",v=="new");$("#fsv").textContent=v=="new"?"Сохранить ученика и занятие":"Сохранить";
-  if(v=="new")setTimeout(()=>{const n=$("#fn");if(n)n.focus({preventScroll:true})},300)}
+function pickSt(v){fSid=v;document.querySelectorAll("#fst button").forEach(b=>b.classList.toggle("on",b.dataset.v==v))}
+function nsFromLesson(){                       // новый ученик — отдельным поп-апом, затем возврат в форму занятия
+  const day=$("#fdte")?$("#fdte").value:iso(T),t=$("#ft")?$("#ft").value:"08:00";
+  nsAfter=sid=>form(0,day,fFrom||undefined,{sid,t,dur:fd});
+  studNew();
+}
 function pickGrade(id,btn){const box=btn.parentNode;box.querySelectorAll("button").forEach(b=>b.classList.remove("on"));
   if(btn.dataset.g)btn.classList.add("on");box.querySelector("input").value=btn.dataset.g||""}
 /* мини-календарь выбора даты */
@@ -576,10 +570,13 @@ function dpGo(n){fdm=new Date(fdm.getFullYear(),fdm.getMonth()+n,1);$("#dpc").in
 const CLK_ICO='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 function tpToggle(){const o=!$("#tpw").classList.contains("on");$("#tpw").classList.toggle("on",o);$("#tbtn").classList.toggle("on",o)}
 function tpHtml(){const v=$("#ft").value||"08:00",h=+v.slice(0,2),m=+v.slice(3,5),p2=n=>String(n).padStart(2,"0");
-  const hs=[...Array(24).keys()].map(i=>`<button type="button" class="${i==h?"on":""}" onclick="tpSet(${i},${m})">${p2(i)}</button>`).join("");
-  const ms=[...Array(12).keys()].map(i=>i*5).map(i=>`<button type="button" class="${i==m?"on":""}" onclick="tpSet(${h},${i})">${p2(i)}</button>`).join("");
-  return `<div class="tph">Часы</div><div class="gg tg">${hs}</div><div class="tph">Минуты</div><div class="gg tg">${ms}</div><div class="tpm"><button type="button" onclick="tpSet(${h},${m-1})" aria-label="Минуту назад">−</button><span>${p2(h)}:${p2(m)}</span><button type="button" onclick="tpSet(${h},${m+1})" aria-label="Минуту вперёд">+</button></div><div class="tph" style="text-align:center;margin:0 0 4px">точная минута — кнопками − / +</div>`}
-function tpSet(h,m){if(m<0){m=59;h--}if(m>59){m=0;h++}h=(h+24)%24;const t=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");$("#ft").value=t;$("#ttxt").textContent=t;$("#tpc").innerHTML=tpHtml();upd()}
+  /* стандартные слоты 08:00–20:00 + поле из двух частей (часы и минуты) для ручного ввода */
+  const slots=[...Array(13)].map((_,i)=>8+i).map(hh=>`<button type="button" class="${hh==h&&!m?"on":""}" onclick="tpSet(${hh},0)">${p2(hh)}:00</button>`).join("");
+  return `<div class="tph">Быстрые слоты</div><div class="gg tg">${slots}</div>
+  <div class="tph">Точное время</div><div class="tmi"><input id="tph_i" type="number" inputmode="numeric" min="0" max="23" value="${p2(h)}" aria-label="Часы" oninput="tpManual()"><span>:</span><input id="tpm_i" type="number" inputmode="numeric" min="0" max="59" value="${p2(m)}" aria-label="Минуты" oninput="tpManual()"></div>`}
+function tpManual(){const p2=n=>String(n).padStart(2,"0"),h=Math.max(0,Math.min(23,parseInt($("#tph_i").value,10)||0)),m=Math.max(0,Math.min(59,parseInt($("#tpm_i").value,10)||0));
+  const t=p2(h)+":"+p2(m);$("#ft").value=t;$("#ttxt").textContent=t;upd()}
+function tpSet(h,m){h=(h+24)%24;m=Math.max(0,Math.min(59,m));const t=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");$("#ft").value=t;$("#ttxt").textContent=t;$("#tpc").innerHTML=tpHtml();upd()}
 function dpToggle(){const o=!$("#dpw").classList.contains("on");$("#dpw").classList.toggle("on",o);$("#dbtn").classList.toggle("on",o)}
 function dpPick(k){$("#fdte").value=k;$("#dtxt").textContent=dateTxt(k);$("#dpc").innerHTML=dpHtml();setTimeout(dpToggle,170)}
 function setD(d){fd=d;document.querySelectorAll("#fdur .pill").forEach(b=>b.classList.toggle("on",b.textContent==d+" мин"));upd()}
@@ -589,15 +586,10 @@ async function save(id){
   const t=$("#ft").value,day=$("#fdte").value;if(!t||!day)return toast("Укажите дату и время");
   saving=true;
   try{
-    let sid=id?(L.find(x=>x.id==id)||{}).sid:fSid;
-    if(!id&&sid=="new"){
-      if(!fNew){                                   // ученик создаётся один раз — при повторе после «время занято» дубля не будет
-        const n=$("#fn").value.trim();if(!n){$("#fn").focus();return toast("Введите имя ученика")}
-        const r0=await api("/api/student/add",{name:n,grade:$("#fg").value,subject:$("#fsb").value.trim(),price:Math.max(0,parseInt($("#fp").value,10)||0)});
-        if(!r0)return;fNew={id:r0.id}}
-      sid=fNew.id}
+    const sid=id?(L.find(x=>x.id==id)||{}).sid:fSid;
+    if(!sid)return toast("Выберите ученика");
     const r=id?await api("/api/lesson/move",{id,day,time:t,dur:fd}):await api("/api/lesson/add",{student_id:+sid,day,time:t,dur:fd,regular:!!($("#frep")&&$("#frep").checked)});
-    if(!r){if(fNew)load();return}                  // занятие не встало (время занято) — окно остаётся, ученик уже сохранён
+    if(!r)return;                                  // занятие не встало (время занято) — окно остаётся
     const dd=new Date(day+"T00:00");ws=mon(dd);mo=new Date(dd.getFullYear(),dd.getMonth(),1);
     await foldInto(day,+sid,t);
     toast(r.skipped?"Часть повторов не поставлена — время занято: "+r.skipped:id?"Занятие перенесено":"Занятие добавлено");
@@ -634,23 +626,39 @@ function cancelL(id){const l=L.find(x=>x.id==id);
     async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
 let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
-/* Системное «Поделиться файлом» (navigator.share) есть только в обычных браузерах/WebView вне Telegram. В WebView Telegram его нет, а сохранение
-   blob-ссылки не срабатывает — поэтому там (и везде, где системного шаринга нет) PDF присылает бот: /api/week/send → чат, оттуда «Переслать»
-   и/или системное «Поделиться» из сообщения — в сторонние мессенджеры. */
+/* «Поделиться PDF»: файл скачивается И одновременно открывается системное окно шаринга
+   («Переслать в мессенджеры»). Никакой отправки файла в чат с ботом.
+   1) APK (Android) — нативный мост: DownloadManager сохраняет файл в «Загрузки» и сразу
+      открывает системный chooser «Переслать файл»;
+   2) браузер/WebView с Web Share API — скачивание + navigator.share с файлом;
+   3) Telegram WebApp — нативное окно сохранения файла (Telegram ≥ 8.0), оттуда его можно переслать. */
 const NATIVE_SHARE=(()=>{try{return !tg.initData&&!!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
+const pdfName=()=>"raspisanie_"+pdfStart+".pdf";
+function dlBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)}
 async function sharePdf(){
-  if(pdfBusy)return;
-  if(NATIVE_SHARE&&pdfBlob){
-    const f=new File([pdfBlob],"raspisanie_"+pdfStart+".pdf",{type:"application/pdf"});
-    try{await navigator.share({files:[f]});return}
-    catch(e){if(e&&e.name=="AbortError")return}}          /* системный шаринг не удался — не молчим, шлём через бота */
-  pdfBusy=true;const btn=$("#prs");btn.disabled=true;btn.textContent="Отправляю…";
-  const r=await api("/api/week/send",{start:pdfStart});
-  pdfBusy=false;btn.disabled=false;btn.textContent="Поделиться PDF";
-  if(!r)return;                                              /* api() уже показал ошибку */
-  try{tg.showPopup({title:"PDF отправлен",message:"Файл пришёл в чат с ботом. Откройте чат и нажмите «Переслать», чтобы отправить его контакту или в сторонний мессенджер.",
-    buttons:[{id:"open",type:"default",text:"Открыть чат"},{id:"ok",type:"cancel",text:"Остаться"}]},id=>{if(id=="open"&&!APP)tg.close()})}   /* в standalone-версии showPopup — это alert(), закрывать нечего */
-  catch(e){toast("PDF отправлен в чат с ботом в Telegram — перешлите его контакту")}}
+  if(pdfBusy)return;pdfBusy=true;const btn=$("#prs");btn.disabled=true;btn.textContent="Открываю…";
+  try{
+    /* 1) APK: скачивание + системное окно «Переслать» одним действием */
+    if(window.Android&&Android.sharePdf){
+      const r=await api("/api/pdf_link",{start:pdfStart});
+      if(r&&r.url){Android.sharePdf((API_BASE||location.origin)+r.url,pdfName());return}
+      throw new Error("pdf_link")}
+    /* 2) Браузер: файл скачивается И сразу уходит в системное окно шаринга */
+    if(NATIVE_SHARE&&pdfBlob){
+      dlBlob(pdfBlob,pdfName());
+      const f=new File([pdfBlob],pdfName(),{type:"application/pdf"});
+      await navigator.share({files:[f]});return}
+    /* 3) Telegram WebApp: нативное окно сохранения файла */
+    if(!APP&&tg.downloadFile){
+      const r=await api("/api/pdf_link",{start:pdfStart});
+      if(r&&r.url){tg.downloadFile({url:(API_BASE||location.origin)+r.url,file_name:pdfName()},ok=>{if(!ok)toast("Не получилось сохранить файл")});return}}
+    /* 4) запасной вариант — просто скачать */
+    if(pdfBlob){dlBlob(pdfBlob,pdfName());toast("Файл сохранён — перешлите его из «Загрузок»");return}
+    toast("Не получилось подготовить файл — попробуйте ещё раз");
+  }catch(e){if(!e||e.name!=="AbortError")toast("Не получилось поделиться файлом")}
+  finally{pdfBusy=false;btn.disabled=false;btn.textContent="Поделиться PDF"}
+}
 /* Распределение оплат: все оплаты ученика идут по порядку и закрывают его занятия от старых к новым (каждое по своей цене).
    Результат для каждой оплаты: на какие занятия она пошла, полностью или частично; остаток — предоплата без занятия. */
 function allocate(sid){
@@ -711,7 +719,7 @@ const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
 const pdrHtml=()=>pd1?`<span>📅 ${pd1==pd2?dmy2(pd1):dmy2(pd1)+" – "+dmy2(pd2)}</span><button onclick="pd1=pd2='';payUpd()">✕ Сбросить</button>`:"";
 /* ---- фильтр по ученику и порядок отображения ---- */
 const stbHtml=()=>{const s=pst!="all"&&S.find(x=>x.id==pst);
-  return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>${s?esc(s.name):"Все ученики"}</span><svg class="chv" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`};
+  return (s?av(s,"sm"):`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>`)+`<span>${s?esc(s.name):"Все ученики"}</span><svg class="chv" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`};
 function payStu(){
   const has=new Set(P.map(p=>p.sid)),cnt={},sm={};P.forEach(p=>{cnt[p.sid]=(cnt[p.sid]||0)+1;sm[p.sid]=(sm[p.sid]||0)+p.amt});
   const list=S.filter(s=>!s.deleted||has.has(s.id)).slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
@@ -871,13 +879,15 @@ function payNew(sid){
   if(!act().length)return toast("Сначала добавьте ученика");
   const cur_=sid||(pst!="all"?pst:act()[0].id);
   open(`<h3>Новая оплата</h3><p class="sub">Выберите ученика и сумму</p>
-  <label>Ученик<select id="pns">${act().map(s=>`<option value="${s.id}" ${s.id==cur_?"selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
+  <label>Ученик</label><div class="stc" id="pnst">${act().map(s=>`<button type="button" data-v="${s.id}" class="${s.id==cur_?"on":""}" onclick="payPickSt(this)">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}</div>
   <label>Быстрая сумма</label><div class="chips" style="margin-bottom:10px">${PAY_QUICK.map(a=>`<button class="pill" onclick="payAdd(${a})">${a.toLocaleString("ru-RU")}</button>`).join("")}</div>
   <label>Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500"></label>
   <div class="btns"><button class="btn pri" onclick="payAdd()">Внести оплату</button></div>`);
 }
+function payPickSt(b){b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
 async function payAdd(a){
-  const sid=+$("#pns").value,v=a||parseInt($("#pna").value,10);
+  const sel=$("#pnst button.on"),sid=sel?+sel.dataset.v:0,v=a||parseInt($("#pna").value,10);
+  if(!sid)return toast("Выберите ученика");
   if(!v||v<=0)return toast("Введите сумму больше нуля");
   const r=await api("/api/payment/add",{student_id:sid,amount:v});if(!r)return;
   close_();
@@ -941,12 +951,13 @@ function photoMenu(id){                    // id ученика; без id — �
       else if(await api("/api/student/update",{id,photo:""})){await load();card(id);toast("Фото удалено")}}});}
 function phShow(){const v=$("#phv");if(!v)return;v.style.background=ph?`url(${ph}) center/cover`:"var(--card)";v.textContent=ph?"":"📷"}
 function photoField(cur){ph=undefined;cur=safePhoto(cur);
-  return `<div class="phw"><span id="phv" class="av" style="${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
-  <button class="phb2" title="Изменить фото" onclick="photoMenu()">📷</button></div>`}
+  return `<div class="phc"><span id="phv" class="av" style="${cur?`background:url(${cur}) center/cover`:"background:var(--card)"}">${cur?"":"📷"}</span>
+  <button type="button" class="pill" onclick="photoMenu()">📷 Изменить фото</button></div>`}
 const gradeSel=(id,cur)=>{cur=(cur||"").trim();const base=GRADES.map(String),all=base.concat(cur&&!base.includes(cur)?[cur]:[]);
   return `<div class="gg"><input type="hidden" class="hid" id="${id}" value="${esc(cur)}">${all.map(g=>`<button type="button" class="${g==cur?"on":""}" data-g="${esc(g)}" onclick="pickGrade('${id}',this)">${esc(g)}</button>`).join("")}<button type="button" class="no" data-g="" onclick="pickGrade('${id}',this)">Нет</button></div>`};
 const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
-function studNew(){
+function studNew(after){
+  if(after)nsAfter=after;                        // после сохранения — вернуться в форму-инициатор
   open(`<h3>Новый ученик</h3><p class="sub">Обязательно только имя</p>${photoField("")}
   <label>Имя и фамилия *<input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label>
   <label>Класс</label>${gradeSel("ng","")}
@@ -957,24 +968,29 @@ async function studAdd(){
   const name=$("#nn").value.trim();if(!name)return toast("Введите имя ученика");
   const b={name,grade:$("#ng").value,subject:$("#nsb").value.trim(),price:Math.max(0,parseInt($("#np").value,10)||0)};if(ph)b.photo=ph;
   const r=await api("/api/student/add",b);if(!r)return;
+  const cb=nsAfter;nsAfter=null;
   close_();await load();toast("Ученик добавлен: "+name);
+  if(cb)cb(r.id);
 }
-function card(id,ed){
+function card(id,ed,fo){
   const s=bal(S.find(x=>x.id==id));
-  if(ed)return open(`<h3>Редактирование профиля</h3><p class="sub">${esc(s.name)}</p>${photoField(s.photo)}
+  if(ed){open(`<h3>Редактирование профиля</h3><p class="sub">${esc(s.name)}</p>${photoField(s.photo)}
     <label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Класс</label>${gradeSel("eg",s.grade)}
     <label>Предмет<input id="es" value="${esc(s.subject||"")}"></label>${priceField("ep",s.price)}<p class="sub" style="margin-top:6px">Новая цена применится к будущим занятиям. Уже проведённые останутся по прежней цене.</p>
     <div class="btns"><button class="btn pri" onclick="saveS(${id})">Сохранить</button><button class="btn" onclick="card(${id})">Отмена</button></div>`);
+    if(fo){const el=document.getElementById(fo);if(el){try{el.focus({preventScroll:true})}catch(e){}try{el.scrollIntoView({block:"center"})}catch(e){}}}
+    return}
   const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
   const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Текущий долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
-  const info=(k,v)=>`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
-  open(`${s.deleted?av(s,"big"):`<div class="phw">${av(s)}<button class="phb2" title="Изменить фото" onclick="photoMenu(${id})">📷</button></div>`}${s.deleted?"":`<div style="text-align:center;margin:-2px 0 10px"><button class="pill" onclick="card(${id},1)">✏️ Изменить</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px">${esc(s.name)}</h3>
+  const info=(k,v,fo)=>fo?`<div class="row" onclick="card(${id},1,'${fo}')" title="Нажмите, чтобы изменить"><span class="info">${k}</span><b>${v}</b> <span style="opacity:.55">✏️</span></div>`
+    :`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
+  open(`${s.deleted?av(s,"big"):`<div class="phc">${av(s)}<button type="button" class="pill" onclick="photoMenu(${id})">📷 Изменить фото</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px;cursor:pointer" onclick="card(${id},1,'en')" title="Нажмите, чтобы изменить">${esc(s.name)}</h3>
   <p class="sub" style="text-align:center">${[gtxt(s.grade),s.subject].filter(Boolean).map(esc).join(" · ")||"класс и предмет не указаны"}</p>
   <button class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}" onclick="balPop(${id})">${s.b==0?money(0):(s.b>0?"+":"−")+money(s.b)}</button>
   <p class="gcap">${s.b<0?"Есть долг":s.b>0?"Есть предоплата":"Все уроки оплачены вовремя"}</p>
   <div class="cst"><div class="stat"><small>Занятий проведено</small><b>${s.done}</b></div><div class="stat"><small>Оплачено всего</small><b>${money(s.paid)}</b></div>
   <div class="stat"><small>Количество оплат</small><b>${mine.length}</b></div><div class="stat"><small>Занятий впереди</small><b>${plan}</b></div></div>
-  ${info("Класс",esc(gtxt(s.grade)||"—"))}${info("Предмет",esc(s.subject||"—"))}${info("Цена за занятие",s.price?money(s.price):"не указана")}${info("Стоимость проведённых",money(s.spent||0))}
+  ${info("Класс",esc(gtxt(s.grade)||"—"),"eg")}${info("Предмет",esc(s.subject||"—"),"es")}${info("Цена за занятие",s.price?money(s.price):"не указана","ep")}${info("Стоимость проведённых",money(s.spent||0))}
   <h2>Последние платежи</h2>${last.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Платежей ещё не было.</p>'}${s.deleted?'<p class="note">Ученик удалён. История занятий и оплат сохранена.</p>':`<div class="btns" style="margin-top:18px"><button class="btn dng" onclick="studDel(${id})">Удалить ученика</button></div>`}`);
 }
 function studDel(id){const s=S.find(x=>x.id==id);
