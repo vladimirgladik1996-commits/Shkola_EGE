@@ -25,10 +25,12 @@ ns = {"hmac": hmac, "hashlib": hashlib, "json": json, "re": re, "time": time, "p
       "TOKEN": "123456:TESTTOKEN", "MAX_PHOTO": 700_000, "INIT_MAX_AGE": 86400, "date": datetime.date}
 sessions = {777}
 ns["auth"] = types.SimpleNamespace(is_authorized=lambda u: u in sessions,
-                                   allowed=lambda u, name=None: type(u) is int and u == 777)
+                                   allowed=lambda u, name=None: type(u) is int and u == 777,
+                                   check_token=lambda t: None)
 for n in tree.body:
-    if isinstance(n, ast.FunctionDef) and n.name in {"authorized", "check_photo", "check_slot", "money_val", "clip", "monday"}: exec(compile(ast.Module([n], []), "bot", "exec"), ns)
-    if isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("PHOTO_RE", "TIME_FMT", "DAY_FMT", "MAX_MONEY") for t in n.targets): exec(compile(ast.Module([n], []), "bot", "exec"), ns)
+    if isinstance(n, ast.FunctionDef) and n.name in {"authorized", "check_photo", "check_slot", "money_val", "clip", "monday",
+                                                     "check_pdf_token", "_pdf_link_uid"}: exec(compile(ast.Module([n], []), "bot", "exec"), ns)
+    if isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("PHOTO_RE", "TIME_FMT", "DAY_FMT", "MAX_MONEY", "PDF_TTL") for t in n.targets): exec(compile(ast.Module([n], []), "bot", "exec"), ns)
 authorized, check_photo = ns["authorized"], ns["check_photo"]
 
 def sign(fields, token="123456:TESTTOKEN"):

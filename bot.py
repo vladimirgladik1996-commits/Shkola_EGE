@@ -1148,13 +1148,50 @@ async def m_price_bad(m: Message):
 # ---------- API для мини-аппа ----------
 INIT_MAX_AGE = 24 * 3600     # initData старше суток не принимаем: украденную строку нельзя воспроизводить вечно
 
+PDF_TTL = 600   # ссылка на PDF живёт 10 минут: хватает на «Сохранить», но не для повторного использования
+
+def pdf_token(uid, start):
+    """Подписанная ссылка на PDF. Нужна для Telegram.WebApp.downloadFile и DownloadManager в APK:
+    нативные загрузчики идут по URL без заголовков X-Init/X-Session, поэтому у ручки PDF
+    должен быть отдельный пропуск — привязан к пользователю и неделе, короткоживущий."""
+    exp = int(time.time()) + PDF_TTL
+    sig = hmac.new(TOKEN.encode(), f"pdf:{uid}:{start}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{exp}.{uid}.{sig}"
+
+def check_pdf_token(raw, start):
+    """tg_id — ссылка валидна; иначе None. Подпись сверяется за постоянное время."""
+    try:
+        exp_s, uid_s, sig = raw.split(".", 2)
+        exp, uid = int(exp_s), int(uid_s)
+    except (ValueError, AttributeError):
+        return None
+    now = time.time()
+    if not (now <= exp <= now + PDF_TTL) or not (0 < uid <= 2_000_000_000):
+        return None
+    want = hmac.new(TOKEN.encode(), f"pdf:{uid}:{start}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return uid if hmac.compare_digest(sig, want) else None
+
+def _pdf_link_uid(request):
+    """Действующая подписная ссылка на ЭТОТ PDF → tg_id; иначе None."""
+    if request.path != "/api/week.pdf":
+        return None
+    try:
+        start = monday(request.query.get("start", "")).isoformat()
+    except (ValueError, TypeError):
+        return None
+    return check_pdf_token(request.query.get("tok", ""), start)
+
 def authorized(request):
     """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой.
-    Два способа: X-Init (Telegram Mini App, подпись initData) или X-Session (токен standalone-приложения)."""
+    Три способа: X-Init (Telegram Mini App, подпись initData), X-Session (токен standalone-приложения)
+    или подписная ссылка ?tok= — только для /api/week.pdf (см. pdf_token)."""
     try:
         raw = request.headers.get("X-Init", "")
         if not raw:
-            return 200 if auth.check_token(request.headers.get("X-Session", "")) else 403
+            ses = request.headers.get("X-Session", "")
+            if ses:
+                return 200 if auth.check_token(ses) else 403
+            return 200 if _pdf_link_uid(request) else 403
         if len(raw) > 8192:
             return 403
         d = dict(parse_qsl(raw))
@@ -1266,12 +1303,15 @@ async def api_data(request):
     return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR})
 
 def user_id(request):
-    """Кто спрашивает: из подписи initData (Telegram) или из токена X-Session (standalone)."""
+    """Кто спрашивает: из подписи initData (Telegram), из токена X-Session (standalone)
+    или из подписной ссылки на PDF (?tok=)."""
     try:
         uid = json.loads(dict(parse_qsl(request.headers.get("X-Init", ""))).get("user", "{}")).get("id")
     except (ValueError, RecursionError, TypeError):
         uid = None
-    return uid if uid is not None else auth.check_token(request.headers.get("X-Session", ""))
+    if uid is not None:
+        return uid
+    return auth.check_token(request.headers.get("X-Session", "")) or _pdf_link_uid(request)
 
 def monday(s):
     if not isinstance(s, str) or not DAY_FMT.fullmatch(s):
@@ -1281,8 +1321,21 @@ def monday(s):
 
 @guarded
 async def api_week_pdf(request):
-    pdf = week_pdf(monday(request.query["start"]))
-    return web.Response(body=pdf, content_type="application/pdf")
+    start = monday(request.query["start"])
+    pdf = week_pdf(start)
+    # Оба заголовка обязательны для Telegram.WebApp.downloadFile (см. DownloadFileParams в доках Telegram):
+    # без них нативное скачивание может молча не сработать, особенно на веб-платформах.
+    return web.Response(body=pdf, content_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="raspisanie_{start}.pdf"',
+                                 "Access-Control-Allow-Origin": "https://web.telegram.org"})
+
+@guarded
+async def api_pdf_link(request):
+    """Подписанная ссылка на PDF для нативного скачивания (Telegram ≥ 8.0 «Сохранить в Загрузки»
+    и DownloadManager в APK): загрузчики идут по URL без заголовков авторизации."""
+    start = monday(request.query["start"]).isoformat()
+    uid = user_id(request)
+    return web.json_response({"url": f"/api/week.pdf?start={start}&tok={pdf_token(uid, start)}"})
 
 @guarded
 async def api_add(request):
@@ -1519,6 +1572,7 @@ def make_app():
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
+    app.router.add_get("/api/pdf_link", api_pdf_link)
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)
     app.router.add_post("/api/lesson/cancel", api_cancel)
