@@ -406,6 +406,26 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 .fo.on{background:color-mix(in srgb,var(--yel) 20%,var(--card));box-shadow:0 0 0 2px var(--acc),0 10px 20px -14px var(--sh)}
 .fo.on .fi{background:var(--yel);color:var(--yon)}
 .fo.on .rd{background:var(--acc);color:var(--on);box-shadow:none}
+/* ===== Уведомления сверху экрана: свой цвет по смыслу, анимация появления/ухода, полоска времени ===== */
+#toast{display:none;width:max-content;max-width:min(88vw,420px);padding:11px 16px 13px;border-radius:16px;border:0;font-weight:700;font-size:14px;line-height:1.3;text-align:left;overflow:hidden;pointer-events:none}
+#toast.on{display:flex;align-items:center;gap:8px;animation:tIn .5s cubic-bezier(.2,1.25,.4,1) both}
+#toast.on.out{animation:tOut .26s ease-in both}
+#toast.k-ok{background:linear-gradient(135deg,#17A45A,#0E8A47);color:#fff;box-shadow:0 14px 28px -12px #0E8A47cc,0 0 0 1px #ffffff30 inset}
+#toast.k-warn{background:linear-gradient(135deg,#FFD25A,#FFB92E);color:#3B2A00;box-shadow:0 14px 28px -12px #C58A00cc,0 0 0 1px #ffffff55 inset}
+#toast.k-err{background:linear-gradient(135deg,#EA4B4B,#C9302F);color:#fff;box-shadow:0 14px 28px -12px #C9302Fcc,0 0 0 1px #ffffff30 inset}
+#toast.k-info{background:linear-gradient(135deg,#3A3F52,#262A39);color:#fff;box-shadow:0 14px 28px -12px #0009,0 0 0 1px #ffffff1f inset}
+#toast .tt{min-width:0}
+#toast .te{flex:none;font-size:19px;line-height:1;animation:tPop .6s cubic-bezier(.2,1.6,.4,1) .15s both}
+#toast .tb{position:absolute;left:0;bottom:0;height:3px;width:100%;background:currentColor;opacity:.35;transform-origin:left;animation:tBar 2.6s linear both}
+@keyframes tIn{from{opacity:0;transform:translate(-50%,-26px) scale(.9)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+@keyframes tOut{to{opacity:0;transform:translate(-50%,-14px) scale(.96)}}
+@keyframes tPop{from{opacity:0;transform:scale(.2) rotate(-25deg)}60%{transform:scale(1.25) rotate(8deg)}to{opacity:1;transform:none}}
+@keyframes tBar{to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){#toast.on,#toast.on.out,#toast .te,#toast .tb{animation:none}}
+/* варианты в списке учеников: те же карточки, без индикатора справа */
+.fo.nr{grid-template-columns:44px 1fr}
+.fo.nr .fi .av{margin:0}
+.fo.on .fi .av{box-shadow:0 0 0 2px #fff8}
 @keyframes foIn{from{opacity:0;transform:translateY(12px)}}
 #sheet.on .fp .fo{animation:foIn .4s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.05s + var(--i)*45ms)}
 @media (prefers-reduced-motion:reduce){#sheet.on .fp .fo{animation:none}.fo,.fo .fi,.fo .rd,.stb,.ib{transition-duration:.01ms}}
@@ -538,7 +558,23 @@ const norm=s=>String(s).toLowerCase().replace(/ё/g,"е");
 /* поиск по любой части имени: «петров», «иван», «иван петров» (порядок слов не важен) */
 const nameMatch=(name,q)=>norm(q).split(/\s+/).filter(Boolean).every(t=>norm(name).includes(t));
 const stName=id=>S.find(s=>s.id==id).name;
-function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2400)}
+/* уведомления: тип (цвет) и эмодзи подбираются по смыслу текста, сами вызовы toast("…") менять не нужно */
+const TOAST_RULES=[
+  [/^Оплата принята/,"ok","💰"],[/^Ученик добавлен/,"ok","🎉"],[/^Ученик удалён/,"ok","🗑️"],[/^Профиль сохранён/,"ok","💾"],
+  [/^Фото обновлено/,"ok","📸"],[/^Фото удалено/,"ok","🗑️"],[/^Занятие добавлено/,"ok","📅"],[/^Занятие перенесено/,"ok","🔁"],
+  [/отменен/i,"ok","🚫"],[/^Файл сохранён/,"ok","📄"],[/^Демо-режим/,"info","🧪"],
+  [/^Часть повторов/,"warn","⚠️"],[/^Время занято/,"warn","⏰"],[/^Укажите дату/,"warn","🗓️"],[/^Выберите ученика/,"warn","👆"],
+  [/^Сначала добавьте ученика/,"warn","👤"],[/^Введите сумму/,"warn","🔢"],[/^Введите имя/,"warn","✏️"],
+  [/^Микрофон/,"err","🎙️"],[/^Не получилось/,"err","😕"]];
+function toast(m){
+  const t=$("#toast"),r=TOAST_RULES.find(x=>x[0].test(m)),kind=r?r[1]:"info",em=r?r[2]:"💡";
+  t.className="";void t.offsetWidth;t.className="on k-"+kind;t.textContent="";
+  const a=document.createElement("span");a.className="tt";a.textContent=m;
+  const e=document.createElement("span");e.className="te";e.textContent=em;e.setAttribute("aria-hidden","true");
+  const b=document.createElement("i");b.className="tb";
+  t.append(a,e,b);   // className сбрасывается выше, поэтому анимация перезапускается и при подряд идущих уведомлениях
+  clearTimeout(toast.h);clearTimeout(toast.h2);
+  toast.h=setTimeout(()=>{t.classList.add("out");toast.h2=setTimeout(()=>{t.className=""},260)},2600)}
 
 let tab="c",view="w",ws=w0,mo=new Date(T.getFullYear(),T.getMonth(),1),pf="all",pv="feed";
 
@@ -808,9 +844,10 @@ const stbHtml=()=>{const s=pst!="all"&&S.find(x=>x.id==pst);
 function payStu(){
   const has=new Set(P.map(p=>p.sid)),cnt={},sm={};P.forEach(p=>{cnt[p.sid]=(cnt[p.sid]||0)+1;sm[p.sid]=(sm[p.sid]||0)+p.amt});
   const list=S.filter(s=>!s.deleted||has.has(s.id)).slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
-  open(`<h3>Ученик</h3><p class="sub">Покажем все оплаты выбранного ученика</p>
-  <div class="row ${pst=="all"?"sel":""}" onclick="payStuPick('all')"><span class="av" style="background:var(--acc);color:var(--on)">∞</span><span class="info"><b>Все ученики</b><small>${P.length} ${plu(P.length,"оплата","оплаты","оплат")}</small></span>${pst=="all"?'<b class="chk">✓</b>':""}</div>
-  ${list.map(s=>`<div class="row ${pst==s.id?"sel":""}" onclick="payStuPick(${s.id})">${av(s,"sm")}<span class="info"><b>${esc(s.name)}</b><small>${cnt[s.id]?`${cnt[s.id]} ${plu(cnt[s.id],"оплата","оплаты","оплат")} · ${money(sm[s.id])}`:"Оплат пока нет"}</small></span>${pst==s.id?'<b class="chk">✓</b>':""}</div>`).join("")}`);
+  const card=(on,i,tile,t,d,fn)=>`<button type="button" class="fo nr ${on?"on":""}" style="--i:${Math.min(i,8)}" onclick="${fn}"><span class="fi">${tile}</span><span class="ft"><b>${t}</b><small>${d}</small></span></button>`;
+  open(fhead("stu","Ученик","Покажем все оплаты выбранного ученика")
+    +card(pst=="all",0,fsvg("stu"),"Все ученики",`${P.length} ${plu(P.length,"оплата","оплаты","оплат")}`,"payStuPick('all')")
+    +list.map((s,i)=>card(pst==s.id,i+1,av(s,"sm"),esc(s.name),cnt[s.id]?`${cnt[s.id]} ${plu(cnt[s.id],"оплата","оплаты","оплат")} · ${money(sm[s.id])}`:"Оплат пока нет",`payStuPick(${s.id})`)).join("")+`</div>`)
 }
 function payStuPick(id){pst=id=="all"?"all":+id;close_();payUpd()}
 const FIC={
@@ -819,8 +856,9 @@ const FIC={
   debt:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   new:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M12 13v5M9.5 15.5l2.5 2.5 2.5-2.5"/>',
   old:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M12 18v-5M9.5 15.5l2.5-2.5 2.5 2.5"/>',
-  big:'<path d="M9 21V6h4.5a3.5 3.5 0 010 7H6M6 17h8"/><path d="M19 4v7M16.5 8.5L19 11l2.5-2.5" transform="translate(0 6)"/>',
-  small:'<path d="M9 21V6h4.5a3.5 3.5 0 010 7H6M6 17h8"/><path d="M19 11V4M16.5 6.5L19 4l2.5 2.5" transform="translate(0 6)"/>',
+  big:'<path d="M5.5 20V4h4.7a3.7 3.7 0 010 7.4H5.5M3 15.2h7.6"/><path d="M19.5 5v14M16.5 16l3 3 3-3"/>',
+  small:'<path d="M5.5 20V4h4.7a3.7 3.7 0 010 7.4H5.5M3 15.2h7.6"/><path d="M19.5 19V5M16.5 8l3-3 3 3"/>',
+  stu:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 010 6.8M18.5 14.4c1.8.8 3 2.6 3 5.6"/>',
   type:'<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',sort:'<path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"/>'};
 const fsvg=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${FIC[k]}</svg>`;
 const fopt=(on,i,ic,t,d,fn,cnt)=>`<button type="button" class="fo ${on?"on":""}" style="--i:${i}" onclick="${fn}"><span class="fi">${fsvg(ic)}</span><span class="ft"><b>${t}${cnt==null?"":`<em>${cnt}</em>`}</b><small>${d}</small></span><span class="rd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></button>`;
