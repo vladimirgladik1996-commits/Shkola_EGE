@@ -16,6 +16,9 @@
 services:
   # ============================================================
   # PROD — рабочий сервис: каталог prod/bot-mini-app, живые данные.
+  # Примечание: в корне репозитория лежит запасной Dockerfile (shim) — он
+  # собирает тот же prod-код, если сервис продолжает строить из корня
+  # (старые настройки до перестройки на dev/ и prod/).
   #
   # Бесплатный тариф (по требованию владельца). Следствия:
   #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
@@ -79,50 +82,60 @@ services:
         value: "180"
 
   # ============================================================
-  # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
-  # Проверяем новые фичи здесь, потом переносим в prod/.
-  #
-  # Важно:
-  #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
-  #    токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад);
-  #  • KEEPALIVE_SEC=0 — без антисна: dev спит после ~15 мин простоя и
-  #    не тратит ограниченные 750 бесплатных часов (prod занимает ~730).
-  #    Пробуждение — первый запрос, ~1 минута.
+  # ВРЕМЕННО ОТКЛЮЧЕНО (не удалять!).
+  # Сервис tutor-bot-dev добавляет в blueprint СЕКРЕТЫ sync: false
+  # (BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH, ALLOWED_USERNAMES,
+  # WEBAPP_URL, PUBLIC_URL). Render не завершает синхронизацию blueprint,
+  # пока их значения не введены в панели, и из-за этого НЕ ПРИМЕНЯЮТСЯ
+  # изменения tutor-bot (rootDir) — деплои падают.
+  # Как получите второго бота от @BotFather: раскомментируйте блок ниже
+  # и введите значения секретов в панели Render при синхронизации.
   # ============================================================
-  - type: web
-    name: tutor-bot-dev
-    runtime: docker
-    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
-    rootDir: dev/bot-mini-app
-    dockerfilePath: ./Dockerfile
-    dockerContext: ./
-    branch: main
-    plan: free
-    region: frankfurt
-    healthCheckPath: /
-    autoDeploy: true
+#  # ============================================================
+#  # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
+#  # Проверяем новые фичи здесь, потом переносим в prod/.
+#  #
+#  # Важно:
+#  #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
+#  #    токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад);
+#  #  • KEEPALIVE_SEC=0 — без антисна: dev спит после ~15 мин простоя и
+#  #    не тратит ограниченные 750 бесплатных часов (prod занимает ~730).
+#  #    Пробуждение — первый запрос, ~1 минута.
+#  # ============================================================
+#  - type: web
+#    name: tutor-bot-dev
+#    runtime: docker
+#    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+#    rootDir: dev/bot-mini-app
+#    dockerfilePath: ./Dockerfile
+#    dockerContext: ./
+#    branch: main
+#    plan: free
+#    region: frankfurt
+#    healthCheckPath: /
+#    autoDeploy: true
 
-    envVars:
-      - key: BOT_TOKEN
-        sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
-      - key: AUTH_LOGIN
-        sync: false
-      - key: AUTH_PASSWORD_HASH
-        sync: false # можно тот же логин/пароль, что и в прод
-      - key: ALLOWED_USERNAMES
-        sync: false # те же люди, что и в прод
-      - key: WEBAPP_URL
-        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
-      - key: PUBLIC_URL
-        sync: false
-      - key: CURRENCY
-        value: "₽"
-      - key: APP_ENV
-        value: "dev"
-      - key: KEEPALIVE_SEC
-        value: "0"
-      - key: LOG_LEVEL
-        value: "DEBUG"
+#    envVars:
+#      - key: BOT_TOKEN
+#        sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
+#      - key: AUTH_LOGIN
+#        sync: false
+#      - key: AUTH_PASSWORD_HASH
+#        sync: false # можно тот же логин/пароль, что и в прод
+#      - key: ALLOWED_USERNAMES
+#        sync: false # те же люди, что и в прод
+#      - key: WEBAPP_URL
+#        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
+#      - key: PUBLIC_URL
+#        sync: false
+#      - key: CURRENCY
+#        value: "₽"
+#      - key: APP_ENV
+#        value: "dev"
+#      - key: KEEPALIVE_SEC
+#        value: "0"
+#      - key: LOG_LEVEL
+#        value: "DEBUG"
 
 # ------------------------------------------------------------
 # WEBAPP_URL = публичный HTTPS-адрес сервиса, например:

@@ -18,7 +18,11 @@ prod/                       ← PROD: рабочая версия
 ├── bot-mini-app/           ←   бот + мини-апп
 └── apk/                    ←   Android-приложение (+ собранный kabinet-repetitora.apk)
 
-render.yaml                 ← Render Blueprint: оба сервиса (tutor-bot, tutor-bot-dev)
+render.yaml                 ← Render Blueprint: tutor-bot (tutor-bot-dev временно
+                              закомментирован — см. комментарий в файле)
+Dockerfile                  ← запасной (shim): собирает prod/bot-mini-app из корня,
+                              пока сервису не задан Root Directory в Render
+docs/                       ← заглушка GitHub Pages: перенаправляет на сервис Render
 .github/workflows/deploy.yml← опциональный SSH-деплой прод-версии
 ```
 
