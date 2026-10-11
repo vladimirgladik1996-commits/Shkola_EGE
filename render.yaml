@@ -81,7 +81,8 @@ services:
       - key: KEEPALIVE_SEC
         value: "180"
 
-  # ============================================================
+  # Секреты (BOT_TOKEN и др.) вводятся в панели Render при синхронизации
+  # blueprint — в репозиторий они не попадают.
   # ВРЕМЕННО ОТКЛЮЧЕНО (не удалять!).
   # Сервис tutor-bot-dev добавляет в blueprint СЕКРЕТЫ sync: false
   # (BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH, ALLOWED_USERNAMES,
@@ -91,51 +92,51 @@ services:
   # Как получите второго бота от @BotFather: раскомментируйте блок ниже
   # и введите значения секретов в панели Render при синхронизации.
   # ============================================================
-#  # ============================================================
-#  # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
-#  # Проверяем новые фичи здесь, потом переносим в prod/.
-#  #
-#  # Важно:
-#  #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
-#  #    токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад);
-#  #  • KEEPALIVE_SEC=0 — без антисна: dev спит после ~15 мин простоя и
-#  #    не тратит ограниченные 750 бесплатных часов (prod занимает ~730).
-#  #    Пробуждение — первый запрос, ~1 минута.
-#  # ============================================================
-#  - type: web
-#    name: tutor-bot-dev
-#    runtime: docker
-#    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
-#    rootDir: dev/bot-mini-app
-#    dockerfilePath: ./Dockerfile
-#    dockerContext: ./
-#    branch: main
-#    plan: free
-#    region: frankfurt
-#    healthCheckPath: /
-#    autoDeploy: true
+  # ============================================================
+  # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
+  # Проверяем новые фичи здесь, потом переносим в prod/.
+  #
+  # Важно:
+  #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
+  #    токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад);
+  #  • KEEPALIVE_SEC=0 — без антисна: dev спит после ~15 мин простоя и
+  #    не тратит ограниченные 750 бесплатных часов (prod занимает ~730).
+  #    Пробуждение — первый запрос, ~1 минута.
+  # ============================================================
+  - type: web
+    name: tutor-bot-dev
+    runtime: docker
+    repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+    rootDir: dev/bot-mini-app
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    branch: main
+    plan: free
+    region: frankfurt
+    healthCheckPath: /
+    autoDeploy: true
 
-#    envVars:
-#      - key: BOT_TOKEN
-#        sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
-#      - key: AUTH_LOGIN
-#        sync: false
-#      - key: AUTH_PASSWORD_HASH
-#        sync: false # можно тот же логин/пароль, что и в прод
-#      - key: ALLOWED_USERNAMES
-#        sync: false # те же люди, что и в прод
-#      - key: WEBAPP_URL
-#        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
-#      - key: PUBLIC_URL
-#        sync: false
-#      - key: CURRENCY
-#        value: "₽"
-#      - key: APP_ENV
-#        value: "dev"
-#      - key: KEEPALIVE_SEC
-#        value: "0"
-#      - key: LOG_LEVEL
-#        value: "DEBUG"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
+      - key: AUTH_LOGIN
+        sync: false
+      - key: AUTH_PASSWORD_HASH
+        sync: false # можно тот же логин/пароль, что и в прод
+      - key: ALLOWED_USERNAMES
+        sync: false # те же люди, что и в прод
+      - key: WEBAPP_URL
+        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
+      - key: PUBLIC_URL
+        sync: false
+      - key: CURRENCY
+        value: "₽"
+      - key: APP_ENV
+        value: "dev"
+      - key: KEEPALIVE_SEC
+        value: "0"
+      - key: LOG_LEVEL
+        value: "DEBUG"
 
 # ------------------------------------------------------------
 # WEBAPP_URL = публичный HTTPS-адрес сервиса, например:
