@@ -1,12 +1,14 @@
 .env
 *.env
+!.env.example
 backups/
 data/
 tutor.db
 __pycache__/
 *.pyc
 .venv/
-# локальный тулчейн сборки APK (см. android/build.sh): JDK и Android SDK кладутся рядом с репозиторием
+.pylibs/
+# локальный тулчейн сборки APK (см. */apk/build.sh): JDK и Android SDK кладутся рядом с папкой apk
 jdk
 android-sdk
-android/build/
+*/apk/build/

@@ -2,11 +2,14 @@
 # Сборка APK кабинета репетитора без Gradle: javac + d8 + aapt2 + apksigner.
 set -e
 cd "$(dirname "$0")"
-TMP=../                      # .openclaw/tmp
-export JAVA_HOME="$TMP/jdk"
+# Тулчейн сборки: JDK и Android SDK.
+# По умолчанию ищем рядом с папкой apk:  ../jdk  и  ../android-sdk.
+# Другое расположение — задайте ANDROID_BUILD_ROOT (внутри — jdk/ и android-sdk/).
+ROOT="${ANDROID_BUILD_ROOT:-$(cd .. && pwd)}"
+export JAVA_HOME="${JAVA_HOME:-$ROOT/jdk}"
 export PATH="$JAVA_HOME/bin:$PATH"
-BT="$TMP/android-sdk/build-tools/34.0.0"
-JAR="$TMP/android-sdk/platforms/android-34/android.jar"
+BT="$ROOT/android-sdk/build-tools/34.0.0"
+JAR="$ROOT/android-sdk/platforms/android-34/android.jar"
 
 echo "==> javac"
 rm -rf build && mkdir -p build/classes build/dex

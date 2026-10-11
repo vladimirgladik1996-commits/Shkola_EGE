@@ -1,28 +1,36 @@
 # ============================================================
 # Render Blueprint — «Кабинет репетитора» (bot.py: Telegram-бот + HTTP API)
 #
+# В репозитории две версии: dev/ (тест) и prod/ (рабочая). Каждый сервис
+# ниже собирает свой каталог (rootDir) — Dockerfile и код лежат внутри него.
+#
 # Подключение (однократно):
 #   Render Dashboard → New → Blueprint → выбрать репозиторий
 #   vladimirgladik1996-commits/Shkola_EGE
-#   Render сам прочитает этот файл и создаст сервис с диском.
+#   Render сам прочитает этот файл и создаст оба сервиса.
 #
-# Секреты (BOT_TOKEN, OWNER_ID, WEBAPP_URL) при деплое через Blueprint
+# Секреты (BOT_TOKEN, AUTH_PASSWORD_HASH и т.п.) при деплое через Blueprint
 # Render спросит в веб-форме (sync: false) — в репозиторий они не попадают.
 # ============================================================
 
 services:
+  # ============================================================
+  # PROD — рабочий сервис: каталог prod/bot-mini-app, живые данные.
+  #
+  # Бесплатный тариф (по требованию владельца). Следствия:
+  #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
+  #  • диск на free недоступен, tutor.db НЕ переживает деплой/рестарт/засыпание —
+  #    данные живут до ближайшего перезапуска сервиса.
+  # ============================================================
   - type: web
     name: tutor-bot
     runtime: docker
     repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+    rootDir: prod/bot-mini-app
     dockerfilePath: ./Dockerfile
     dockerContext: ./
     branch: main
 
-    # Бесплатный тариф (по требованию владельца). Следствия:
-    #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
-    #  • диск на free недоступен, tutor.db НЕ переживает деплой/рестарт/засыпание —
-    #    данные живут до ближайшего перезапуска сервиса.
     plan: free
     region: frankfurt
 
@@ -43,16 +51,26 @@ services:
     envVars:
       # --- секреты: значения вводятся в панели Render, не в коде ---
       - key: BOT_TOKEN
-        sync: false # токен от @BotFather
-      - key: OWNER_ID
-        sync: false # @username и/или Telegram ID через запятую: @user1,@user2,111222333
+        sync: false # токен от @BotFather (рабочий бот)
+      - key: AUTH_LOGIN
+        sync: false # логин входа в кабинет
+      - key: AUTH_PASSWORD_HASH
+        sync: false # scrypt-хэш пароля: python auth.py (--gen)
+      - key: ALLOWED_USERNAMES
+        sync: false # @ники через запятую, без @ (кому разрешён доступ)
+      - key: ALLOWED_IDS
+        sync: false # необязательно: числовые Telegram-ID
       - key: WEBAPP_URL
-        sync: false # https://tutor-bot-cn4a.onrender.com/  (см. комментарий ниже)
+        sync: false # https://tutor-bot-cn4a.onrender.com/  (адрес этого сервиса)
+      - key: PUBLIC_URL
+        sync: false # тот же https-адрес (там открывается /login)
 
       # --- обычные настройки ---
       # Render сам выдаёт PORT — bot.py его читает (os.getenv("PORT", "8080")).
       - key: CURRENCY
         value: "₽"
+      - key: APP_ENV
+        value: "prod"
 
       # Анти-сон (free plan): бот каждые KEEPALIVE_SEC секунд сам пингует свой
       # публичный URL — входящий запрос через прокси Render сбрасывает 15-минутный
@@ -61,12 +79,8 @@ services:
         value: "180"
 
   # ============================================================
-  # TEST (dev) — проверка новых фич перед выкаткой в прод.
-  # Строится из ветки dev; сюда мержится новое, тестируется, потом
-  # ветка сливается в main (прод). См. DEPLOY.md «Среды».
-  #
-  # Создаётся при синхронизации Blueprint (или вручную: New → Web
-  # Service → репозиторий, Branch: dev, тот же Dockerfile).
+  # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
+  # Проверяем новые фичи здесь, потом переносим в prod/.
   #
   # Важно:
   #  • СВОЙ BOT_TOKEN — второго бота от @BotFather! Два сервиса с одним
@@ -79,9 +93,10 @@ services:
     name: tutor-bot-dev
     runtime: docker
     repo: https://github.com/vladimirgladik1996-commits/Shkola_EGE
+    rootDir: dev/bot-mini-app
     dockerfilePath: ./Dockerfile
     dockerContext: ./
-    branch: dev
+    branch: main
     plan: free
     region: frankfurt
     healthCheckPath: /
@@ -90,18 +105,20 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
-      - key: ALLOWED_USERNAMES
-        sync: false # те же люди, что и в прод
-      - key: WEBAPP_URL
-        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
       - key: AUTH_LOGIN
         sync: false
       - key: AUTH_PASSWORD_HASH
         sync: false # можно тот же логин/пароль, что и в прод
+      - key: ALLOWED_USERNAMES
+        sync: false # те же люди, что и в прод
+      - key: WEBAPP_URL
+        sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
       - key: PUBLIC_URL
         sync: false
       - key: CURRENCY
         value: "₽"
+      - key: APP_ENV
+        value: "dev"
       - key: KEEPALIVE_SEC
         value: "0"
       - key: LOG_LEVEL
@@ -115,5 +132,5 @@ services:
 # Этот же URL указать в @BotFather → /setmenubutton (или /newapp).
 # Если мини-апп остаётся на GitHub Pages — дополнительно задать
 # ALLOW_ORIGIN=https://vladimirgladik1996-commits.github.io
-# и прописать API_BASE в docs/index.html (см. DEPLOY.md, сценарий B).
+# и прописать API_BASE в docs/index.html (см. prod/bot-mini-app/DEPLOY.md, сценарий B).
 # ------------------------------------------------------------

@@ -19,7 +19,7 @@
 Весь backend локально + публичный HTTPS-туннель. GitHub — только под код.
 
 ```bash
-cd tutor-app
+cd Shkola_EGE/prod/bot-mini-app
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -113,9 +113,9 @@ Description=Tutor bot + API
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/tutor-app          # каталог с bot.py: рядом лежат docs/, fonts/ и data/
-EnvironmentFile=/opt/tutor-app/.env      # секреты — в .env (chmod 600), а не в самом unit-файле
-ExecStart=/opt/tutor-app/.venv/bin/python bot.py
+WorkingDirectory=/opt/tutor-app/prod/bot-mini-app   # каталог с bot.py: рядом лежат docs/, fonts/ и data/
+EnvironmentFile=/opt/tutor-app/prod/bot-mini-app/.env      # секреты — в .env (chmod 600), а не в самом unit-файле
+ExecStart=/opt/tutor-app/prod/bot-mini-app/.venv/bin/python bot.py
 Restart=always
 
 [Install]
@@ -154,7 +154,7 @@ WantedBy=multi-user.target
 собран и закоммичен. Дальше:
 
 ```bash
-cd tutor-app
+cd Shkola_EGE
 git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
 ```
@@ -164,7 +164,7 @@ git push -u origin main
 
 - **CI/CD:** добавьте секрет `SERVER_KNOWN_HOSTS` (`ssh-keyscan -t ed25519 <host>`) — деплой проверяет отпечаток сервера и не стартует без него.
   Деплой идёт только после успешных тестов. Включите 2FA на GitHub и Branch protection для `main`; для SSH заведите отдельного
-  пользователя без sudo (по возможности с `command="cd /opt/tutor-app && sh deploy.sh"` в `authorized_keys`).
+  пользователя без sudo (по возможности с `command="cd /opt/tutor-app/prod/bot-mini-app && sh deploy.sh"` в `authorized_keys`).
 - **Первый деплой этой версии:** контейнер теперь работает не от root. Если `data/tutor.db` создан раньше (владелец root), выполните один раз
   `sudo chown -R $(id -u):$(id -g) data` — `deploy.sh` подскажет, если это нужно.
 - **Бэкапы:** `deploy.sh` делает консистентную копию (`sqlite3 backup`), права 600, хранит 14 последних. Копии лежат на том же сервере —
@@ -191,23 +191,30 @@ git push -u origin main
 
 ---
 
-## Среды: dev (тест) → main (прод)
+## Среды: dev (тест) и prod (рабочая)
 
-| | dev (тест) | main (прод) |
+В репозитории две независимые версии — по папкам, а не по веткам:
+`dev/` — тестовая, `prod/` — рабочая. Внутри каждой — `bot-mini-app/`
+(бот + мини-апп) и `apk/` (Android-приложение).
+
+| | `dev/` (тест) | `prod/` (рабочая) |
 |---|---|---|
-| Ветка | `dev` | `main` |
+| Каталог | `dev/bot-mini-app` | `prod/bot-mini-app` |
 | Сервис Render | `tutor-bot-dev` | `tutor-bot` |
 | Бот Telegram | **второй**, от @BotFather | рабочий |
-| Данные | тестовые (пустая база) | живые ученики и оплаты |
-| Анти-сон | выключен (спит без трафика) | включён (180 с) |
+| Данные | тестовые (`./data` можно удалить) | живые ученики и оплаты |
+| Анти-сон | выключен (`KEEPALIVE_SEC=0`) | включён (180 с) |
+| Маркировка | пометка «DEV» в боте и мини-аппе (`APP_ENV=dev`) | без пометки |
+| Логи | `LOG_LEVEL=DEBUG` | `LOG_LEVEL=INFO` |
 
 **Процесс выкатки фичи:**
-1. Разработка и коммиты → ветка `dev`, деплой на `tutor-bot-dev` (autoDeploy).
-2. Проверка в тестовом кабинете (ссылка — WEBAPP_URL dev-сервиса).
-3. Всё ок → `git checkout main && git merge dev && git push` → прод обновляется.
+1. Разработка и проверка в `dev/bot-mini-app` (локально или на `tutor-bot-dev`, autoDeploy).
+2. Смотрим в тестовом кабинете (ссылка — WEBAPP_URL dev-сервиса).
+3. Всё ок → переносим изменения в `prod/bot-mini-app` (и `dev/apk` → `prod/apk`, если менялось приложение) → `git push` → прод обновляется.
 
 ⚠️ Dev и прод обязаны использовать **разные** токены ботов: два сервиса с одним
-токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад).
+токеном конфликтуют (Telegram отдаёт апдейты одному из них наугад). То же самое
+для баз: у каждой версии своя `./data/tutor.db`.
 
 ⚠️ Бесплатных часов Render — 750 в месяц на весь аккаунт. Prod с антисном
 потребляет ~730 из них, поэтому на dev антисон выключен (`KEEPALIVE_SEC=0`):

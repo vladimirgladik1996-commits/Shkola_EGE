@@ -1,6 +1,9 @@
-# Автодеплой backend. Сейчас прод-деплой идёт через Render (render.yaml,
-# autoDeploy при пуше в main), поэтому этот SSH-сценарий переведён в ручной
-# запуск: Actions → deploy → Run workflow.
+# Автодеплой backend через SSH. Сейчас прод-деплой идёт через Render (render.yaml
+# в корне репозитория, autoDeploy при пуше в main), поэтому этот SSH-сценарий
+# переведён в ручной запуск: Actions → deploy → Run workflow.
+#
+# После перестройки репозитория (dev/ и prod/) деплой собирает каталог
+# prod/bot-mini-app — на сервере путь: /opt/tutor-app/prod/bot-mini-app.
 #
 # Настройка (для SSH-сценария, однократно, в GitHub: Settings → Secrets and
 # variables → Actions):
@@ -30,4 +33,4 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh -o StrictHostKeyChecking=accept-new \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            'cd /opt/tutor-app && sh deploy.sh'
+            'cd /opt/tutor-app/prod/bot-mini-app && sh deploy.sh'

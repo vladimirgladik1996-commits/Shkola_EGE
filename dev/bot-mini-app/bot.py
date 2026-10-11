@@ -21,6 +21,8 @@ TOKEN = os.environ["BOT_TOKEN"]
 URL = os.getenv("WEBAPP_URL", "")            # https-адрес мини-аппа
 PORT = int(os.getenv("PORT", "8080"))
 CUR = os.getenv("CURRENCY", "₽")
+APP_ENV = os.getenv("APP_ENV", "").strip().lower()     # "dev" — тестовая среда: пометка DEV в боте и мини-аппе; пусто/"prod" — без пометки
+ENV_TAG = " · DEV" if APP_ENV == "dev" else ""
 WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 WD_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 PER = 6
@@ -28,7 +30,7 @@ WEEKS_AHEAD = 12   # на сколько недель вперёд раскла�
 
 # ---------- БД ----------
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(HERE, "data")            # ./data/tutor.db — см. README и env/*.example
+DATA_DIR = os.path.join(HERE, "data")            # ./data/tutor.db — см. README и .env.example
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "tutor.db")
 _legacy_db = os.path.join(HERE, "tutor.db")      # старая база лежала рядом с кодом — переносим
@@ -777,9 +779,9 @@ async def student_done(m: Message, state: FSMContext, name, price, grade="", sub
 async def start(m: Message, state: FSMContext):
     await state.clear()
     if auth.is_authorized(m.from_user.id):
-        await m.answer("Готово к работе. Выберите действие в меню.", reply_markup=menu_kb())
+        await m.answer("Готово к работе. Выберите действие в меню." + ENV_TAG, reply_markup=menu_kb())
         return
-    await m.answer("🔐 Для работы с ботом и кабинетом нужно войти.", reply_markup=ReplyKeyboardRemove())
+    await m.answer("🔐 Для работы с ботом и кабинетом нужно войти." + ENV_TAG, reply_markup=ReplyKeyboardRemove())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Войти", url=auth.new_link(m.from_user.id, m.from_user.username or ""))]])
     await m.answer("Нажмите кнопку и введите логин и пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
 
@@ -1305,7 +1307,7 @@ async def api_data(request):
         join students s on s.id=l.student_id order by l.day,l.time""")]
     pays = [dict(x) for x in q("""select p.id,p.student_id,p.amount,p.created,s.name from payments p
         join students s on s.id=p.student_id order by p.id desc limit 200""")]
-    return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR})
+    return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR, "env": APP_ENV})
 
 def user_id(request):
     """Кто спрашивает: из подписи initData (Telegram), из токена X-Session (standalone)
@@ -1653,7 +1655,7 @@ async def main():
     app["bot"] = bot
 
     async def on_login(tg_id):                      # после входа через сайт — открываем меню в чате
-        await bot.send_message(tg_id, "✅ Вход выполнен. Готово к работе — выберите действие в меню.", reply_markup=menu_kb())
+        await bot.send_message(tg_id, "✅ Вход выполнен. Готово к работе — выберите действие в меню." + ENV_TAG, reply_markup=menu_kb())
     async def on_alert(tg_id, text):
         await bot.send_message(tg_id, text)
     auth.setup(app, on_login, on_alert)
