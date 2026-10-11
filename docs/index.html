@@ -370,15 +370,17 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 .row:active,.feed:active,.kp:active,.lg:active{transform:scale(.985)}
 .ls:active{transform:scale(.97);filter:brightness(.95)}
 @media (prefers-reduced-motion:reduce){.btn,.dbtn,.pill,.gauge,label.rep,.row,.feed,.kp,.lg,.ls{transition-duration:.01ms}}
-/* шапка таблицы расписания: день недели + дата отделены от сетки */
-.wg:not(.bw) .wh{position:relative;background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 9%,var(--card)),color-mix(in srgb,var(--acc) 4%,var(--card)));border-bottom:2px solid color-mix(in srgb,var(--acc) 22%,var(--ln))}
-.wg:not(.bw) .wh>i{display:block}
-.wg:not(.bw) .wh b{position:relative;gap:5px;padding:9px 2px 8px;font-size:12px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:var(--tx);border-left-color:color-mix(in srgb,var(--acc) 14%,var(--ln))}
+/* шапка таблицы расписания: колонки и линии строго совпадают с сеткой ниже */
+.wg:not(.bw) .wh,.wg:not(.bw) .wb{grid-template-columns:38px repeat(7,minmax(0,1fr))}   /* minmax(0,…): ширина колонки не зависит от текста, шапка не «уезжает» от линий */
+.wg:not(.bw) .wh{background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 7%,var(--card)),color-mix(in srgb,var(--acc) 3%,var(--card)));border-bottom:1px solid var(--ln)}   /* нижняя линия — такая же, как линии часов */
+.wg:not(.bw) .wh b{position:relative;min-width:0;overflow:hidden;gap:4px;padding:8px 2px 7px;font-size:11px;font-weight:800;letter-spacing:-.01em;color:var(--tx);border-left:1px solid var(--ln)}   /* те же 1px и цвет, что у вертикалей сетки */
 .wg:not(.bw) .wh b:nth-child(n+7){color:var(--red)}
-.wg:not(.bw) .wh em{margin:0;padding:2px 8px;border-radius:99px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-size:10.5px;font-weight:800;letter-spacing:0;text-transform:none;color:var(--hint);font-variant-numeric:tabular-nums}
-.wg:not(.bw) .wh b.td{background:color-mix(in srgb,var(--yel) 30%,transparent)}
+.wg:not(.bw) .wh em{margin:0;padding:1px 7px;border-radius:99px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-size:10px;font-weight:700;color:var(--hint);font-variant-numeric:tabular-nums}
+.wg:not(.bw) .wh b.td{background:color-mix(in srgb,var(--yel) 26%,transparent)}
 .wg:not(.bw) .wh b.td::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--yel)}
-.wg:not(.bw) .wh b.td em{background:var(--yel);color:var(--yon);box-shadow:0 3px 8px -4px #C58A00}
+.wg:not(.bw) .wh b.td em{background:var(--yel);color:var(--yon);box-shadow:none}
+.wg:not(.bw) .col.td{background-color:color-mix(in srgb,var(--yel) 9%,transparent)}   /* сегодняшний столбец чуть подсвечен по всей высоте */
+.wg:not(.bw) .tl i:first-child{transform:translateY(3px)}   /* «08:00» стоит под линией шапки, а не под ней и поверх неё */
 /* фильтр «Все ученики»: иконка в такой же ячейке, как у остальных фильтров */
 .stb{padding:0 12px 0 0;gap:0}
 .stb .ico{flex:none;display:grid;place-items:center;width:42px;height:46px;color:inherit}
@@ -554,7 +556,7 @@ function grid(start,bw){
   let h=`<div class="wg ${bw?"bw":""}" style="--hh:${hh}px"><div class="wh"><i></i>${days.map((d,i)=>`<b class="${!bw&&iso(d)==iso(T)?"td":""}">${WDF[i]}<em>${d.toLocaleDateString("ru-RU")}</em></b>`).join("")}</div>
   <div class="wb" style="height:${(H1-H0)*hh}px"><div class="tl">${[...Array(H1-H0)].map((_,i)=>`<i style="top:${i*hh}px">${pad(H0+i)}:00</i>`).join("")}</div>`;
   days.forEach(d=>{
-    h+=`<div class="col" data-k="${iso(d)}">`+L.filter(l=>l.day==iso(d)).map(l=>{
+    h+=`<div class="col ${!bw&&iso(d)==iso(T)?"td":""}" data-k="${iso(d)}">`+L.filter(l=>l.day==iso(d)).map(l=>{
       const s=mins(l.time),top=(s-H0*60)/60*hh,ht=l.dur/60*hh-.8,st=stName(l.sid);
       if(bw){const g=stGrade(l.sid),np=nameParts(l.sid);
         return `<div class="ls" style="top:${top}px;height:${ht}px"><span class="r1">${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""} <small>(${l.dur} мин)</small></span><span class="nm" data-full="${esc(np.full)}" data-short="${esc(np.short)}"><span class="t">${esc(np.full)}</span>${g?" "+esc(g):""}</span></div>`}
