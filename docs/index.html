@@ -346,9 +346,9 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 @media (prefers-reduced-motion:reduce){.feed.fresh,.feed.fresh::after,.feed.fresh .av,.feed.fresh>b,.spk{animation:none!important}.spk{display:none}.feed.fresh{box-shadow:0 0 0 1.5px var(--grn)}}
 
 /* ===== Патч: шапка недели, фильтры оплат, попапы «Тип записи» и «Порядок» ===== */
-/* синий квадрат вокруг кнопок: системный tap-highlight (прямоугольный, не по форме кнопки) отключаем только у бургера и фильтров,
-   вместо него ниже своя подсветка по форме кнопки; остальные элементы приложения не затронуты */
-#burger,.ib,.stb{-webkit-tap-highlight-color:transparent}
+/* синий квадрат при нажатии: системный tap-highlight WebView прямоугольный и не повторяет форму кнопки — отключаем везде;
+   вместо него у каждой кнопки есть отклик по её форме (анимации, что были, не тронуты; недостающие добавлены ниже) */
+*{-webkit-tap-highlight-color:transparent}
 /* рамка фокуса WebView после касания (в старых WebView :focus-visible не поддерживается и рисуется синий контур) — убираем, для клавиатуры остаётся жёлтая */
 button:focus,[role=button]:focus{outline:none}
 button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);outline-offset:2px}
@@ -358,6 +358,18 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 #burger:active{filter:brightness(1.3)}
 .fo:active{background:color-mix(in srgb,var(--acc) 8%,var(--card))}
 .fo.on:active{background:color-mix(in srgb,var(--yel) 32%,var(--card))}
+/* кнопки и строки, у которых раньше не было своего отклика (их «подсвечивал» только системный квадрат) */
+.btn,.dbtn,.pill,.gauge,label.rep{transition:transform .15s,filter .2s}
+.btn:active,.dbtn:active,.pill:active,.gauge:active,label.rep:active{transform:scale(.97);filter:brightness(.95)}
+.btn.pri:active,.pill.on:active{filter:brightness(1.3)}
+.gauge:active{filter:brightness(1.15)}
+.btn:disabled:active{transform:none;filter:none}
+.row,.feed,.kp{transition:transform .15s}
+.lg{transition:background .2s,transform .15s}
+.ls{transition:transform .15s,filter .2s}
+.row:active,.feed:active,.kp:active,.lg:active{transform:scale(.985)}
+.ls:active{transform:scale(.97);filter:brightness(.95)}
+@media (prefers-reduced-motion:reduce){.btn,.dbtn,.pill,.gauge,label.rep,.row,.feed,.kp,.lg,.ls{transition-duration:.01ms}}
 /* шапка таблицы расписания: день недели + дата отделены от сетки */
 .wg:not(.bw) .wh{position:relative;background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 9%,var(--card)),color-mix(in srgb,var(--acc) 4%,var(--card)));border-bottom:2px solid color-mix(in srgb,var(--acc) 22%,var(--ln))}
 .wg:not(.bw) .wh>i{display:block}
