@@ -60,7 +60,7 @@ h2{font-size:15px;margin:14px 2px 8px}
 .phc{display:flex;flex-direction:column;align-items:center;gap:10px;margin:2px auto 12px}
 .phc .av{width:96px;height:96px;font-size:34px;margin:0;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.seg button{padding:11px;border-radius:12px;background:var(--card);font-weight:600;font-size:14px}.seg button.on{background:var(--acc);color:var(--on)}
-.srch{margin:0 0 8px}.sbar{display:flex;gap:6px;margin-bottom:10px}.sbar .srch{flex:1;min-width:0;margin:0}.ib{position:relative;flex:none;width:46px;height:46px;border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;cursor:pointer;margin:0;color:var(--tx)}.ib.on,.ib.acc{background:var(--acc);color:var(--on)}.ib select{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;padding:0}.pdr{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--hint)}.pdr:not(:empty){margin:-4px 2px 8px}.pdr button{color:var(--acc);font-weight:600;font-size:13px}.calg button.cd{position:relative;aspect-ratio:1;border-radius:10px;font-size:14px;background:var(--card)}.calg .cd.rng{background:color-mix(in srgb,var(--acc) 25%,var(--card))}.calg .cd.sel{background:var(--acc);color:var(--on);font-weight:700}.calg .cd.tdy{outline:1.5px solid var(--acc)}.calg .cd u{position:absolute;bottom:4px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.6}.btn:disabled{opacity:.45}.gauge{display:block;width:100%;border-radius:14px;padding:13px;font-size:22px;font-weight:800;text-align:center;color:#fff;margin-top:12px}.gauge.gzero{background:#2e9e5b}.gauge.gpos{background:#14573a}.gauge.gneg{background:#d64545}.gcap{text-align:center;font-weight:600;margin:6px 0 14px}.phr{display:flex;align-items:center;gap:12px;margin-bottom:12px}.phb{display:flex;gap:6px;flex-wrap:wrap}.bal.neg{border-color:var(--red);color:var(--red)}.flt{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.flt select{margin:0;padding:11px;font-size:14px}
+.srch{margin:0 0 8px}.sbar{display:flex;gap:6px;margin-bottom:10px}.sbar .srch{flex:1;min-width:0;margin:0}.ib{position:relative;flex:none;width:46px;height:46px;border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;cursor:pointer;margin:0;color:var(--tx)}.ib.on,.ib.acc{background:var(--acc);color:var(--on)}.ib select{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;padding:0}.calg button.cd{position:relative;aspect-ratio:1;border-radius:10px;font-size:14px;background:var(--card)}.calg .cd.rng{background:color-mix(in srgb,var(--acc) 25%,var(--card))}.calg .cd.sel{background:var(--acc);color:var(--on);font-weight:700}.calg .cd.tdy{outline:1.5px solid var(--acc)}.calg .cd u{position:absolute;bottom:4px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.6}.btn:disabled{opacity:.45}.gauge{display:block;width:100%;border-radius:14px;padding:13px;font-size:22px;font-weight:800;text-align:center;color:#fff;margin-top:12px}.gauge.gzero{background:#2e9e5b}.gauge.gpos{background:#14573a}.gauge.gneg{background:#d64545}.gcap{text-align:center;font-weight:600;margin:6px 0 14px}.phr{display:flex;align-items:center;gap:12px;margin-bottom:12px}.phb{display:flex;gap:6px;flex-wrap:wrap}.bal.neg{border-color:var(--red);color:var(--red)}.flt{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}.flt select{margin:0;padding:11px;font-size:14px}
 .dstats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px}.dstats .stat b{font-size:16px}
 .dh{font-size:15px;margin:18px 0 8px}
 .avg{display:grid;grid-template-columns:1fr 1fr;gap:6px}.avgc{background:var(--card);border-radius:14px;padding:14px 12px;border-left:4px solid var(--acc)}.avgc span{display:block;color:var(--hint);font-size:12px;margin-bottom:4px}.avgc b{font-size:19px}
@@ -799,10 +799,9 @@ function payFeedList(){
   return sm+f.map(e=>{const s=S.find(x=>x.id==e.sid);
     return e.k=="pay"?`<div class="feed${e.id==fresh?" fresh":""}" onclick="payCard(${e.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b>${e.id==fresh?SPK:""}</div>`
       :`<div class="feed" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг за занятие · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
-function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);const n=$("#pdr");if(n)n.innerHTML=pdrHtml();
+function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);
   const b=$("#pstb");if(b){b.className="stb"+(pst!="all"?" on":"");b.innerHTML=stbHtml()}const so=$("#psrt");if(so)so.classList.toggle("on",psort!="new");const tf=$("#ptf");if(tf)tf.classList.toggle("on",pty!="all")}
 const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
-const pdrHtml=()=>pd1?`<span>📅 ${pd1==pd2?dmy2(pd1):dmy2(pd1)+" – "+dmy2(pd2)}</span><button onclick="pd1=pd2='';payUpd()">✕ Сбросить</button>`:"";
 /* ---- фильтр по ученику и порядок отображения ---- */
 const stbHtml=()=>{const s=pst!="all"&&S.find(x=>x.id==pst);
   return `<span class="ico">${s?av(s,"sm"):`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>`}</span>`+`<span>${s?esc(s.name):"Все ученики"}</span><svg class="chv" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`};
@@ -858,7 +857,7 @@ function payFeed(){
   <button class="ib ${pty!="all"?"on":""}" id="ptf" onclick="payTy()" aria-label="Тип записи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
   <button class="ib ${psort!="new"?"on":""}" id="psrt" onclick="paySort()" aria-label="Порядок отображения"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"/></svg></button>
   <button class="ib acc" onclick="payNew()" aria-label="Новая оплата">＋</button></div>
-  <div class="pdr" id="pdr">${pdrHtml()}</div><div id="flist">${payFeedList()}</div>`}
+  <div id="flist">${payFeedList()}</div>`}
 
 /* ---- календарь: одна дата или период (две даты подряд) ---- */
 function payCal(){const base=pd1?new Date(pd1+"T00:00"):new Date(T);cal={m:new Date(base.getFullYear(),base.getMonth(),1),a:pd1,b:pd1==pd2?"":pd2,t:"p"};calShow()}
@@ -993,8 +992,11 @@ function prePop(){
 function pay(){
   return `<div class="seg"><button class="${pv=="feed"?"on":""}" onclick="pv='feed';render()">Лента</button><button class="${pv=="dash"?"on":""}" onclick="pv='dash';render()">Дашборд</button></div>`+(pv=="feed"?payFeed():`<div id="dash" class="an">${payDash()}</div>`)}
 
-/* ---------- Новая оплата (те же быстрые суммы, что и в боте: 3 000 / 5 000 / 10 000, либо ручной ввод) ---------- */
+/* ---------- Новая оплата (быстрые суммы только подставляют значение в поле;
+   оплата вносится ИСКЛЮЧИТЕЛЬНО по кнопке «Внести оплату») ---------- */
 const PAY_QUICK=[3000,5000,10000];
+function paySetAm(a,b){const i=$("#pna");if(!i)return;i.value=a;
+  if(b&&b.parentNode)b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
 function fabGo(){tab=="p"?payNew():form()}
 function payNew(sid){
   if(!act().length)return toast("Сначала добавьте ученика");
@@ -1002,8 +1004,8 @@ function payNew(sid){
   const ids=act().map(s=>s.id),cur_=ids.includes(+sid)?+sid:ids.includes(+pst)?+pst:ids[0];
   open(`<h3>Новая оплата</h3><p class="sub">Выберите ученика и сумму</p>
   <label>Ученик</label><div class="stc" id="pnst">${act().map(s=>`<button type="button" data-v="${s.id}" class="${s.id==cur_?"on":""}" onclick="payPickSt(this)">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}</div>
-  <label>Быстрая сумма</label><div class="chips" style="margin-bottom:10px">${PAY_QUICK.map(a=>`<button class="pill" onclick="payAdd(${a})">${a.toLocaleString("ru-RU")}</button>`).join("")}</div>
-  <label>Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500"></label>
+  <label>Быстрая сумма</label><div class="chips" id="pnchips" style="margin-bottom:10px">${PAY_QUICK.map(a=>`<button type="button" class="pill" onclick="paySetAm(${a},this)">${a.toLocaleString("ru-RU")}</button>`).join("")}</div>
+  <label>Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500" oninput="document.querySelectorAll('#pnchips button').forEach(x=>x.classList.remove('on'))"></label>
   <div class="btns"><button class="btn pri" onclick="payAdd()">Внести оплату</button></div>`);
 }
 function payPickSt(b){b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
