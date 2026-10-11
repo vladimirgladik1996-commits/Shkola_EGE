@@ -20,6 +20,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
+import android.webkit.ValueCallback;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -31,6 +32,8 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
+    private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
+    private static final int FILE_CHOOSER_REQ = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,7 +105,32 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.setWebChromeClient(new WebChromeClient());   // alert / confirm / prompt из страницы
+        // alert / confirm / prompt из страницы + выбор файла из галереи:
+        // без onShowFileChooser WebView молча игнорирует <input type="file">
+        // («Фото ученика → Выбрать из галереи» ничего не открывало).
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if (fileCb != null) fileCb.onReceiveValue(null);   // прошлый выбор не завершился
+                fileCb = cb;
+                Intent i;
+                try {
+                    i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
+                } catch (Exception e) {
+                    i = new Intent(Intent.ACTION_GET_CONTENT);
+                }
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("image/*");
+                try {
+                    startActivityForResult(i, FILE_CHOOSER_REQ);
+                } catch (Exception e) {
+                    fileCb = null;
+                    Toast.makeText(MainActivity.this, "Не получилось открыть галерею", Toast.LENGTH_LONG).show();
+                    return false;
+                }
+                return true;
+            }
+        });
 
         web.setDownloadListener(new DownloadListener() {
             public void onDownloadStart(String u, String agent, String disposition, String mime, long size) {
@@ -166,7 +194,10 @@ public class MainActivity extends Activity {
                         if (rid != id) return;
                         try { unregisterReceiver(this); } catch (Exception ignored) {}
                         Uri u = dm.getUriForDownloadedFile(id);
-                        if (u == null) return;
+                        if (u == null) {
+                            Toast.makeText(MainActivity.this, "Файл скачался — он в «Загрузках», перешлите его оттуда", Toast.LENGTH_LONG).show();
+                            return;
+                        }
                         Intent s = new Intent(Intent.ACTION_SEND);
                         s.setType("application/pdf");
                         s.putExtra(Intent.EXTRA_STREAM, u);
@@ -175,7 +206,10 @@ public class MainActivity extends Activity {
                     }
                 };
                 IntentFilter f = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(rc, f, Context.RECEIVER_NOT_EXPORTED);
+                // Android 14: broadcast DownloadManager приходит из ЧУЖОГО процесса (downloads provider),
+                // поэтому NOT_EXPORTED-регистрация его не получает — окно «Переслать файл» не открывалось.
+                // Защита от подделки — сверка EXTRA_DOWNLOAD_ID с нашим id (выше в onReceive).
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(rc, f, Context.RECEIVER_EXPORTED);
                 else registerReceiver(rc, f);
             } catch (Exception e) {
                 runOnUiThread(new Runnable() {
@@ -184,6 +218,16 @@ public class MainActivity extends Activity {
                     }
                 });
             }
+        }
+    }
+
+    /** Результат выбора фото из галереи → обратно в страницу (<input type="file">). */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQ && fileCb != null) {
+            fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            fileCb = null;
         }
     }
 
