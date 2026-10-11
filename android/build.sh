@@ -15,8 +15,11 @@ javac --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classes src/ru/kab
 echo "==> d8"
 "$BT/d8" --lib "$JAR" --release --output build/dex build/classes/ru/kabinet/tutor/*.class
 
+echo "==> aapt2 compile (ресурсы: иконка)"
+"$BT/aapt2" compile --dir res -o build/res.zip
+
 echo "==> aapt2 link"
-"$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml \
+"$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -R build/res.zip \
   --min-sdk-version 24 --target-sdk-version 34 --version-code 1 --version-name "1.0" -o build/base.apk
 
 echo "==> dex в apk"

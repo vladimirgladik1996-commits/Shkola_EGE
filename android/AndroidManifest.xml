@@ -3,7 +3,8 @@
     package="ru.kabinet.tutor">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="Кабинет репетитора"
+        android:label="Надежда"
+        android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
