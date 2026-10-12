@@ -1,5 +1,6 @@
 package ru.kabinet.tutor;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
@@ -8,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,6 +20,7 @@ import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -28,12 +32,19 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 /** Обёртка кабинета репетитора: WebView поверх того же адреса, что и мини-апп. */
 public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
     private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
     private static final int FILE_CHOOSER_REQ = 1001;
+    private static final int MIC_PERM_REQ = 1002;
+    private PermissionRequest micRequest;          // запрос микрофона из страницы, ждущий ответа пользователя
+    private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,6 +120,29 @@ public class MainActivity extends Activity {
         // без onShowFileChooser WebView молча игнорирует <input type="file">
         // («Фото ученика → Выбрать из галереи» ничего не открывало).
         web.setWebChromeClient(new WebChromeClient() {
+            /** Голосовой помощник: страница просит микрофон (getUserMedia). Без этого обработчика WebView
+             *  молча отклоняет запрос. Разрешаем только звук и только нашему серверу, после системного запроса. */
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                String reqHost = request.getOrigin() == null ? null : request.getOrigin().getHost();
+                boolean ours = reqHost != null && reqHost.equals(Uri.parse(url).getHost());
+                boolean audio = false;
+                for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                if (!ours || !audio) { request.deny(); return; }
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                    return;
+                }
+                if (micRequest != null) micRequest.deny();       // прошлый запрос не завершился
+                micRequest = request;
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_PERM_REQ);
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (request == micRequest) micRequest = null;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCb != null) fileCb.onReceiveValue(null);   // прошлый выбор не завершился
@@ -173,51 +207,133 @@ public class MainActivity extends Activity {
 
     /**
      * JS-мост «Поделиться PDF» (страница вызывает Android.sharePdf(url, name)).
-     * Файл скачивается в «Загрузки» через DownloadManager И по завершении загрузки
-     * открывается системное окно «Переслать файл» — одновременно скачивание и шаринг.
+     * Файл скачивается через DownloadManager И по завершении загрузки открывается системное
+     * окно «Переслать файл». Методы моста вызываются из фонового потока — работу переносим в UI-поток.
      */
     private class ShareBridge {
         @JavascriptInterface
-        public void sharePdf(String url, String name) {
-            try {
-                final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-                req.setMimeType("application/pdf");
-                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                String fn = (name == null || name.trim().isEmpty()) ? "raspisanie.pdf" : name.trim();
+        public void sharePdf(final String url, final String name) {
+            runOnUiThread(new Runnable() {
+                public void run() { startShare(url, name, 0); }
+            });
+        }
+    }
+
+    private static String safePdfName(String name) {
+        String fn = (name == null) ? "" : name.trim().replace('/', '_').replace('\\', '_');
+        return fn.isEmpty() ? "raspisanie.pdf" : fn;
+    }
+
+    /** «raspisanie_2026-10-12.pdf» + попытка 1 → «raspisanie_2026-10-12 (1).pdf». */
+    private static String numberedName(String fn, int attempt) {
+        if (attempt <= 0) return fn;
+        int dot = fn.lastIndexOf('.');
+        return dot > 0 ? fn.substring(0, dot) + " (" + attempt + ")" + fn.substring(dot) : fn + " (" + attempt + ")";
+    }
+
+    private void toastLong(String msg) {
+        Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+    }
+
+    /** Запуск загрузки + ожидание её окончания. Только в UI-потоке. attempt — номер повтора при занятом имени файла. */
+    private void startShare(final String url, final String name, final int attempt) {
+        try {
+            final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            final String fn = numberedName(safePdfName(name), attempt);
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+            req.setMimeType("application/pdf");
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+: в публичные «Загрузки» можно писать через DownloadManager без разрешений
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fn);
-                final long id = dm.enqueue(req);
-                BroadcastReceiver rc = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context c, Intent i) {
-                        long rid = (i == null) ? -1 : i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                        if (rid != id) return;
-                        try { unregisterReceiver(this); } catch (Exception ignored) {}
-                        Uri u = dm.getUriForDownloadedFile(id);
-                        if (u == null) {
-                            Toast.makeText(MainActivity.this, "Файл скачался — он в «Загрузках», перешлите его оттуда", Toast.LENGTH_LONG).show();
+            } else {
+                // Android 7–9: запись в публичные «Загрузки» требует WRITE_EXTERNAL_STORAGE (runtime-разрешение),
+                // а для шаринга оно не нужно — кладём файл в личную папку приложения (разрешений не просит)
+                File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (dir == null) throw new IllegalStateException("no external files dir");
+                new File(dir, fn).delete();      // свежий PDF вместо старого: расписание могло измениться
+                req.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, fn);
+            }
+            final long id = dm.enqueue(req);
+            BroadcastReceiver rc = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context c, Intent i) {
+                    long rid = (i == null) ? -1 : i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                    if (rid != id) return;
+                    try { unregisterReceiver(this); } catch (Exception ignored) {}
+                    shareReceivers.remove(this);
+                    // ACTION_DOWNLOAD_COMPLETE приходит и при неудачной загрузке — смотрим фактический статус
+                    int status = -1, reason = 0;
+                    Cursor cur = null;
+                    try {
+                        cur = dm.query(new DownloadManager.Query().setFilterById(id));
+                        if (cur != null && cur.moveToFirst()) {
+                            status = cur.getInt(cur.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                            reason = cur.getInt(cur.getColumnIndex(DownloadManager.COLUMN_REASON));
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        if (cur != null) cur.close();
+                    }
+                    if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                        if (status == DownloadManager.STATUS_FAILED
+                                && reason == DownloadManager.ERROR_FILE_ALREADY_EXISTS && attempt < 3) {
+                            startShare(url, name, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
                             return;
                         }
+                        toastLong("Не получилось скачать файл — попробуйте ещё раз");
+                        return;
+                    }
+                    Uri u = dm.getUriForDownloadedFile(id);
+                    if (u == null) {
+                        toastLong("Файл скачался, но открыть окно пересылки не получилось");
+                        return;
+                    }
+                    try {
                         Intent s = new Intent(Intent.ACTION_SEND);
                         s.setType("application/pdf");
                         s.putExtra(Intent.EXTRA_STREAM, u);
                         s.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(Intent.createChooser(s, "Переслать файл"));
+                    } catch (Exception e) {
+                        toastLong("Не получилось открыть окно пересылки");
                     }
-                };
-                IntentFilter f = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-                // Android 14: broadcast DownloadManager приходит из ЧУЖОГО процесса (downloads provider),
-                // поэтому NOT_EXPORTED-регистрация его не получает — окно «Переслать файл» не открывалось.
-                // Защита от подделки — сверка EXTRA_DOWNLOAD_ID с нашим id (выше в onReceive).
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(rc, f, Context.RECEIVER_EXPORTED);
-                else registerReceiver(rc, f);
-            } catch (Exception e) {
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        Toast.makeText(MainActivity.this, "Не получилось поделиться файлом", Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
+                }
+            };
+            IntentFilter f = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+            // Android 14: broadcast DownloadManager приходит из ЧУЖОГО процесса (downloads provider),
+            // поэтому NOT_EXPORTED-регистрация его не получает — окно «Переслать файл» не открывалось.
+            // Защита от подделки — сверка EXTRA_DOWNLOAD_ID с нашим id (выше в onReceive).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(rc, f, Context.RECEIVER_EXPORTED);
+            else registerReceiver(rc, f);
+            shareReceivers.add(rc);
+        } catch (Exception e) {
+            toastLong("Не получилось поделиться файлом");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        for (BroadcastReceiver r : new ArrayList<>(shareReceivers)) {
+            try { unregisterReceiver(r); } catch (Exception ignored) {}
+        }
+        shareReceivers.clear();
+        if (micRequest != null) { micRequest.deny(); micRequest = null; }
+        super.onDestroy();
+    }
+
+    /** Ответ пользователя на системный запрос микрофона → обратно в страницу. */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != MIC_PERM_REQ || micRequest == null) return;
+        PermissionRequest r = micRequest;
+        micRequest = null;
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+        } else {
+            r.deny();
+            Toast.makeText(this, "Нет доступа к микрофону — включите его в настройках приложения", Toast.LENGTH_LONG).show();
         }
     }
 
