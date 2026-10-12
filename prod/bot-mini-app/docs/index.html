@@ -1185,24 +1185,30 @@ function chatOpen(){if($("#sheet.on .chs")){close_();return}vctx=voiceCtx();open
   <canvas class="eq" id="eq" aria-hidden="true"></canvas>
   <button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><p class="chr" id="chr" aria-live="polite"></p></div>`)}
 function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
+function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
 async function voiceToggle(){
   if(vc){voiceStop(true);return}
   const me=vc={raf:0,lv:[]};micUi(true);
-  try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    if(vc!==me){stream.getTracks().forEach(t=>t.stop());return}
-    const ctx=new(window.AudioContext||window.webkitAudioContext)(),an=ctx.createAnalyser();an.fftSize=128;an.smoothingTimeConstant=.6;
-    ctx.createMediaStreamSource(stream).connect(an);me.stream=stream;me.ctx=ctx;me.an=an;
-    if(window.MediaRecorder){const mt=["audio/webm;codecs=opus","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t))||"";
-      const rec=new MediaRecorder(stream,mt?{mimeType:mt,audioBitsPerSecond:24000}:{audioBitsPerSecond:24000}),ch=[];
-      rec.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};rec.start(250);me.rec=rec;me.ch=ch;me.t0=Date.now();
-      me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}}catch(e){}   // нет доступа к микрофону — рисуем волны без реального звука
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}
+  catch(e){vc=null;micUi(false);chrSay(e&&e.name==="NotAllowedError"?"Нет доступа к микрофону — разрешите его в настройках приложения":"Микрофон недоступен — проверьте разрешения приложения");return}
+  if(vc!==me){stream.getTracks().forEach(t=>t.stop());return}
+  me.stream=stream;
+  try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),an=ctx.createAnalyser();an.fftSize=128;an.smoothingTimeConstant=.6;
+    ctx.createMediaStreamSource(stream).connect(an);me.ctx=ctx;me.an=an}catch(e){}   // нет анализатора — волна будет синтетической, на запись не влияет
+  try{if(window.MediaRecorder){const mt=["audio/webm;codecs=opus","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t))||"";
+    const rec=new MediaRecorder(stream,mt?{mimeType:mt,audioBitsPerSecond:24000}:{audioBitsPerSecond:24000}),ch=[];
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};rec.start(250);me.rec=rec;me.ch=ch;me.t0=Date.now();
+    me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}}catch(e){}   // сбой рекордера — не то же самое, что сбой микрофона
+  if(!me.rec)chrSay("Микрофон включён, но запись звука не поддерживается — команда не сохранится");
   const cv=$("#eq"),g=cv.getContext("2d"),cs=getComputedStyle(document.documentElement),c1=cs.getPropertyValue("--yel").trim()||"#FFC93C",c2=cs.getPropertyValue("--acc").trim()||"#0F2E6E",data=me.an?new Uint8Array(me.an.fftSize):null;
   const W=[{f:.021,s:.0042,a:1,w:3,al:1,p:0},{f:.033,s:-.0058,a:.7,w:2.2,al:.6,p:2},{f:.014,s:.0031,a:.5,w:1.6,al:.35,p:4}];
   const tick=t=>{if(vc!==me)return;
     const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr)}
     g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
     let lvl;if(data){me.an.getByteTimeDomainData(data);let q=0;for(let i=0;i<data.length;i++){const d=(data[i]-128)/128;q+=d*d}lvl=Math.min(1,Math.sqrt(q/data.length)*5)}
-    else lvl=.45+.3*Math.sin(t/260)*Math.sin(t/710+1);   // нет микрофона — рисуем волну без реального звука
+    else lvl=.45+.3*Math.sin(t/260)*Math.sin(t/710+1);   // микрофон есть, но анализатор не поднялся — волна рисуется синтетической
     me.lv[0]=(me.lv[0]||0)*.75+Math.max(.08,lvl)*.25;const amp=me.lv[0]*(h/2-4);
     const gr=g.createLinearGradient(0,0,w,0);gr.addColorStop(0,c1);gr.addColorStop(.5,c2);gr.addColorStop(1,c1);
     g.lineCap="round";g.lineJoin="round";g.strokeStyle=gr;
@@ -1217,8 +1223,8 @@ function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.
     rec.onstop=()=>{if(done&&ch.length)voiceSend(new Blob(ch,{type:rec.mimeType||"audio/webm"}),ctx0,dur)};try{rec.stop()}catch(e){}}
   if(v.stream)v.stream.getTracks().forEach(t=>t.stop());if(v.ctx&&v.ctx.close)v.ctx.close().catch(()=>{});
   {const c=$("#eq");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height)}micUi(false);
-  if(done&&!v.rec)toast("Микрофон недоступен")}
-async function voiceSend(blob,ctx,dur){const say=t=>{const e=$("#chr");if(e){e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}};
+  if(done&&!v.rec)toast("Запись звука не поддерживается — команда не сохранится")}
+async function voiceSend(blob,ctx,dur){const say=chrSay;
   say("Отправляю…");
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});
   if(!audio){say("Не удалось прочитать запись");return}

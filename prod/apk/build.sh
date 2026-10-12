@@ -11,6 +11,18 @@ export PATH="$JAVA_HOME/bin:$PATH"
 BT="$ROOT/android-sdk/build-tools/34.0.0"
 JAR="$ROOT/android-sdk/platforms/android-34/android.jar"
 
+# Подпись: ключ лежит РЯДОМ с build.sh, а не внутри build/ — build/ стирается
+# на каждой сборке, и новый ключ каждый раз ломает обновление поверх старого APK.
+# Свой ключ (release для Google Play) и пароль — через ANDROID_KEYSTORE / KEYSTORE_PASS.
+KS="${ANDROID_KEYSTORE:-keystore.jks}"
+KSP="${KEYSTORE_PASS:-tutorpass}"
+
+# versionCode растёт с каждой сборкой; файл version-code хранится в git,
+# чтобы номер не «откатился» на другом компьютере или после переклона.
+VC_FILE="version-code"
+VC="${VERSION_CODE:-$(cat "$VC_FILE" 2>/dev/null || echo 1)}"
+case "$VC" in ''|*[!0-9]*) VC=1 ;; esac
+
 echo "==> javac"
 rm -rf build && mkdir -p build/classes build/dex
 javac --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classes src/ru/kabinet/tutor/MainActivity.java
@@ -23,7 +35,7 @@ echo "==> aapt2 compile (ресурсы: иконка)"
 
 echo "==> aapt2 link"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -R build/res.zip \
-  --min-sdk-version 24 --target-sdk-version 34 --version-code 1 --version-name "1.0" -o build/base.apk
+  --min-sdk-version 24 --target-sdk-version 34 --version-code "$VC" --version-name "1.0" -o build/base.apk
 
 echo "==> dex в apk"
 cp build/base.apk build/unsigned.apk
@@ -37,16 +49,18 @@ PY
 echo "==> zipalign"
 "$BT/zipalign" -f -p 4 build/with-dex.apk build/aligned.apk
 
-echo "==> keystore"
-if [ ! -f build/ks.jks ]; then
-  keytool -genkeypair -keystore build/ks.jks -alias tutor -keyalg RSA -keysize 2048 \
-    -validity 10000 -storepass tutorpass -keypass tutorpass \
+echo "==> keystore: $KS"
+if [ ! -f "$KS" ]; then
+  keytool -genkeypair -keystore "$KS" -alias tutor -keyalg RSA -keysize 2048 \
+    -validity 10000 -storepass "$KSP" -keypass "$KSP" \
     -dname "CN=Kabinet Repetitora, OU=App, O=Local, C=RU" >/dev/null 2>&1
+  echo "    создан новый ключ — сохраните $KS: без него обновления поверх старого APK невозможны"
 fi
 
 echo "==> apksigner"
-"$BT/apksigner" sign --ks build/ks.jks --ks-pass pass:tutorpass --key-pass pass:tutorpass \
+"$BT/apksigner" sign --ks "$KS" --ks-pass pass:"$KSP" --key-pass pass:"$KSP" \
   --out kabinet-repetitora.apk build/aligned.apk
 "$BT/apksigner" verify --print-certs kabinet-repetitora.apk | head -3
+echo "$((VC + 1))" > "$VC_FILE"
 ls -la kabinet-repetitora.apk
-echo "BUILD OK"
+echo "BUILD OK (versionCode $VC)"

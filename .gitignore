@@ -12,3 +12,5 @@ __pycache__/
 jdk
 android-sdk
 */apk/build/
+# ключ подписи APK — личный, не коммитим (см. */apk/README.md)
+*/apk/keystore.jks

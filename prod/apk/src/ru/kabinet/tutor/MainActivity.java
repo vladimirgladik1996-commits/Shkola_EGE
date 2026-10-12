@@ -203,6 +203,23 @@ public class MainActivity extends Activity {
         });
 
         web.loadUrl(url);
+        ensureMicPermission();
+    }
+
+    /**
+     * Микрофон лучше выдать заранее: если разрешения ещё нет, WebView зовёт
+     * onPermissionRequest и мы уводим фокус в системный диалог — часть устройств
+     * в это время отменяет запрос страницы (onPermissionRequestCanceled),
+     * и grant потом некому отдать: getUserMedia висит и падает без объяснений.
+     * С уже выданным разрешением onPermissionRequest отвечает синхронно.
+     * Спрашиваем один раз; «больше не спрашивать» уважаем.
+     */
+    private void ensureMicPermission() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return;
+        if (prefs.getBoolean("micAsked", false)
+                && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) return;
+        prefs.edit().putBoolean("micAsked", true).apply();
+        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_PERM_REQ);
     }
 
     /**
@@ -326,10 +343,12 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != MIC_PERM_REQ || micRequest == null) return;
+        if (requestCode != MIC_PERM_REQ) return;
+        boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
         PermissionRequest r = micRequest;
         micRequest = null;
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        if (r == null) return;                     // предзапрос при открытии кабинета — страница ещё не просила
+        if (granted) {
             r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
         } else {
             r.deny();
