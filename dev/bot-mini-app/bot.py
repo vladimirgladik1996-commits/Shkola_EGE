@@ -1359,8 +1359,13 @@ async def api_week_send(request):
 @guarded
 async def api_pdf_link(request):
     """Подписанная ссылка на PDF для нативного скачивания (Telegram ≥ 8.0 «Сохранить в Загрузки»
-    и DownloadManager в APK): загрузчики идут по URL без заголовков авторизации."""
-    start = monday(request.query["start"]).isoformat()
+    и DownloadManager в APK): загрузчики идут по URL без заголовков авторизации.
+    start — из query (GET, как зовёт страница) или из тела (POST): так работает старая
+    закэшированная страница в WebView APK, она не должна ловить 405."""
+    raw = request.query.get("start")
+    if raw is None:
+        raw = (await request.json()).get("start")
+    start = monday(raw).isoformat()
     uid = user_id(request)
     return web.json_response({"url": f"/api/week.pdf?start={start}&tok={pdf_token(uid, start)}"})
 
@@ -1600,6 +1605,7 @@ def make_app():
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_get("/api/pdf_link", api_pdf_link)
+    app.router.add_post("/api/pdf_link", api_pdf_link)   # POST — для закэшированной страницы, см. api_pdf_link
     app.router.add_post("/api/week/send", api_week_send)
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)

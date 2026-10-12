@@ -756,7 +756,7 @@ async function sharePdf(){
   try{
     /* 1) APK: скачивание + системное окно «Переслать» одним действием */
     if(window.Android&&Android.sharePdf){
-      const r=await api("/api/pdf_link",{start:pdfStart});
+      const r=await api("/api/pdf_link?start="+encodeURIComponent(pdfStart));
       if(r&&r.url){Android.sharePdf((API_BASE||location.origin)+r.url,pdfName());return}
       throw new Error("pdf_link")}
     /* 2) Клиент с Web Share API (браузер, часть WebView/клиентов Telegram): файл скачивается
