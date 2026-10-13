@@ -43,37 +43,69 @@ jobs:
           ln -s "$JAVA_HOME" "$RUNNER_TEMP/bt/jdk"
           ln -s "$ANDROID_HOME" "$RUNNER_TEMP/bt/android-sdk"
 
-      - name: Ключ подписи из секретов (keystore.jks рядом с build.sh)
+      - name: Ключ подписи (keystore.jks рядом с build.sh)
         env:
           KS_B64: ${{ secrets.APK_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
         run: |
-          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
-            echo "::error::Не заданы секреты APK_KEYSTORE_B64 / APK_KEYSTORE_PASS — без них APK не подписать."
+          set -e
+          if [ -z "$KS_B64" ]; then
+            echo "::error::Не задан секрет APK_KEYSTORE_B64 (base64 от keystore) — без него APK не подписать."
             exit 1
           fi
+          # пароль, под которым build.sh подписывает APK: стабильный, зависит только от секрета
+          SIGN_PASS="$(printf %s "$KS_B64" | sha256sum | cut -c1-32)"
+          mkdir -p ks
+          printf '%s' "$KS_B64" | base64 -d > ks/src 2>/dev/null || true
+          SRC_PASS=""; OPENED=""; SOURCE=""
+          # 1) keystore из секрета + пароль из секрета (обычный путь)
+          if [ -s ks/src ] && [ -n "$KS_PASS" ] && keytool -list -keystore ks/src -storepass "$KS_PASS" >/dev/null 2>&1; then
+            OPENED=1; SRC_PASS="$KS_PASS"; SOURCE="keystore из секретов"
+          fi
+          # 2) keystore из секрета с пустым паролем
+          if [ -z "$OPENED" ] && [ -s ks/src ] && keytool -list -keystore ks/src -storepass "" >/dev/null 2>&1; then
+            OPENED=1; SRC_PASS=""; SOURCE="keystore из секретов (без пароля)"
+          fi
+          # 3) зашифрованная копия из репозитория (пароль шифрования = секрет APK_KEYSTORE_B64)
+          if [ -z "$OPENED" ] && [ -f apk-sign/keystore.p12.enc ]; then
+            if openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$KS_B64" -in apk-sign/keystore.p12.enc -out ks/src2 2>/dev/null; then
+              mv ks/src2 ks/src; OPENED=1; SRC_PASS="$SIGN_PASS"; SOURCE="зашифрованная копия из репозитория"
+            fi
+          fi
+          # 4) ничего не открылось — выпускаем новый ключ (единственный путь, если пароль утерян)
+          if [ -z "$OPENED" ]; then
+            echo "::warning::Keystore из секретов не открылся (нет верного APK_KEYSTORE_PASS) — выпущен НОВЫЙ ключ подписи. Установленные приложения потребуется переустановить один раз (данные кабинета живут на сервере и не теряются)."
+            rm -f ks/src
+            keytool -genkeypair -keystore ks/src -storetype PKCS12 -alias tutor -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass "$SIGN_PASS" -keypass "$SIGN_PASS" \
+              -dname "CN=Kabinet Repetitora, OU=App, O=Local, C=RU" >/dev/null 2>&1
+            mkdir -p apk-sign
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass pass:"$KS_B64" -in ks/src -out apk-sign/keystore.p12.enc
+            SRC_PASS="$SIGN_PASS"; SOURCE="новый ключ, выпущен в CI"
+          fi
+          # приводим к JKS, как ждёт build.sh, — под единым стабильным паролем
           for d in prod/apk dev/apk; do
-            printf '%s' "$KS_B64" | base64 -d > "$d/keystore-src"
-            # исходник может быть и JKS, и PKCS#12 — приводим к JKS, как ждёт build.sh
+            rm -f "$d/keystore.jks"
             keytool -importkeystore -noprompt \
-              -srckeystore "$d/keystore-src" -srcstoretype PKCS12 -srcstorepass "$KS_PASS" \
-              -destkeystore "$d/keystore.jks" -deststoretype JKS -deststorepass "$KS_PASS" \
-              -destkeypass "$KS_PASS" >/dev/null 2>&1 || mv "$d/keystore-src" "$d/keystore.jks"
-            rm -f "$d/keystore-src"
+              -srckeystore ks/src -srcstorepass "$SRC_PASS" \
+              -destkeystore "$d/keystore.jks" -deststoretype JKS -deststorepass "$SIGN_PASS" \
+              -destkeypass "$SIGN_PASS" >/dev/null 2>&1 || cp ks/src "$d/keystore.jks"
           done
+          echo "KEYSTORE_PASS=$SIGN_PASS" >> "$GITHUB_ENV"
+          echo "Ключ подписи: $SOURCE"
 
       - name: Сборка prod
         working-directory: prod/apk
         env:
           ANDROID_BUILD_ROOT: ${{ runner.temp }}/bt
-          KEYSTORE_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
+          KEYSTORE_PASS: ${{ env.KEYSTORE_PASS }}
         run: sh build.sh
 
       - name: Сборка dev
         working-directory: dev/apk
         env:
           ANDROID_BUILD_ROOT: ${{ runner.temp }}/bt
-          KEYSTORE_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
+          KEYSTORE_PASS: ${{ env.KEYSTORE_PASS }}
         run: sh build.sh
 
       - name: Номера версий и история APK — коммит обратно в репозиторий
@@ -81,7 +113,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add prod/apk/version-code dev/apk/version-code prod/apk/releases dev/apk/releases
+          git add prod/apk/version-code dev/apk/version-code prod/apk/releases dev/apk/releases apk-sign
           if ! git diff --cached --quiet; then
             git commit -m "apk: сборка $(cat prod/apk/version-code) [skip ci]"
             git push
