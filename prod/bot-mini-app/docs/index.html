@@ -319,6 +319,15 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 #sheet.on .chs h3{animation-delay:.2s}#sheet.on .chs p{animation-delay:.26s}#sheet.on .chs .mic{animation-delay:.38s}
 .chs .chr{min-height:20px;margin:14px 8px 0;font-size:13.5px;color:var(--hint)}
 .chs .chr.on{animation:chUp .4s cubic-bezier(.22,1,.36,1)}
+.chs .chi{display:flex;gap:8px;margin:14px 8px 0}
+.chs .chi input{flex:1;min-width:0;height:46px;padding:0 14px;border-radius:12px;border:1px solid var(--ln);background:var(--card);color:var(--tx);font-size:14px;outline:none}
+.chs .chi input:focus{border-color:var(--acc)}
+.chs .chi button{height:46px;padding:0 18px;border-radius:12px;background:var(--acc);color:var(--on);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 10px 22px -12px var(--sh)}
+#chc{display:flex;gap:8px;justify-content:center;margin:12px 8px 0}
+#chc:empty{display:none}
+#chc button{height:44px;padding:0 16px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
+#chc .ok{background:var(--grn);color:var(--on)}
+#chc .no{background:var(--card);color:var(--tx);box-shadow:0 0 0 1px var(--ln)}
 @keyframes micPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--grn) 55%,transparent)}70%,100%{box-shadow:0 0 0 14px transparent}}
 @media (prefers-reduced-motion:reduce){#chw{animation:none}}
 /* ===== Оплаты: фильтр по ученику, сортировка, анимация новой оплаты ===== */
@@ -1181,9 +1190,24 @@ function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]}
     else if(tab=="s"&&pf&&pf!=="all")c.filter=String(pf).slice(0,20)}catch(e){}
   return c}
 var vc=null;   // состояние записи: {raf, stream, ctx, an}
-function chatOpen(){if($("#sheet.on .chs")){close_();return}vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Спросите про расписание, оплаты и учеников — голосом.</p>
+function chatOpen(){if($("#sheet.on .chs")){close_();return}vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Спросите про расписание, оплаты и учеников — голосом или текстом.</p>
   <canvas class="eq" id="eq" aria-hidden="true"></canvas>
-  <button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><p class="chr" id="chr" aria-live="polite"></p></div>`)}
+  <button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><p class="chr" id="chr" aria-live="polite"></p>
+  <div class="chi"><input id="cht" type="text" maxlength="1000" placeholder="Например: сколько должен Андрей?" autocomplete="off" enterkeyhint="send"><button type="button" onclick="textSend()">Спросить</button></div>
+  <div id="chc"></div></div>`);
+  const i=$("#cht");if(i)i.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();textSend()}})}
+function chrBtns(confirm){const c=$("#chc");if(!c)return;c.innerHTML=confirm?`<button type="button" class="ok" onclick="voiceConfirm()">✅ Выполнить</button><button type="button" class="no" onclick="voiceCancel()">❌ Отмена</button>`:""}
+async function voiceConfirm(){chrBtns(false);const say=chrSay;say("Выполняю…");
+  let r=null;try{r=await api("/api/voice_confirm",{})}catch(e){}
+  say(r&&r.reply?r.reply:"Не получилось выполнить");if(r&&r.ok)try{await load()}catch(e){}}
+async function voiceCancel(){chrBtns(false);
+  let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
+  chrSay(r&&r.reply?r.reply:"Отменил — ничего не менял")}
+function voiceReply(r){const say=chrSay;say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
+async function textSend(){const i=$("#cht"),t=(i&&i.value||"").trim();if(!t)return;
+  i.value="";chrBtns(false);const ctx0=vctx||voiceCtx();chrSay("Думаю…");
+  let r=null;try{r=await api("/api/voice",{ctx:ctx0,text:t})}catch(e){}
+  voiceReply(r)}
 function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
 function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
 async function voiceToggle(){
@@ -1225,11 +1249,11 @@ function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.
   {const c=$("#eq");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height)}micUi(false);
   if(done&&!v.rec)toast("Запись звука не поддерживается — команда не сохранится")}
 async function voiceSend(blob,ctx,dur){const say=chrSay;
-  say("Отправляю…");
+  say("Отправляю…");chrBtns(false);
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});
   if(!audio){say("Не удалось прочитать запись");return}
   let r=null;try{r=await api("/api/voice",{ctx,audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.min(60,Math.round(dur*10)/10)})}catch(e){}
-  say(r&&r.reply?r.reply:"Не получилось отправить команду")}
+  voiceReply(r)}
 /* переход между экранами внутри уже открытой шторки (день → занятие, карточка → правка, «‹ назад») меняет содержимое на месте:
    без повторного выезда окна и мигания затемнения */
 function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelector(".sh:not(.fly)"):null;

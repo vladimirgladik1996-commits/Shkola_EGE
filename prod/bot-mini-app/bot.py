@@ -1,11 +1,11 @@
-import asyncio, collections, hashlib, hmac, json, logging, os, re, sqlite3, time
+import asyncio, collections, hashlib, hmac, io, json, logging, os, re, sqlite3, time
 from datetime import date, timedelta
 from urllib.parse import parse_qsl
 
 from aiohttp import web
-import auth
+import assist, auth, kimi, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramAPIError
@@ -1152,7 +1152,123 @@ async def m_price_custom(m: Message, state: FSMContext):
 async def m_price_bad(m: Message):
     await m.answer("Введите цену цифрами, например 3500")
 
+# ---------- ассистент: задачи текстом, голосом, с фото и файлами ----------
+# Сообщение → разбор задачи (Kimi) → уточнение → подтверждение → исполнение. Голос сначала
+# превращается в текст (Whisper). Обработчики стоят ПОСЛЕДНИМИ и перехватывают только то,
+# что не забрали меню и мастера (StateFilter(None) — у мастеры свои состояния и свой ввод).
+
+def ai_kb(buttons):
+    if not buttons:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t, callback_data=d)] for t, d in buttons])
+
+async def say(m: Message, text, buttons=None):
+    """Ответ пользователю: длинный текст режется кусками (лимит Telegram — 4096)."""
+    kb = ai_kb(buttons)
+    parts, cur = [], ""
+    for para in (text or "—").split("\n"):
+        if cur and len(cur) + len(para) + 1 > 3800:
+            parts.append(cur); cur = para
+        else:
+            cur = para if not cur else cur + "\n" + para
+    parts.append(cur)
+    for i, p in enumerate(parts):
+        await m.answer(p, reply_markup=kb if i == 0 else None)
+
+def pdf_text(data):
+    """Текст из PDF (до 8000 символов). Если pypdf не установлен — честное сообщение, без падения."""
+    try:
+        from pypdf import PdfReader
+        r = PdfReader(io.BytesIO(data))
+        return "\n".join((p.extract_text() or "") for p in r.pages)[:8000] or "[в PDF не нашёлся текст]"
+    except ImportError:
+        return "[для чтения PDF на сервере нужно добавить pypdf в requirements.txt]"
+    except Exception as e:
+        log.warning("pdf: не прочитался: %r", e)
+        return "[не получилось прочитать PDF]"
+
+async def tg_media(m: Message):
+    """(base64-картинки для vision, текст из файлов) из вложений сообщения. Без падений: что не
+    получилось прочитать — честная пометка в тексте для модели."""
+    import base64
+    images, docs = [], []
+    for ph in (m.photo or [])[-1:]:
+        f = await m.bot.get_file(ph.file_id)
+        if (f.file_size or 0) > 6 * 1024 * 1024:
+            continue
+        buf = io.BytesIO(); await m.bot.download_file(f.file_path, buf)
+        images.append(base64.b64encode(buf.getvalue()).decode())
+    if m.document:
+        d = m.document
+        name = (d.file_name or "").lower()
+        f = await m.bot.get_file(d.file_id)
+        buf = io.BytesIO()
+        if (f.file_size or 0) <= 8 * 1024 * 1024:
+            await m.bot.download_file(f.file_path, buf)
+            raw = buf.getvalue()
+            if (d.mime_type or "").startswith("image/"):
+                images.append(base64.b64encode(raw).decode())
+            elif name.endswith((".txt", ".md", ".csv", ".json", ".log")) or (d.mime_type or "").startswith("text/"):
+                docs.append(f"--- {d.file_name} ---\n" + raw.decode("utf-8", "replace")[:8000])
+            elif name.endswith(".pdf"):
+                docs.append(f"--- {d.file_name} ---\n" + pdf_text(raw))
+            else:
+                docs.append(f"--- {d.file_name} ---\n[файл такого типа пока не читается]")
+        else:
+            docs.append(f"--- {d.file_name} ---\n[файл слишком большой, не читается]")
+    return images, "\n".join(docs)
+
+async def tg_audio(m: Message):
+    """(байты, mime) голосового или аудиосообщения Telegram."""
+    src = m.voice or m.audio
+    f = await m.bot.get_file(src.file_id)
+    buf = io.BytesIO(); await m.bot.download_file(f.file_path, buf)
+    return buf.getvalue(), (src.mime_type or "audio/ogg")
+
+@r.message(StateFilter(None), F.text)
+async def ai_text(m: Message):
+    res = await assist.handle_chat(m.from_user.id, m.text)
+    await say(m, res["reply"], res.get("buttons"))
+
+@r.message(StateFilter(None), F.voice | F.audio)
+async def ai_voice(m: Message):
+    if not whisper.enabled():
+        await say(m, "Голос пока не распознаётся: на сервере не задан WHISPER_API_KEY. Напишите текстом.")
+        return
+    data, mime = await tg_audio(m)
+    text = await whisper.transcribe(data, mime)
+    if not text:
+        await say(m, "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом.")
+        return
+    res = await assist.handle_chat(m.from_user.id, text)
+    await say(m, "🎤 " + text + "\n\n" + res["reply"], res.get("buttons"))
+
+@r.message(StateFilter(None), F.photo)
+async def ai_photo(m: Message):
+    images, docs = await tg_media(m)
+    text = (m.caption or "").strip()
+    if not text:
+        await say(m, "Фото получил. Напишите, что с ним сделать — например: «разбери эту задачу».")
+        return
+    res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
+    await say(m, res["reply"], res.get("buttons"))
+
+@r.message(StateFilter(None), F.document)
+async def ai_doc(m: Message):
+    images, docs = await tg_media(m)
+    text = (m.caption or "").strip() or "Прочитай файл и учти его содержимое."
+    res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
+    await say(m, res["reply"], res.get("buttons"))
+
+@r.callback_query(F.data.startswith("ai:"))
+async def ai_cb(c: CallbackQuery):
+    await c.answer()
+    res = await assist.handle_reply(c.from_user.id, c.data)
+    await say(c.message, res["reply"], res.get("buttons"))
+
 # ---------- API для мини-аппа ----------
+
+
 INIT_MAX_AGE = 24 * 3600     # initData старше суток не принимаем: украденную строку нельзя воспроизводить вечно
 
 PDF_TTL = 600   # ссылка на PDF живёт 10 минут: хватает на «Сохранить», но не для повторного использования
@@ -1549,11 +1665,54 @@ def voice_audio(j):
     except binascii.Error:
         raise ValueError
 
-def voice_handle(ctx, audio, mime, text):
-    """Точка расширения. Сейчас — заглушка: подключить распознавание речи (audio → text) и разбор
-    команды (text + ctx → действие) можно здесь, не трогая фронт и проверку контекста."""
+def voice_snapshot():
+    """Снимок кабинета для ассистента: дата, ученики с балансом, ближайшие занятия, оплаты за неделю.
+    Обрезается по размеру — большой снимок ест токены и замедляет ответ."""
+    today = date.today()
+    t = today.isoformat()
+    out = [f"Сегодня {dmy(t)}, {WD_FULL[today.weekday()]}.", ""]
+    info = {r["id"]: r for r in q("select id, grade, subject from students")}
+    st = stats()
+    out.append(f"Ученики (всего {len(st)}):")
+    for s in st[:50]:
+        i = info.get(s["id"])
+        bits = []
+        if i is not None:
+            g = grade_text(i["grade"])
+            if g: bits.append(g)
+            if i["subject"]: bits.append(i["subject"])
+        bits.append(f"{money(s['price'])}/занятие" if s["price"] else "цена не указана")
+        bits.append(f"оплачено всего {money(s['paid'])}")
+        bal = s["paid"] - s["spent"]
+        if s["price"]:
+            bits.append(f"долг {money(-bal)}" if bal < 0 else f"предоплата {money(bal)}" if bal > 0 else "без долга и предоплаты")
+        out.append(f"#{s['id']} {s['name']}" + (" (в архиве)" if s["deleted"] else "") + " · " + " · ".join(bits))
+    rows = q("select l.day, l.time, coalesce(l.dur,60) dur, s.name from lessons l join students s on s.id=l.student_id "
+             "where l.day>=? order by l.day, l.time limit 40", t)
+    out += ["", f"Ближайшие занятия (от {dmy(t)}, до 40 штук):"]
+    out += [f"{dmy(l['day'])} {l['time']} — {l['name']}, {l['dur']} мин" for l in rows] or ["занятий нет"]
+    pays = q("select coalesce(sum(amount),0) s, count(*) n from payments where created>=?",
+             (today - timedelta(days=7)).isoformat())[0]
+    out += ["", f"Оплаты за 7 дней: {pays['n']} шт. на {money(pays['s'])}."]
+    return "\n".join(out)[:4000]
+
+async def voice_handle(uid, ctx, audio, mime, text):
+    """Запрос Вишенки из мини-аппа: аудио → текст (Whisper), дальше разбор команды с учётом
+    контекста страницы (Kimi): ответ, уточняющий вопрос или предложение действия с подтверждением."""
     where = ctx["tab_name"] + (f" · {ctx['screen']}" if ctx["screen"] else "")
-    return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Распознавание речи пока не подключено."}
+    heard = ""
+    if not text and audio:
+        if not whisper.enabled():
+            return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Голос не распознаётся: "
+                    "на сервере не задан WHISPER_API_KEY. Напишите текстом."}
+        heard = await whisper.transcribe(audio, mime) or ""
+        if not heard:
+            return {"stage": "stub", "reply": "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом."}
+        text = heard
+    res = await assist.handle_page(uid, text, ctx)
+    if heard:
+        res = {**res, "reply": f"🎤 {heard}\n\n{res['reply']}"}
+    return res
 
 @guarded
 async def api_voice(request):
@@ -1570,9 +1729,29 @@ async def api_voice(request):
         raise ValueError
     if audio is None and not text:
         raise ValueError
-    res = voice_handle(ctx, audio, mime, (text or "").strip())
-    log.info("voice: tg_id=%s tab=%s screen=%s audio=%sB", user_id(request), ctx["tab"], ctx["screen"], len(audio or b""))
+    uid = user_id(request)
+    res = await voice_handle(uid, ctx, audio, mime, (text or "").strip())
+    log.info("voice: tg_id=%s tab=%s screen=%s audio=%sB stage=%s", uid, ctx["tab"], ctx["screen"], len(audio or b""), res.get("stage"))
     return web.json_response({"ok": True, "context": ctx, **res})
+
+@guarded
+async def api_voice_confirm(request):
+    """Пользователь подтвердил действие, предложенное Вишенкой, — исполняем."""
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    res = await assist.confirm_page(user_id(request))
+    log.info("voice_confirm: tg_id=%s ok=%s", user_id(request), res.get("ok"))
+    return web.json_response({"ok": True, **res})
+
+@guarded
+async def api_voice_cancel(request):
+    """Отмена: забыть незавершённый диалог с Вишенкой, ничего не меняя."""
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    res = assist.cancel_page(user_id(request))
+    return web.json_response({"ok": True, **res})
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
@@ -1619,6 +1798,8 @@ def make_app():
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
     app.router.add_post("/api/voice", api_voice)
+    app.router.add_post("/api/voice_confirm", api_voice_confirm)
+    app.router.add_post("/api/voice_cancel", api_voice_cancel)
     return app
 
 

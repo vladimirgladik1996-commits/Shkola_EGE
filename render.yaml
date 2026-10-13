@@ -20,10 +20,9 @@ services:
   # собирает тот же prod-код, если сервис продолжает строить из корня
   # (старые настройки до перестройки на dev/ и prod/).
   #
-  # Бесплатный тариф (по требованию владельца). Следствия:
-  #  • сервис «усыпает» после ~15 мин простоя — бот оживает при первом запросе;
-  #  • диск на free недоступен, tutor.db НЕ переживает деплой/рестарт/засыпание —
-  #    данные живут до ближайшего перезапуска сервиса.
+  # Платный тариф (0.5c-512mb) + постоянный диск 1 ГБ на /app/data:
+  # tutor.db переживает деплой, рестарт и простой — данные не теряются.
+  # У Render есть автоматический снапшот диска раз в 24 ч (хранится ≥7 дней).
   # ============================================================
   - type: web
     name: tutor-bot
@@ -34,8 +33,15 @@ services:
     dockerContext: ./
     branch: main
 
-    plan: free
+    plan: 0.5c-512mb
     region: frankfurt
+
+    # постоянный диск: сюда пишется tutor.db (DATA_DIR=/app/data в bot.py) —
+    # данные переживают деплой и рестарт
+    disk:
+      name: disk
+      mountPath: /app/data
+      sizeGB: 1
 
     # / отдаёт docs/index.html — подходит для health check
     healthCheckPath: /
@@ -68,6 +74,18 @@ services:
       - key: PUBLIC_URL
         sync: false # тот же https-адрес (там открывается /login)
 
+      # --- ассистент: Kimi (Moonshot AI) + Whisper (голос → текст) ---
+      # Без KIMI_API_KEY ассистент отвечает заглушкой, без WHISPER_API_KEY
+      # голос не распознаётся — остальной бот работает как обычно.
+      - key: KIMI_API_KEY
+        sync: false # ключ с https://platform.kimi.ai/ → API Keys
+      - key: WHISPER_API_KEY
+        sync: false # ключ STT: OpenAI (/audio/transcriptions) или Groq
+      - key: KIMI_BASE_URL
+        value: "https://api.moonshot.ai/v1" # или https://api.moonshot.cn/v1 (Китай)
+      - key: WHISPER_BASE_URL
+        value: "https://api.openai.com/v1" # для Groq: https://api.groq.com/openai/v1
+
       # --- обычные настройки ---
       # Render сам выдаёт PORT — bot.py его читает (os.getenv("PORT", "8080")).
       - key: CURRENCY
@@ -75,22 +93,20 @@ services:
       - key: APP_ENV
         value: "prod"
 
-      # Анти-сон (free plan): бот каждые KEEPALIVE_SEC секунд сам пингует свой
-      # публичный URL — входящий запрос через прокси Render сбрасывает 15-минутный
-      # счётчик простоя. По умолчанию 180 с (3 минуты); для free достаточно < 900.
+      # Анти-сон: бот каждые KEEPALIVE_SEC секунд сам пингует свой публичный URL.
+      # На платном тарифе сервис не засыпает, но пинг полезен как самопроверка.
+      # По умолчанию 180 с (3 минуты); 0 — выключить (так в dev).
       - key: KEEPALIVE_SEC
         value: "180"
 
   # Секреты (BOT_TOKEN и др.) вводятся в панели Render при синхронизации
   # blueprint — в репозиторий они не попадают.
-  # ВРЕМЕННО ОТКЛЮЧЕНО (не удалять!).
-  # Сервис tutor-bot-dev добавляет в blueprint СЕКРЕТЫ sync: false
-  # (BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH, ALLOWED_USERNAMES,
-  # WEBAPP_URL, PUBLIC_URL). Render не завершает синхронизацию blueprint,
-  # пока их значения не введены в панели, и из-за этого НЕ ПРИМЕНЯЮТСЯ
-  # изменения tutor-bot (rootDir) — деплои падают.
-  # Как получите второго бота от @BotFather: раскомментируйте блок ниже
-  # и введите значения секретов в панели Render при синхронизации.
+  # ВНИМАНИЕ: сервис tutor-bot-dev ниже АКТИВЕН и добавляет в blueprint свои
+  # секреты sync: false (BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH,
+  # ALLOWED_USERNAMES, WEBAPP_URL, PUBLIC_URL, KIMI_API_KEY, WHISPER_API_KEY).
+  # Render не завершает синхронизацию blueprint, пока значения всех sync: false
+  # не введены в панели, и из-за этого НЕ ПРИМЕНЯЮТСЯ изменения tutor-bot
+  # (rootDir) — деплои падают. Держите значения под рукой при синхронизации.
   # ============================================================
   # ============================================================
   # DEV — тестовый сервис: каталог dev/bot-mini-app, тестовые данные.
@@ -129,6 +145,14 @@ services:
         sync: false # https://tutor-bot-dev-XXXX.onrender.com/ — адрес этого сервиса
       - key: PUBLIC_URL
         sync: false
+      - key: KIMI_API_KEY
+        sync: false # ключ Kimi для тестовой версии (можно тот же, что и в прод)
+      - key: WHISPER_API_KEY
+        sync: false # ключ STT (можно тот же, что и в прод)
+      - key: KIMI_BASE_URL
+        value: "https://api.moonshot.ai/v1"
+      - key: WHISPER_BASE_URL
+        value: "https://api.openai.com/v1"
       - key: CURRENCY
         value: "₽"
       - key: APP_ENV

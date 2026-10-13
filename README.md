@@ -18,8 +18,8 @@ prod/                       ← PROD: рабочая версия
 ├── bot-mini-app/           ←   бот + мини-апп
 └── apk/                    ←   Android-приложение (+ собранный kabinet-repetitora.apk)
 
-render.yaml                 ← Render Blueprint: tutor-bot (tutor-bot-dev временно
-                              закомментирован — см. комментарий в файле)
+render.yaml                 ← Render Blueprint: два сервиса — tutor-bot (prod) и
+                              tutor-bot-dev (тест); секреты вводятся в панели Render
 Dockerfile                  ← запасной (shim): собирает prod/bot-mini-app из корня,
                               пока сервису не задан Root Directory в Render
 docs/                       ← заглушка GitHub Pages: перенаправляет на сервис Render
@@ -44,7 +44,7 @@ docs/                       ← заглушка GitHub Pages: перенапр�
 | Анти-сон Render | выключен (`KEEPALIVE_SEC=0`) | включён (180 с) |
 | Маркировка | «DEV» в боте и мини-аппе (`APP_ENV=dev`) | без пометки |
 | Логи | `DEBUG` | `INFO` |
-| APK | подписан debug-ключом, `versionName 1.0-dev` | подписан release-ключом, `versionName 1.0` |
+| APK | `versionName 1.0-dev`, подписан своим ключом (`keystore.jks`, не в git) | `versionName 1.0`, подписан своим ключом (`keystore.jks`, не в git) |
 
 ⚠️ Dev и prod обязаны использовать **разные** токены ботов и **разные** базы.
 

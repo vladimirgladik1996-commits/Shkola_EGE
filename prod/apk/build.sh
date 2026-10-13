@@ -14,8 +14,14 @@ JAR="$ROOT/android-sdk/platforms/android-34/android.jar"
 # Подпись: ключ лежит РЯДОМ с build.sh, а не внутри build/ — build/ стирается
 # на каждой сборке, и новый ключ каждый раз ломает обновление поверх старого APK.
 # Свой ключ (release для Google Play) и пароль — через ANDROID_KEYSTORE / KEYSTORE_PASS.
+# Пароль ищем строго в этом порядке: KEYSTORE_PASS (окружение) → файл keystore.pass
+# (строка KEYSTORE_PASS=..., тот же каталог; в .gitignore). Дефолтного пароля НЕТ —
+# он не должен жить в открытом репозитории.
 KS="${ANDROID_KEYSTORE:-keystore.jks}"
-KSP="${KEYSTORE_PASS:-tutorpass}"
+KSP="${KEYSTORE_PASS:-}"
+if [ -z "$KSP" ] && [ -f keystore.pass ]; then
+  KSP="$(sed -n 's/^KEYSTORE_PASS=//p' keystore.pass | head -1)"
+fi
 
 # versionCode растёт с каждой сборкой; файл version-code хранится в git,
 # чтобы номер не «откатился» на другом компьютере или после переклона.
@@ -50,7 +56,19 @@ echo "==> zipalign"
 "$BT/zipalign" -f -p 4 build/with-dex.apk build/aligned.apk
 
 echo "==> keystore: $KS"
+if [ -f "$KS" ] && [ -z "$KSP" ]; then
+  echo "ОШИБКА: ключ $KS уже есть, а пароль не задан." >&2
+  echo "  Задайте KEYSTORE_PASS в окружении или создайте keystore.pass со строкой KEYSTORE_PASS=..." >&2
+  echo "  Новый ключ НЕ создаётся: иначе обновления поверх старого APK сломаются." >&2
+  exit 1
+fi
 if [ ! -f "$KS" ]; then
+  if [ -z "$KSP" ]; then
+    # первый запуск: пароль генерируется и сохраняется рядом (не коммитить!)
+    KSP="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 28)"
+    (umask 077 && printf 'KEYSTORE_PASS=%s\n' "$KSP" > keystore.pass)
+    echo "    пароль сгенерирован и записан в keystore.pass (не коммитить) — сделайте БЭКАП: $KS + keystore.pass"
+  fi
   keytool -genkeypair -keystore "$KS" -alias tutor -keyalg RSA -keysize 2048 \
     -validity 10000 -storepass "$KSP" -keypass "$KSP" \
     -dname "CN=Kabinet Repetitora, OU=App, O=Local, C=RU" >/dev/null 2>&1
