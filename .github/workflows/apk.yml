@@ -1,0 +1,103 @@
+# Сборка APK (prod + dev) автоматически: подпись ключом из секретов,
+# номер версии растёт и коммитится обратно, готовые APK крепятся к релизу
+# «apk-latest» (файлы в релизе заменяются новой сборкой) и остаются
+# артефактами запуска.
+#
+# Секреты репозитория (Settings → Secrets and variables → Actions):
+#   APK_KEYSTORE_B64  — base64 от keystore.jks (или .p12) ключа подписи
+#   APK_KEYSTORE_PASS — пароль keystore (та же строка, что в keystore.pass)
+name: apk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "prod/apk/**"
+      - "dev/apk/**"
+      - ".github/workflows/apk.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android SDK: build-tools и platform
+        run: sdkmanager "build-tools;34.0.0" "platforms;android-34"
+
+      - name: Тулчейн для build.sh (jdk/ и android-sdk/)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bt"
+          ln -s "$JAVA_HOME" "$RUNNER_TEMP/bt/jdk"
+          ln -s "$ANDROID_HOME" "$RUNNER_TEMP/bt/android-sdk"
+
+      - name: Ключ подписи из секретов (keystore.jks рядом с build.sh)
+        env:
+          KS_B64: ${{ secrets.APK_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error::Не заданы секреты APK_KEYSTORE_B64 / APK_KEYSTORE_PASS — без них APK не подписать."
+            exit 1
+          fi
+          for d in prod/apk dev/apk; do
+            printf '%s' "$KS_B64" | base64 -d > "$d/keystore-src"
+            # исходник может быть и JKS, и PKCS#12 — приводим к JKS, как ждёт build.sh
+            keytool -importkeystore -noprompt \
+              -srckeystore "$d/keystore-src" -srcstoretype PKCS12 -srcstorepass "$KS_PASS" \
+              -destkeystore "$d/keystore.jks" -deststoretype JKS -deststorepass "$KS_PASS" \
+              -destkeypass "$KS_PASS" >/dev/null 2>&1 || mv "$d/keystore-src" "$d/keystore.jks"
+            rm -f "$d/keystore-src"
+          done
+
+      - name: Сборка prod
+        working-directory: prod/apk
+        env:
+          ANDROID_BUILD_ROOT: ${{ runner.temp }}/bt
+          KEYSTORE_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
+        run: sh build.sh
+
+      - name: Сборка dev
+        working-directory: dev/apk
+        env:
+          ANDROID_BUILD_ROOT: ${{ runner.temp }}/bt
+          KEYSTORE_PASS: ${{ secrets.APK_KEYSTORE_PASS }}
+        run: sh build.sh
+
+      - name: Номера версий и история APK — коммит обратно в репозиторий
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prod/apk/version-code dev/apk/version-code prod/apk/releases dev/apk/releases
+          if ! git diff --cached --quiet; then
+            git commit -m "apk: сборка $(cat prod/apk/version-code) [skip ci]"
+            git push
+          fi
+
+      - name: APK в артефакты запуска
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: |
+            prod/apk/kabinet-repetitora.apk
+            dev/apk/kabinet-repetitora.apk
+
+      - name: APK в релиз apk-latest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: APK — последняя сборка
+          files: |
+            prod/apk/kabinet-repetitora.apk
+            dev/apk/kabinet-repetitora.apk
