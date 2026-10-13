@@ -6,10 +6,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# код и ассеты (docs/ — мини-апп, fonts/ — шрифты для PDF)
-COPY bot.py auth.py ./
-COPY docs/ docs/
-COPY fonts/ fonts/
+# код и ассеты копируем ЦЕЛИКОМ (см. .dockerignore — что исключено):
+# так ни один новый файл или модуль не «пропадает» в релизе
+# (контроль — tests/test_release_contract.py)
+COPY . .
 
 # не root: UID/GID задаются из docker-compose (см. APP_UID/APP_GID в deploy.sh), чтобы писать в ./data
 RUN mkdir -p /app/data && chown 1000:1000 /app/data   # владелец = USER ниже: без этого sqlite не создаст tutor.db

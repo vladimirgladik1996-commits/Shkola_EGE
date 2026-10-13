@@ -20,9 +20,7 @@ COPY prod/bot-mini-app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # код и ассеты (docs/ — мини-апп, fonts/ — шрифты для PDF)
-COPY prod/bot-mini-app/bot.py prod/bot-mini-app/auth.py ./
-COPY prod/bot-mini-app/docs/ docs/
-COPY prod/bot-mini-app/fonts/ fonts/
+COPY prod/bot-mini-app/ ./
 
 # не root: UID 1000 — владелец /app/data, чтобы sqlite создавал tutor.db
 RUN mkdir -p /app/data && chown 1000:1000 /app/data

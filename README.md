@@ -53,6 +53,7 @@ docs/                       ← заглушка GitHub Pages: перенапр�
 - Бот + мини-апп (dev): `dev/bot-mini-app/` → `DEPLOY.md` (запуск локально / туннель / Render)
 - Бот + мини-апп (prod): `prod/bot-mini-app/` → `DEPLOY.md` (Selectel / Render / GitHub Pages)
 - Android-приложение: `dev/apk/README.md` и `prod/apk/README.md` (сборка APK)
+- Порядок релизов, что где лежит и как не потерять ключ подписи APK: `RELEASE.md`
 
 Быстрый старт (dev, локально):
 

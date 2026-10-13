@@ -1,0 +1,20 @@
+# Секреты и рабочие данные — в образ Docker не попадают (см. RELEASE.md)
+.env
+.env.*
+*.env
+*.jks
+*.pass
+keystore.*
+data/
+backups/
+
+# Служебное: в работающем приложении не нужно
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+.git/
+*.md
+docker-compose.yml
+releases/

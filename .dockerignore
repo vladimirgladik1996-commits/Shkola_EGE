@@ -1,0 +1,13 @@
+# Корневой shim-образ (собирает prod/bot-mini-app из корня репозитория).
+# Секреты и данные в образ не попадают.
+.git
+**/data/
+**/backups/
+**/*.jks
+**/*.pass
+**/keystore.*
+**/.env
+**/.env.*
+**/__pycache__/
+**/build/
+**/releases/

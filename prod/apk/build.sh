@@ -79,6 +79,13 @@ echo "==> apksigner"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:"$KSP" --key-pass pass:"$KSP" \
   --out kabinet-repetitora.apk build/aligned.apk
 "$BT/apksigner" verify --print-certs kabinet-repetitora.apk | head -3
+
+# копия релиза — с номером версии, чтобы новая сборка не затирала прошлые APK.
+# каталог releases/ коммитится в git: всегда можно откатиться на прошлую версию.
+mkdir -p releases
+cp kabinet-repetitora.apk "releases/kabinet-repetitora-$VC.apk"
+cp kabinet-repetitora.apk.idsig "releases/kabinet-repetitora-$VC.apk.idsig" 2>/dev/null || true
+
 echo "$((VC + 1))" > "$VC_FILE"
 ls -la kabinet-repetitora.apk
-echo "BUILD OK (versionCode $VC)"
+echo "BUILD OK (versionCode $VC) → releases/kabinet-repetitora-$VC.apk"
