@@ -64,7 +64,7 @@ services:
       - key: ALLOWED_IDS
         sync: false # необязательно: числовые Telegram-ID
       - key: WEBAPP_URL
-        sync: false # https://tutor-bot-cn4a.onrender.com/  (адрес этого сервиса)
+        sync: false # https://tutor-bot-y40k.onrender.com/  (адрес этого сервиса)
       - key: PUBLIC_URL
         sync: false # тот же https-адрес (там открывается /login)
 
@@ -140,7 +140,7 @@ services:
 
 # ------------------------------------------------------------
 # WEBAPP_URL = публичный HTTPS-адрес сервиса, например:
-#   https://tutor-bot-cn4a.onrender.com/
+#   https://tutor-bot-y40k.onrender.com/
 # Схема «всё с одного домена»: этот же адрес отдаёт и страницу мини-аппа,
 # и /api/*, и PDF — CORS и API_BASE не нужны.
 # Этот же URL указать в @BotFather → /setmenubutton (или /newapp).

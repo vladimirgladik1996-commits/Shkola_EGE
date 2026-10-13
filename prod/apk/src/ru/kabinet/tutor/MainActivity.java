@@ -64,7 +64,7 @@ public class MainActivity extends Activity {
 
         final EditText edit = new EditText(this);
         edit.setHint("https://ваш-адрес.onrender.com/");
-        edit.setText(current.isEmpty() ? "https://tutor-bot-cn4a.onrender.com/" : current);
+        edit.setText(current.isEmpty() ? "https://tutor-bot-y40k.onrender.com/" : current);
         edit.setSingleLine(true);
 
         Button b = new Button(this);
