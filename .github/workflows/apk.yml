@@ -119,19 +119,22 @@ jobs:
             git push
           fi
 
+      - name: Имена файлов для релиза (prod и dev не должны перетирать друг друга)
+        run: |
+          mkdir -p dist
+          cp prod/apk/kabinet-repetitora.apk dist/kabinet-repetitora-prod.apk
+          cp dev/apk/kabinet-repetitora.apk  dist/kabinet-repetitora-dev.apk
+          ls -la dist
+
       - name: APK в артефакты запуска
         uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: |
-            prod/apk/kabinet-repetitora.apk
-            dev/apk/kabinet-repetitora.apk
+          path: dist/*.apk
 
       - name: APK в релиз apk-latest
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
           name: APK — последняя сборка
-          files: |
-            prod/apk/kabinet-repetitora.apk
-            dev/apk/kabinet-repetitora.apk
+          files: dist/*.apk
