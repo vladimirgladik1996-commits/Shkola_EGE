@@ -117,7 +117,7 @@ def find_student(val):
         return soft[0]
     if len(soft) > 1:
         raise AssistError("Нашёл несколько похожих: " + ", ".join(r["name"] for r in soft[:5]) + ". Уточните.")
-    raise AssistError(f"Ученика «{val}» нет в кабинете. Проверьте имя или добавьте ученика.")
+    raise AssistError(f"Ученика «{val}» не нашёл. Проверьте имя или добавьте ученика.")
 
 
 ASK = {"student": "Как зовут ученика?", "name": "Как зовут нового ученика?", "grade": "Какой класс?",
@@ -318,7 +318,7 @@ async def answer_chat(text, deep=False, images=None, docs=None):
 
 
 # ---------- общий конвейер для Telegram-бота ----------
-MODE_BUTTONS = [("⚡ Быстрый ответ", "ai:fast"), ("🧠 Глубокий разбор", "ai:deep")]
+MODE_BUTTONS = [("⚡ Быстрый ответ на простой вопрос", "ai:fast"), ("🧠 Долгий ответ на сложный вопрос", "ai:deep")]
 
 
 def _keep(uid, **kw):
@@ -348,7 +348,7 @@ async def handle_chat(uid, text, *, images=None, docs=None):
         return {"reply": "Не получилось разобрать задачу — попробуйте сказать иначе.", "buttons": None}
     if task["kind"] == "chat":
         _keep(uid, phase="mode", text=text, images=images, docs=docs)
-        return {"reply": "Это не задача для кабинета. Как ответить — быстро или с глубоким разбором?",
+        return {"reply": "Хорошо, отвечу на вопрос. Выберите режим ответа:",
                 "buttons": MODE_BUTTONS}
     return _app_flow(uid, task, prev, text, images, docs)
 
@@ -357,7 +357,7 @@ def _app_flow(uid, task, prev, text, images=None, docs=None):
     """Задача про кабинет: добрать параметры или выйти на подтверждение."""
     action = task["action"]
     if action == "none":
-        return {"reply": "Не понял, что нужно сделать в кабинете. Сформулируйте задачу ещё раз.", "buttons": None}
+        return {"reply": "Не понял, что нужно сделать. Сформулируйте задачу ещё раз.", "buttons": None}
     asked = list((prev or {}).get("asked", []))
     try:
         params, need = prepare(task["params"], action)

@@ -1,5 +1,6 @@
 import asyncio, collections, hashlib, hmac, io, json, logging, os, re, sqlite3, time
 from datetime import date, timedelta
+from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl
 
 from aiohttp import web
@@ -781,7 +782,7 @@ async def start(m: Message, state: FSMContext):
     if auth.is_authorized(m.from_user.id):
         await m.answer("Готово к работе. Выберите действие в меню." + ENV_TAG, reply_markup=menu_kb())
         return
-    await m.answer("🔐 Для работы с ботом и кабинетом нужно войти." + ENV_TAG, reply_markup=ReplyKeyboardRemove())
+    await m.answer("🔐 Для работы нужно войти." + ENV_TAG, reply_markup=ReplyKeyboardRemove())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Войти", url=auth.new_link(m.from_user.id, m.from_user.username or ""))]])
     await m.answer("Нажмите кнопку и введите логин и пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
 
@@ -1175,6 +1176,34 @@ async def say(m: Message, text, buttons=None):
     for i, p in enumerate(parts):
         await m.answer(p, reply_markup=kb if i == 0 else None)
 
+
+# ---------- индикатор «ассистент думает» ----------
+# Пока идёт распознавание голоса или запрос к Kimi, в чате горит «печатает…»
+# (статус Telegram живёт ~5 с — обновляем каждые 4 с). На «🧠 Долгий ответ»
+# дополнительно шлётся заглушка, которая потом заменяется готовым ответом.
+TYPING_EVERY = 4.0
+
+async def _typing_loop(bot_, chat_id):
+    try:
+        while True:
+            try: await bot_.send_chat_action(chat_id, "typing")
+            except Exception: return            # чат недоступен — просто без индикатора
+            await asyncio.sleep(TYPING_EVERY)
+    except asyncio.CancelledError:
+        raise
+
+@asynccontextmanager
+async def thinking(m: Message, on: bool = True):
+    """Контекст обработки: показывает «печатает…», пока выполняется запрос к ассистенту."""
+    task = asyncio.create_task(_typing_loop(m.bot, m.chat.id)) if on else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
 def pdf_text(data):
     """Текст из PDF (до 8000 символов). Если pypdf не установлен — честное сообщение, без падения."""
     try:
@@ -1227,7 +1256,8 @@ async def tg_audio(m: Message):
 
 @r.message(StateFilter(None), F.text)
 async def ai_text(m: Message):
-    res = await assist.handle_chat(m.from_user.id, m.text)
+    async with thinking(m, kimi.enabled()):
+        res = await assist.handle_chat(m.from_user.id, m.text)
     await say(m, res["reply"], res.get("buttons"))
 
 @r.message(StateFilter(None), F.voice | F.audio)
@@ -1235,12 +1265,13 @@ async def ai_voice(m: Message):
     if not whisper.enabled():
         await say(m, "Голос пока не распознаётся: на сервере не задан WHISPER_API_KEY. Напишите текстом.")
         return
-    data, mime = await tg_audio(m)
-    text = await whisper.transcribe(data, mime)
-    if not text:
+    async with thinking(m, True):              # и распознавание, и ответ — оба долгие
+        data, mime = await tg_audio(m)
+        text = await whisper.transcribe(data, mime)
+        res = await assist.handle_chat(m.from_user.id, text) if text else None
+    if res is None:
         await say(m, "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом.")
         return
-    res = await assist.handle_chat(m.from_user.id, text)
     await say(m, "🎤 " + text + "\n\n" + res["reply"], res.get("buttons"))
 
 @r.message(StateFilter(None), F.photo)
@@ -1250,21 +1281,39 @@ async def ai_photo(m: Message):
     if not text:
         await say(m, "Фото получил. Напишите, что с ним сделать — например: «разбери эту задачу».")
         return
-    res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
+    async with thinking(m, kimi.enabled()):
+        res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
     await say(m, res["reply"], res.get("buttons"))
 
 @r.message(StateFilter(None), F.document)
 async def ai_doc(m: Message):
     images, docs = await tg_media(m)
     text = (m.caption or "").strip() or "Прочитай файл и учти его содержимое."
-    res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
+    async with thinking(m, kimi.enabled()):
+        res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
     await say(m, res["reply"], res.get("buttons"))
 
 @r.callback_query(F.data.startswith("ai:"))
 async def ai_cb(c: CallbackQuery):
     await c.answer()
-    res = await assist.handle_reply(c.from_user.id, c.data)
-    await say(c.message, res["reply"], res.get("buttons"))
+    deep = c.data == "ai:deep"
+    status = None
+    if deep and kimi.enabled():
+        # долгий режим — модель думает до 2–3 минут: заглушка вместо тишины
+        status = await c.message.answer("🧠 Долгий ответ на сложный вопрос — думаю, это может занять 2–3 минуты…")
+    async with thinking(c.message, kimi.enabled()):
+        res = await assist.handle_reply(c.from_user.id, c.data)
+    reply, buttons = res["reply"], res.get("buttons")
+    if status is not None and reply and len(reply) <= 3800 and not buttons:
+        try:
+            await status.edit_text(reply)      # ответ сразу вместо заглушки — без лишних сообщений
+            return
+        except TelegramAPIError:
+            pass
+    if status is not None:
+        try: await status.delete()
+        except TelegramAPIError: pass
+    await say(c.message, reply, buttons)
 
 # ---------- API для мини-аппа ----------
 
