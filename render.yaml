@@ -49,13 +49,9 @@ services:
     # автодеплой при пуше в main (заменяет SSH-скрипт deploy.sh)
     autoDeploy: true
 
-    # Диск не используется: на бесплатном тарифе он недоступен.
-    # (При переходе на платный тариф раскомментируйте — данные перестанут
-    # теряться при деплоях: путь совпадает с DATA_DIR в bot.py.)
-    # disk:
-    #   name: tutor-data
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # Примечание: диск ОБЯЗАН быть смонтирован в /app/data (см. блок disk выше) —
+    # путь совпадает с DATA_DIR в bot.py. Проверить после синхронизации blueprint:
+    # Render Dashboard → tutor-bot → Disk: 1 GB на /app/data.
 
     envVars:
       # --- секреты: значения вводятся в панели Render, не в коде ---

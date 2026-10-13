@@ -95,6 +95,25 @@ def main():
         "build.sh должен складывать собранные APK в releases/ с номером версии"
     ok(f"APK на месте (version-code {vc}); сборка складывает версии в apk/releases/; ключ подписи — вне git")
 
+    # 7. workflow-файлы не должны снова стать невалидным YAML:
+    #    двоеточие с пробелом внутри plain-скалара ломает парсер GitHub Actions
+    #    (run падает сразу, 0 jobs, и всё молча не собирается — так и было с apk.yml).
+    wf_dir = os.path.join(REPO, ".github", "workflows")
+    for fn in sorted(os.listdir(wf_dir)) if os.path.isdir(wf_dir) else []:
+        if not fn.endswith((".yml", ".yaml")):
+            continue
+        for i, line in enumerate(read(os.path.join(wf_dir, fn)).splitlines(), 1):
+            m = re.match(r"^(\s*- name:)\s+(.+?)\s*$", line)
+            if not m:
+                continue
+            val = m.group(2)
+            if not (val[0:1] in "\"'" or ": " not in val):
+                raise AssertionError(
+                    f"{fn}:{i}: имя шага '{val}' содержит ': ' без кавычек — GitHub отклонит workflow. "
+                    f"Оформите как - name: \"{val}\"")
+    ok("workflow-файлы валидны (имена шагов без неэкранированного ': ')")
+
+
 
 if __name__ == "__main__":
     main()

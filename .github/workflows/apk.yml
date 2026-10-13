@@ -11,11 +11,8 @@ name: apk
 on:
   workflow_dispatch:
   push:
+    # сборка на КАЖДЫЙ пуш в main (без фильтра paths): APK всегда соответствует коду
     branches: [main]
-    paths:
-      - "prod/apk/**"
-      - "dev/apk/**"
-      - ".github/workflows/apk.yml"
 
 permissions:
   contents: write
@@ -33,7 +30,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Android SDK: build-tools и platform
+      - name: "Android SDK: build-tools и platform"   # кавычки обязательны: двоеточие в имени ломает YAML
         run: sdkmanager "build-tools;34.0.0" "platforms;android-34"
 
       - name: Тулчейн для build.sh (jdk/ и android-sdk/)
@@ -76,6 +73,7 @@ jobs:
         run: sh build.sh
 
       - name: Номера версий и история APK — коммит обратно в репозиторий
+        continue-on-error: true   # если push запрещён (защита ветки / права workflow) — релиз всё равно собираем
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
