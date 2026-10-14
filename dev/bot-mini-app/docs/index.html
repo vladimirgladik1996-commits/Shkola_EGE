@@ -926,8 +926,7 @@ function payFeed(){
   return `<div class="sbar sbar2"><button class="stb ${pst!="all"?"on":""}" id="pstb" onclick="payStu()" aria-label="Фильтр по ученику">${stbHtml()}</button>
   <button class="ib ${pd1?"on":""}" id="pcal" onclick="payCal()" aria-label="Фильтр по дате"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button>
   <button class="ib ${pty!="all"?"on":""}" id="ptf" onclick="payTy()" aria-label="Тип записи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
-  <button class="ib ${psort!="new"?"on":""}" id="psrt" onclick="paySort()" aria-label="Порядок отображения"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"/></svg></button>
-  <button class="ib acc" onclick="payNew()" aria-label="Новая оплата">＋</button></div>
+  <button class="ib ${psort!="new"?"on":""}" id="psrt" onclick="paySort()" aria-label="Порядок отображения"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"/></svg></button></div>
   <div id="flist">${payFeedList()}</div>`}
 
 /* ---- календарь: одна дата или период (две даты подряд) ---- */
@@ -1068,7 +1067,7 @@ function pay(){
 const PAY_QUICK=[3000,5000,10000];
 function paySetAm(a,b){const i=$("#pna");if(!i)return;i.value=a;
   if(b&&b.parentNode)b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
-function fabGo(){tab=="p"?payNew():form()}
+function fabGo(){tab=="p"?payNew():tab=="s"?studNew():form()}
 function payNew(sid){
   if(!act().length)return toast("Сначала добавьте ученика");
   // ученик выбирается в этом окне; фильтр списка подставляем, только если он среди активных, иначе берём первого
@@ -1107,8 +1106,7 @@ function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filte
 function stu(){
   const gs=stuGrades();
   return `<div class="sbar"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
-  <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
-  <button class="ib acc" onclick="studNew()" aria-label="Добавить ученика">＋</button></div><div id="slist">${stuList()}</div>`}
+  <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></div><div id="slist">${stuList()}</div>`}
 function stuUpd(){$("#slist").innerHTML=stuList()}
 function gradeFilter(){
   const cnt=g=>act().filter(s=>(s.grade||"").trim()==g).length,none=act().filter(s=>!(s.grade||"").trim()).length,
@@ -1345,7 +1343,7 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;$("#sheet").classList.remove("on")}
-function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");fb.style.display=tab=="c"?"block":"none";fb.textContent="+ Занятие";syncNav()}
+function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
 /* ---------- раздел «Материалы» ---------- */
