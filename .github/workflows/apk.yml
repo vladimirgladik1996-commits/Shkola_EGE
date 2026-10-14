@@ -133,7 +133,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # включая «текущий» APK в корне */apk/ — чтобы kabinet-repetitora.apk не отставал
           # от истории (build/ и keystore.* исключены в .gitignore)
-          git add prod/apk dev/apk apk-sign
+          # копии в docs/ — их отдаёт кабинет по /apk: без этого ссылка ведёт на старую сборку
+          cp prod/apk/kabinet-repetitora.apk prod/bot-mini-app/docs/kabinet-repetitora.apk
+          cp dev/apk/kabinet-repetitora.apk dev/bot-mini-app/docs/kabinet-repetitora.apk
+          git add prod/apk dev/apk apk-sign prod/bot-mini-app/docs dev/bot-mini-app/docs
           if ! git diff --cached --quiet; then
             git commit -m "apk: сборка prod $(( $(cat prod/apk/version-code) - 1 )), dev $(( $(cat dev/apk/version-code) - 1 )) [skip ci]"
             git push
