@@ -158,9 +158,11 @@ async def main():
                   params={"student": "Борис", "day": DAY1, "time": "18:00"})
             r = await post("/api/voice", {"ctx": ctx, "audio": AUD, "mime": "audio/webm", "dur": 2})
             j = await r.json()
-            assert j["stage"] == "confirm" and j["reply"].startswith("🎤") and "добавь занятие" in j["reply"]
+            assert j["stage"] == "confirm" and "добавь занятие" in j["heard"] and "🎤" not in j["reply"]
             assert CALLS[-1][1] and CALLS[-2][0] == "stt"   # сначала STT, потом разбор
-            await post("/api/voice_confirm", {})
+            r = await post("/api/voice_confirm", {})
+            j = await r.json()
+            assert j["ok"] and j["action"] == "add_lesson" and j["info"]["day"] == DAY1 and j["info"]["time"] == "18:00" and j["info"]["sid"]
             assert lessons(DAY1, "18:00") != []
             ok("голос из мини-аппа: Whisper → разбор → подтверждение → занятие записано")
 

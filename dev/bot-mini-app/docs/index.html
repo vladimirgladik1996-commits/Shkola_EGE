@@ -306,26 +306,35 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 .chs .chb{width:104px;height:104px;margin:0 auto 12px;border-radius:50%;overflow:hidden;background:#FBF7E9;box-shadow:0 0 0 4px var(--yel),0 14px 28px -12px var(--sh)}
 .chs .chb img{width:100%;height:100%;object-fit:cover;object-position:50% 30%}
 .chs h3{padding:0}.chs p{color:var(--hint);margin:6px 8px 16px}
-.chs .eq{display:block;width:calc(100% - 16px);height:72px;margin:0 8px 14px;opacity:0;transform:scaleY(.4);transition:opacity .35s,transform .45s cubic-bezier(.34,1.3,.64,1)}
+.chs .zone{position:relative;min-height:72px;margin:0 8px 14px;display:flex;flex-direction:column;justify-content:center}
+.chs .eq{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transform:scaleY(.4);transition:opacity .35s,transform .45s cubic-bezier(.34,1.3,.64,1)}
 .chs .eq.on{opacity:1;transform:none}
-.chs .mic{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:210px;padding:13px 22px;border-radius:99px;background:var(--acc);color:var(--on);font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 10px 22px -10px var(--sh);transition:background .25s,transform .15s;-webkit-tap-highlight-color:transparent}
-.chs .mic:active{transform:scale(.96)}
-.chs .mic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chs .act{--e:cubic-bezier(.22,1,.36,1);display:flex;justify-content:center;width:calc(100% - 16px);max-width:340px;margin:0 auto}
+.chs .act button{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1 1 0;min-width:0;overflow:hidden;white-space:nowrap;padding:13px 22px;border-radius:99px;font-size:15px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:flex-grow .5s var(--e),padding .5s var(--e),margin .5s var(--e),opacity .22s ease,background .25s,transform .15s}
+.chs .act button:active{transform:scale(.96)}
+.chs .mic{background:var(--acc);color:var(--on);box-shadow:0 10px 22px -10px var(--sh)}
+.chs .mic svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chs .act .ok,.chs .act .no{flex-grow:0;padding-left:0;padding-right:0;opacity:0;pointer-events:none}
+.chs .act .ok{background:var(--grn);color:var(--on);box-shadow:0 10px 22px -10px color-mix(in srgb,var(--grn) 80%,transparent)}
+.chs .act .no{background:var(--card);color:var(--tx);box-shadow:0 0 0 1.5px var(--ln)}
+.chs .act.cf .mic{flex-grow:0;padding-left:0;padding-right:0;opacity:0;pointer-events:none}
+.chs .act.cf .ok,.chs .act.cf .no{flex-grow:1;padding-left:12px;padding-right:12px;opacity:1;pointer-events:auto;transition:flex-grow .5s var(--e),padding .5s var(--e),margin .5s var(--e),opacity .35s ease .14s,background .25s,transform .15s}
+.chs .act.cf .no{margin-left:10px;transition-delay:0s,0s,0s,.22s,0s,0s}
+.chs .chh{margin:0 0 6px;font-size:15.5px;font-weight:600;line-height:1.35;color:var(--tx);word-break:break-word}
+.chs .chh:empty{display:none}
+.chs .chh::before{content:"Вы сказали";display:block;margin-bottom:3px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--hint)}
+.chs .chh.on{animation:chUp .4s cubic-bezier(.22,1,.36,1)}
 .chs .mic.rec{background:var(--grn);animation:micPulse 1.6s ease-out infinite}
 @keyframes chPop{0%{transform:scale(.3) rotate(-12deg);opacity:0}60%{transform:scale(1.08) rotate(3deg);opacity:1}100%{transform:none}}
 @keyframes chUp{from{opacity:0;transform:translateY(14px)}}
 #sheet.on .chs .chb{animation:chPop .6s cubic-bezier(.34,1.4,.64,1) .12s both}
-#sheet.on .chs h3,#sheet.on .chs p,#sheet.on .chs .mic{animation:chUp .45s cubic-bezier(.22,1,.36,1) both}
-#sheet.on .chs h3{animation-delay:.2s}#sheet.on .chs p{animation-delay:.26s}#sheet.on .chs .mic{animation-delay:.38s}
-.chs .chr{min-height:20px;margin:14px 8px 0;font-size:13.5px;color:var(--hint)}
+#sheet.on .chs h3,#sheet.on .chs p,#sheet.on .chs .act{animation:chUp .45s cubic-bezier(.22,1,.36,1) both}
+#sheet.on .chs h3{animation-delay:.2s}#sheet.on .chs p{animation-delay:.26s}#sheet.on .chs .act{animation-delay:.38s}
+.chs .chr{margin:0;font-size:13.5px;color:var(--hint)}
+.chs .chr:empty{display:none}
 .chs .chr.on{animation:chUp .4s cubic-bezier(.22,1,.36,1)}
-#chc{display:flex;gap:8px;justify-content:center;margin:12px 8px 0}
-#chc:empty{display:none}
-#chc button{height:44px;padding:0 16px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
-#chc .ok{background:var(--grn);color:var(--on)}
-#chc .no{background:var(--card);color:var(--tx);box-shadow:0 0 0 1px var(--ln)}
 @keyframes micPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--grn) 55%,transparent)}70%,100%{box-shadow:0 0 0 14px transparent}}
-@media (prefers-reduced-motion:reduce){#chw{animation:none}}
+@media (prefers-reduced-motion:reduce){#chw{animation:none}.chs .act button{transition:none!important}}
 /* ===== Оплаты: фильтр по ученику, сортировка, анимация новой оплаты ===== */
 .sbar2 .ib{width:42px}
 .stb{flex:1;min-width:0;height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:12px;background:var(--card);color:var(--tx);font-size:14px;font-weight:600;cursor:pointer;text-align:left;transition:background .2s,color .2s}
@@ -1187,22 +1196,58 @@ function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]}
   return c}
 var vc=null;   // состояние записи: {raf, stream, ctx, an}
 function chatOpen(){if($("#sheet.on .chs")){close_();return}vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Нажмите кнопку и скажите команду.</p>
-  <canvas class="eq" id="eq" aria-hidden="true"></canvas>
-  <button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><p class="chr" id="chr" aria-live="polite"></p>
-  <div id="chc"></div></div>`)}
-function chrBtns(confirm){const c=$("#chc");if(!c)return;c.innerHTML=confirm?`<button type="button" class="ok" onclick="voiceConfirm()">✅ Выполнить</button><button type="button" class="no" onclick="voiceCancel()">❌ Отмена</button>`:""}
-async function voiceConfirm(){chrBtns(false);const say=chrSay;say("Выполняю…");
+  <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+  <div class="chh" id="chh" aria-live="polite"></div>
+  <p class="chr" id="chr" aria-live="polite"></p></div>
+  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">✅ Выполнить</button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">❌ Отмена</button></div></div>`)}
+function chrBtns(confirm){const a=$("#cha");if(!a)return;confirm=!!confirm;a.classList.toggle("cf",confirm);   // микрофон плавно превращается в «Выполнить» / «Отмена» и обратно
+  for(const [id,off] of [["micb",confirm],["cok",!confirm],["cno",!confirm]]){const b=$("#"+id);if(b){b.inert=off;off&&id!=="micb"?b.setAttribute("aria-hidden","true"):b.removeAttribute("aria-hidden")}}}
+function chrHeard(t){const e=$("#chh");if(!e)return;e.classList.remove("on");e.textContent=t?"«"+t+"»":"";if(t){void e.offsetWidth;e.classList.add("on")}}
+async function voiceConfirm(){chrBtns(false);chrSay("Выполняю…");
   let r=null;try{r=await api("/api/voice_confirm",{})}catch(e){}
-  say(r&&r.reply?r.reply:"Не получилось выполнить");if(r&&r.ok)try{await load()}catch(e){}}
+  if(!(r&&r.ok)){chrSay(r&&r.reply?r.reply:"Не получилось выполнить");return}   // ошибка: окно остаётся, причина — в строке ответа
+  try{await voiceDone(r)}catch(e){close_();try{await load()}catch(_){}}}
+/* «Выполнить»: виджет плавно сворачивается, а на странице играет анимация того, что сделал помощник */
+async function voiceFold(){   // окно Вишенки опускается и гаснет (при «уменьшить анимацию» — сразу закрывается)
+  const sh=$("#sheet .sh:not(.fly)"),bd=$("#sheet .bd");
+  if(!REDUCE&&sh&&sh.animate){const o={duration:340,easing:"cubic-bezier(.5,0,.75,0)",fill:"forwards"};
+    try{await Promise.all([sh.animate([{transform:"none",opacity:1},{transform:"translateY(44px) scale(.94)",opacity:0}],o).finished,bd?bd.animate([{opacity:1},{opacity:0}],o).finished:0])}catch(e){}}
+  close_()}
+function voiceWeek(day){const dd=new Date(day+"T00:00");ws=mon(dd);mo=new Date(dd.getFullYear(),dd.getMonth(),1);tab="c"}
+async function voiceDone(r){const a=r.action,i=r.info||{};
+  if((a=="add_lesson"||a=="move_lesson")&&i.day){   // карточка летит в ячейку расписания, как при ручном добавлении
+    voiceWeek(i.day);await foldInto(i.day,+i.sid,i.time);
+    toast(i.skipped?"Часть повторов не поставлена — время занято: "+i.skipped:a=="move_lesson"?"Занятие перенесено":"Занятие добавлено");return}
+  if(a=="cancel_lesson"&&i.day){   // занятие в ячейке гаснет и исчезает
+    await voiceFold();voiceWeek(i.day);render();
+    const el=$(view=="m"?`.d[data-k="${i.day}"]`:`.ls[data-day="${i.day}"][data-sid="${i.sid}"][data-t="${i.time}"]`)||$(`.d[data-k="${i.day}"]`);
+    if(el){el.scrollIntoView({block:"center",inline:"center"});
+      if(!REDUCE&&view!="m"&&el.animate)try{await el.animate([{transform:"none",opacity:1},{transform:"scale(.55)",opacity:0}],{duration:460,easing:"cubic-bezier(.5,0,.75,0)",fill:"forwards"}).finished}catch(e){}
+      else{el.classList.add("pop");await sleep(REDUCE?0:520)}}
+    await load();toast("Занятие отменено");return}
+  if(a=="add_payment"&&i.pid){   // новая оплата появляется в ленте, потом — карточка «куда распределилась сумма»
+    await voiceFold();
+    if(pty=="debt")pty="all";if(pst!="all"&&pst!=i.sid)pst="all";
+    if(pd1&&!(iso(T)>=pd1&&iso(T)<=pd2))pd1=pd2="";
+    tab="p";pv="feed";fresh=i.pid;await load();
+    if(!P.find(x=>x.id==i.pid)){fresh=0;toast("Оплата принята: +"+money(i.amount)+" · "+stName(i.sid));return}
+    const el=$(".feed.fresh");if(el)el.scrollIntoView({block:"nearest",behavior:"smooth"});
+    clearTimeout(payAdd.h);payAdd.h=setTimeout(()=>{fresh=0;const e=$(".feed.fresh");if(e)e.classList.remove("fresh")},2600);
+    clearTimeout(payAdd.c);payAdd.c=setTimeout(()=>{if(tab=="p")payCard(i.pid,1)},1500);return}
+  if(a=="add_student"&&i.sid){   // новый ученик вспыхивает в списке
+    await voiceFold();tab="s";sq="";sg="all";await load();toast("Ученик добавлен: "+i.name);
+    const el=$(`.srow[onclick="card(${i.sid})"]`);
+    if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),800)}return}
+  await voiceFold();await load()}
 async function voiceCancel(){chrBtns(false);
   let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
   chrSay(r&&r.reply?r.reply:"Отменил — ничего не менял")}
-function voiceReply(r){const say=chrSay;say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
+function voiceReply(r){const say=chrSay;chrHeard(r&&r.heard||"");say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
 function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
 function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
 async function voiceToggle(){
   if(vc){voiceStop(true);return}
-  const me=vc={raf:0,lv:[]};micUi(true);
+  const me=vc={raf:0,lv:[]};chrHeard("");chrSay("");micUi(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}

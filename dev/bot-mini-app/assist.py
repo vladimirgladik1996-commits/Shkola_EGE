@@ -194,16 +194,20 @@ def lesson_id(day, t):
     return rows[0]
 
 
-def execute(action, p):
-    """Исполняет подтверждённое действие. Возвращает текст отчёта; проблемы — AssistError."""
+def execute(action, p, info=None):
+    """Исполняет подтверждённое действие. Возвращает текст отчёта; проблемы — AssistError.
+    info (dict, необязательно) заполняется тем, что изменилось, — мини-апп по нему запускает анимацию на странице."""
+    info = {} if info is None else info
     if action == "add_student":
         sid = bot.run("insert into students(name,price,grade,subject) values(?,?,?,?)",
                       p["name"], p.get("price") or 0, p.get("grade"), p.get("subject"))
+        info.update(sid=sid, name=p["name"])
         return bot.student_card(p["name"], p.get("grade"), p.get("subject"), p.get("price") or 0) + f"\nНомер: {sid}"
     if action == "add_lesson":
         res = bot.add_lesson(p["student"]["id"], p["day"], p["time"], p["regular"], p["dur"])
         if res is None:
             raise AssistError(f"⚠️ {bot.pretty(p['day'], p['time'])} — время занято или пересекается с другим занятием.")
+        info.update(sid=p["student"]["id"], day=p["day"], time=p["time"], skipped=res[1])
         text = (f"✅ Занятие добавлено\n👤 {p['student']['name']}\n📅 {bot.pretty(p['day'], p['time'])}, {p['dur']} мин")
         if p["regular"]:
             text += f"\n🔁 Регулярно каждую неделю"
@@ -214,13 +218,16 @@ def execute(action, p):
         l = lesson_id(p["day"], p["time"])
         if not bot.move_lesson(l["id"], p["new_day"], p["new_time"], p.get("dur")):
             raise AssistError(f"⚠️ {bot.pretty(p['new_day'], p['new_time'])} — время занято, перенос не сделан.")
+        info.update(sid=l["student_id"], day=p["new_day"], time=p["new_time"])
         return f"✅ Занятие перенесено: {bot.pretty(p['day'], p['time'])} → {bot.pretty(p['new_day'], p['new_time'])}"
     if action == "cancel_lesson":
         l = lesson_id(p["day"], p["time"])
         bot.cancel_lesson(l["id"])
+        info.update(sid=l["student_id"], day=p["day"], time=p["time"])
         return f"✅ Занятие отменено: {bot.pretty(p['day'], p['time'])}"
     if action == "add_payment":
         pid = bot.run("insert into payments(student_id,amount) values(?,?)", p["student"]["id"], p["amount"])
+        info.update(sid=p["student"]["id"], pid=pid, amount=p["amount"])
         return bot.pay_report(p["student"]["id"], pid, p["amount"])
     raise AssistError("Не знаю, как выполнить это действие.")
 
@@ -456,14 +463,15 @@ async def confirm_page(uid):
     if not p or p.get("phase") != "page_confirm":
         return {"ok": False, "reply": "Нечего подтверждать — команда устарела, повторите."}
     t = p["task"]
+    info = {}
     try:
-        report = execute(t["action"], t["params"])
+        report = execute(t["action"], t["params"], info)
     except AssistError as e:
         PENDING.pop(uid, None)
         return {"ok": False, "reply": str(e)}
     PENDING.pop(uid, None)
     log.info("assist: uid=%s (мини-апп) выполнил %s", uid, t["action"])
-    return {"ok": True, "reply": report}
+    return {"ok": True, "reply": report, "action": t["action"], "info": info}   # action+info: по ним мини-апп сворачивает виджет и играет анимацию
 
 
 def cancel_page(uid):

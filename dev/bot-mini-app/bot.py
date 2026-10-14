@@ -1760,7 +1760,7 @@ async def voice_handle(uid, ctx, audio, mime, text):
         text = heard
     res = await assist.handle_page(uid, text, ctx)
     if heard:
-        res = {**res, "reply": f"🎤 {heard}\n\n{res['reply']}"}
+        res = {**res, "heard": heard}   # расшифровка идёт отдельным полем: мини-апп показывает её над кнопками
     return res
 
 @guarded
