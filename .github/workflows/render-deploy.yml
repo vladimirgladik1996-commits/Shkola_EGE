@@ -1,0 +1,47 @@
+# Автодеплой на Render при пуше в main.
+#
+# Зачем: собственный вебхук Render не настроен (в репозитории нет ни одного
+# GitHub hook), поэтому autoDeploy в Render молчит, и прод отстаёт от main.
+# Этот workflow дёргает Render API сам.
+#
+# Нужен секрет репозитория RENDER_API_KEY (Render Dashboard → Account
+# Settings → API Keys, или настройки команды). Без него шаг упадёт с
+# понятной ошибкой авторизации.
+#
+# Сервисы:
+#   tutor-bot (prod, srv-db6eg0ajnfac73dfqv5g) — деплоится всегда;
+#   tutor-bot-dev (srv-db6045vlot8c738d39e0) — пропущен: сервис приостановлен
+#   по биллингу (suspenders: billing), деплой отклоняется API. Когда биллинг
+#   починят, можно раскомментировать второй шаг.
+name: render-deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: render-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy tutor-bot (prod)
+        run: |
+          resp=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/srv-db6eg0ajnfac73dfqv5g/deploys")
+          echo "$resp"
+          echo "$resp" | grep -q '"id"' || { echo "Render не создал деплой"; exit 1; }
+
+      # - name: Deploy tutor-bot-dev
+      #   continue-on-error: true
+      #   run: |
+      #     curl -s -X POST \
+      #       -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+      #       -H "Content-Type: application/json" \
+      #       -d '{"clearCache":"do_not_clear"}' \
+      #       "https://api.render.com/v1/services/srv-db6045vlot8c738d39e0/deploys"
