@@ -43,7 +43,6 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
-    private PermissionRequest micRequest;          // запрос микрофона из страницы, ждущий ответа пользователя
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
 
     @Override
@@ -101,7 +100,7 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
 
-        web.addJavascriptInterface(new ShareBridge(), "Android");   // «Поделиться PDF»: скачивание + системный chooser
+        web.addJavascriptInterface(new JsBridge(), "Android");   // «Поделиться PDF» + микрофон (см. JsBridge)
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -124,23 +123,28 @@ public class MainActivity extends Activity {
              *  молча отклоняет запрос. Разрешаем только звук и только нашему серверу, после системного запроса. */
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                String reqHost = request.getOrigin() == null ? null : request.getOrigin().getHost();
-                boolean ours = reqHost != null && reqHost.equals(Uri.parse(url).getHost());
-                boolean audio = false;
-                for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
-                if (!ours || !audio) { request.deny(); return; }
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
-                    return;
-                }
-                if (micRequest != null) micRequest.deny();       // прошлый запрос не завершился
-                micRequest = request;
-                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_PERM_REQ);
-            }
-
-            @Override
-            public void onPermissionRequestCanceled(PermissionRequest request) {
-                if (request == micRequest) micRequest = null;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        String reqHost = request.getOrigin() == null ? null : request.getOrigin().getHost();
+                        String nowUrl = web == null ? null : web.getUrl();
+                        String nowHost = nowUrl == null ? null : Uri.parse(nowUrl).getHost();
+                        boolean ours = reqHost != null && (reqHost.equals(Uri.parse(url).getHost()) || reqHost.equals(nowHost));
+                        boolean audio = false;
+                        for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                        if (!ours || !audio) { request.deny(); return; }
+                        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                            return;
+                        }
+                        // ВАЖНО: системный диалог поверх pending-запроса WebView отменяет его на части
+                        // устройств (onPermissionRequestCanceled), и getUserMedia падает без объяснений —
+                        // «Микрофон недоступен». Поэтому запрос страницы закрываем СРАЗУ, разрешение
+                        // просим отдельно, а страница повторяет нажатие (см. виджет: micStatus/askMic).
+                        request.deny();
+                        askMicPermission(true);
+                        Toast.makeText(MainActivity.this, "Разрешите микрофон — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
+                    }
+                });
             }
 
             @Override
@@ -189,49 +193,88 @@ public class MainActivity extends Activity {
             }
         });
 
-        // долгое нажатие — служебное меню (сменить адрес)
+        // долгое нажатие — служебное меню (сменить адрес);
+        // страница помечает нажатия на кнопках (window.__lpOnBtn), чтобы меню не выскакивало
+        // поверх виджета — раньше долгий тап по «Голосовая команда» открывал «Сменить адрес».
         web.setOnLongClickListener(v -> {
-            new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("Кабинет репетитора")
-                    .setItems(new String[]{"Сменить адрес сервера"}, (dlg, which) -> {
-                        prefs.edit().remove("url").apply();
-                        showSetup(url);
-                    })
-                    .setNegativeButton("Отмена", null)
-                    .show();
+            web.evaluateJavascript("window.__lpOnBtn===true", new ValueCallback<String>() {
+                public void onReceiveValue(String value) {
+                    if ("true".equals(value)) return;   // долгий тап по кнопке — не служебное меню
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Кабинет репетитора")
+                            .setItems(new String[]{"Сменить адрес сервера"}, (dlg, which) -> {
+                                prefs.edit().remove("url").apply();
+                                showSetup(url);
+                            })
+                            .setNegativeButton("Отмена", null)
+                            .show();
+                }
+            });
             return true;
         });
 
         web.loadUrl(url);
-        ensureMicPermission();
+        askMicPermission(false);
     }
 
     /**
-     * Микрофон лучше выдать заранее: если разрешения ещё нет, WebView зовёт
-     * onPermissionRequest и мы уводим фокус в системный диалог — часть устройств
-     * в это время отменяет запрос страницы (onPermissionRequestCanceled),
-     * и grant потом некому отдать: getUserMedia висит и падает без объяснений.
-     * С уже выданным разрешением onPermissionRequest отвечает синхронно.
-     * Спрашиваем один раз; «больше не спрашивать» уважаем.
+     * Запрос микрофона. Просим заранее: пока системный диалог открыт, страница
+     * НЕ должна держать pending-запрос getUserMedia — на части устройств такой
+     * конфликт отменяет запрос WebView, и запись падает без объяснений.
+     * force=false — предзапрос при открытии («больше не спрашивать» уважаем);
+     * force=true — явное нажатие кнопки в виджете (см. JsBridge.askMic).
      */
-    private void ensureMicPermission() {
+    private void askMicPermission(boolean force) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return;
-        if (prefs.getBoolean("micAsked", false)
+        if (!force && prefs.getBoolean("micAsked", false)
                 && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) return;
         prefs.edit().putBoolean("micAsked", true).apply();
         requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_PERM_REQ);
     }
 
     /**
-     * JS-мост «Поделиться PDF» (страница вызывает Android.sharePdf(url, name)).
-     * Файл скачивается через DownloadManager И по завершении загрузки открывается системное
-     * окно «Переслать файл». Методы моста вызываются из фонового потока — работу переносим в UI-поток.
+     * JS-мост для страницы (вызывается как Android.*):
+     *  - sharePdf(url, name) — «Поделиться PDF»: скачивание + системный chooser;
+     *  - micStatus() — состояние микрофона: granted / denied / prompt — виджет решает,
+     *    звать ли getUserMedia или сразу вести пользователя в настройки;
+     *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
+     *  - openSettings() — настройки приложения: включить микрофон после «больше не спрашивать».
+     * Методы моста вызываются из фонового потока — работу переносим в UI-поток.
      */
-    private class ShareBridge {
+    private class JsBridge {
         @JavascriptInterface
         public void sharePdf(final String url, final String name) {
             runOnUiThread(new Runnable() {
                 public void run() { startShare(url, name, 0); }
+            });
+        }
+
+        @JavascriptInterface
+        public String micStatus() {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return "granted";
+            if (prefs.getBoolean("micAsked", false)
+                    && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) return "denied";
+            return "prompt";
+        }
+
+        @JavascriptInterface
+        public void askMic() {
+            runOnUiThread(new Runnable() {
+                public void run() { askMicPermission(true); }
+            });
+        }
+
+        @JavascriptInterface
+        public void openSettings() {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    try {
+                        startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (Exception e) {
+                        Toast.makeText(MainActivity.this, "Откройте настройки приложения и включите микрофон", Toast.LENGTH_LONG).show();
+                    }
+                }
             });
         }
     }
@@ -335,23 +378,18 @@ public class MainActivity extends Activity {
             try { unregisterReceiver(r); } catch (Exception ignored) {}
         }
         shareReceivers.clear();
-        if (micRequest != null) { micRequest.deny(); micRequest = null; }
         super.onDestroy();
     }
 
-    /** Ответ пользователя на системный запрос микрофона → обратно в страницу. */
+    /** Ответ пользователя на системный запрос микрофона. Страница у него pending-запроса не держит — просто подсказываем следующий шаг. */
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != MIC_PERM_REQ) return;
         boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-        PermissionRequest r = micRequest;
-        micRequest = null;
-        if (r == null) return;                     // предзапрос при открытии кабинета — страница ещё не просила
         if (granted) {
-            r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            Toast.makeText(this, "Микрофон разрешён — нажмите кнопку ещё раз", Toast.LENGTH_SHORT).show();
         } else {
-            r.deny();
             Toast.makeText(this, "Нет доступа к микрофону — включите его в настройках приложения", Toast.LENGTH_LONG).show();
         }
     }

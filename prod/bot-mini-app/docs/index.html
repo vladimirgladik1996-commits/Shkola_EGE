@@ -1245,13 +1245,38 @@ async function voiceCancel(){chrBtns(false);
 function voiceReply(r){const say=chrSay;chrHeard(r&&r.heard||"");say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
 function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
 function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
+let micFix=0;
+function micSettings(){micFix=1;const b=$("#micb");if(b){b.classList.remove("rec");b.innerHTML="⚙️<span>Микрофон в настройках</span>"}const e=$("#eq");if(e)e.classList.remove("on")}
+function micOpen(){const A=window.Android;
+  if(A&&A.openSettings){A.openSettings();chrSay("Включите микрофон в настройках — и вернитесь сюда")}
+  else chrSay("Откройте настройки приложения «Надежда» → Разрешения → Микрофон")}
 async function voiceToggle(){
+  chrHeard("");   // новая попытка — старая расшифровка не должна висеть над кнопками
+  if(micFix){const A=window.Android;
+    if(A&&A.micStatus&&A.micStatus()==="granted"){micFix=0;micUi(false);chrSay("")}   // вернулись из настроек — сразу записываем
+    else{micOpen();return}}
   if(vc){voiceStop(true);return}
-  const me=vc={raf:0,lv:[]};chrHeard("");chrSay("");micUi(true);
+  const A=window.Android||{};
+  if(A.micStatus){   // APK-обёртка сообщает состояние микрофона до getUserMedia — без гонок с системным диалогом
+    const st=A.micStatus();
+    if(st==="denied"){micSettings();chrSay("Микрофон выключен в настройках приложения — включите его и нажмите ещё раз");return}
+    if(st==="prompt"){if(A.askMic)A.askMic();chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}}
+  const me=vc={raf:0,lv:[]};chrSay("");micUi(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
-  let stream;
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}
-  catch(e){vc=null;micUi(false);chrSay(e&&e.name==="NotAllowedError"?"Нет доступа к микрофону — разрешите его в настройках приложения":"Микрофон недоступен — проверьте разрешения приложения");return}
+  let stream=null,err=null;
+  for(let k=0;k<2;k++){   // одна повторная попытка: WebView на части устройств падает сразу после выдачи разрешения
+    try{stream=await navigator.mediaDevices.getUserMedia({audio:true});err=null;break}
+    catch(e){err=e;if(k===0&&A.micStatus&&A.micStatus()==="granted"){await new Promise(r=>setTimeout(r,400));continue}break}}
+  if(!stream){vc=null;micUi(false);
+    const n=(err&&err.name)||"";
+    let msg=n==="NotAllowedError"?"Нет доступа к микрофону — разрешите его в настройках приложения"
+      :n==="NotFoundError"?"Микрофон не найден на этом устройстве"
+      :n==="NotReadableError"?"Микрофон занят другим приложением — закройте его и попробуйте ещё раз"
+      :"Микрофон недоступен — проверьте разрешения приложения";
+    if(n&&n!=="NotAllowedError")msg+=" (код: "+n+")";   // точный код ошибки — диагностика с первого раза
+    chrSay(msg);
+    if(n==="NotAllowedError"||(A.micStatus&&A.micStatus()==="denied"))micSettings();
+    return}
   if(vc!==me){stream.getTracks().forEach(t=>t.stop());return}
   me.stream=stream;
   try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),an=ctx.createAnalyser();an.fftSize=128;an.smoothingTimeConstant=.6;
@@ -1348,6 +1373,12 @@ try{tg.BackButton.onClick(()=>setNav(false))}catch(e){}
   d.addEventListener("touchstart",e=>{sx=e.touches[0].clientX},{passive:true});
   d.addEventListener("touchend",e=>{if(sx!==null&&e.changedTouches[0].clientX-sx<-60)setNav(false);sx=null},{passive:true})})();
 addEventListener("scroll",()=>{const t=$("#top");if(t)t.classList.toggle("scr",scrollY>4)},{passive:true});
+// долгий тап по кнопкам — не служебное меню обёртки (см. MainActivity: window.__lpOnBtn);
+// иначе зажатие «Голосовая команда» открывало диалог «Сменить адрес сервера»
+const lpMark=e=>{window.__lpOnBtn=!!(e.target.closest&&e.target.closest("button,a,input,select,textarea,[onclick]"))};
+document.addEventListener("touchstart",lpMark,{passive:true});
+document.addEventListener("mousedown",lpMark,{passive:true});
+document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest("button,a,input,select,textarea"))e.preventDefault()});
 addEventListener("resize",syncNav);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(syncNav);
 load();
 </script></body></html>
