@@ -1250,32 +1250,38 @@ function micSettings(){micFix=1;const b=$("#micb");if(b){b.classList.remove("rec
 function micOpen(){const A=window.Android;
   if(A&&A.openSettings){A.openSettings();chrSay("Включите микрофон в настройках — и вернитесь сюда")}
   else chrSay("Откройте настройки приложения «Надежда» → Разрешения → Микрофон")}
+/* старая обёртка APK (без моста micStatus) — единственный честный выход: обновить приложение.
+   Кнопка превращается в «Обновить приложение»: кабинет отдаёт свежий APK по своему адресу (/apk) */
+function micUpdate(){micFix=2;const b=$("#micb");if(b){b.classList.remove("rec");b.innerHTML="⬇️<span>Обновить приложение</span>"}const e=$("#eq");if(e)e.classList.remove("on")}
 async function voiceToggle(){
   chrHeard("");   // новая попытка — старая расшифровка не должна висеть над кнопками
-  if(micFix){const A=window.Android;
-    if(A&&A.micStatus&&A.micStatus()==="granted"){micFix=0;micUi(false);chrSay("")}   // вернулись из настроек — сразу записываем
+  const A=window.Android||{},oldWrap=!!(A.sharePdf&&!A.micStatus);   // APK со старой обёрткой — просим обновить приложение
+  const micSt=()=>{try{return A.micStatus?A.micStatus():null}catch(e){return null}};   // мост старых версий может бросать — гасим
+  if(micFix===2){location.href=(API_BASE||location.origin)+"/apk";return}   // «Обновить приложение»: скачиваем свежий APK
+  if(micFix){if(micSt()==="granted"){micFix=0;micUi(false);chrSay("")}   // вернулись из настроек — сразу записываем
     else{micOpen();return}}
   if(vc){voiceStop(true);return}
-  const A=window.Android||{};
-  if(A.micStatus){   // APK-обёртка сообщает состояние микрофона до getUserMedia — без гонок с системным диалогом
-    const st=A.micStatus();
-    if(st==="denied"){micSettings();chrSay("Микрофон выключен в настройках приложения — включите его и нажмите ещё раз");return}
-    if(st==="prompt"){if(A.askMic)A.askMic();chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}}
+  const st=micSt();   // APK-обёртка сообщает состояние микрофона до getUserMedia — без гонок с системным диалогом
+  if(st==="denied"){micSettings();chrSay("Микрофон выключен в настройках приложения — включите его и нажмите ещё раз");return}
+  if(st==="prompt"){if(A.askMic)try{A.askMic()}catch(e){}chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}
   const me=vc={raf:0,lv:[]};chrSay("");micUi(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
   let stream=null,err=null;
-  for(let k=0;k<2;k++){   // одна повторная попытка: WebView на части устройств падает сразу после выдачи разрешения
+  const tries=A.micStatus?2:3;   // повторные попытки: WebView на части устройств падает сразу после выдачи разрешения; старая обёртка состояние не сообщает — пробуем дольше
+  for(let k=0;k<tries;k++){
     try{stream=await navigator.mediaDevices.getUserMedia({audio:true});err=null;break}
-    catch(e){err=e;if(k===0&&A.micStatus&&A.micStatus()==="granted"){await new Promise(r=>setTimeout(r,400));continue}break}}
+    catch(e){err=e;if(k<tries-1){await new Promise(r=>setTimeout(r,400));continue}break}}
   if(!stream){vc=null;micUi(false);
     const n=(err&&err.name)||"";
     let msg=n==="NotAllowedError"?"Нет доступа к микрофону — разрешите его в настройках приложения"
       :n==="NotFoundError"?"Микрофон не найден на этом устройстве"
       :n==="NotReadableError"?"Микрофон занят другим приложением — закройте его и попробуйте ещё раз"
       :"Микрофон недоступен — проверьте разрешения приложения";
-    if(n&&n!=="NotAllowedError")msg+=" (код: "+n+")";   // точный код ошибки — диагностика с первого раза
+    if(n)msg+=" (код: "+n+")";   // точный код ошибки — диагностика с первого раза
+    if(oldWrap)msg+=" · Приложение устарело — нажмите «Обновить приложение», установите скачанный файл и вернитесь сюда";
     chrSay(msg);
-    if(n==="NotAllowedError"||(A.micStatus&&A.micStatus()==="denied"))micSettings();
+    if(oldWrap)micUpdate();
+    else if(n==="NotAllowedError"||micSt()==="denied")micSettings();
     return}
   if(vc!==me){stream.getTracks().forEach(t=>t.stop());return}
   me.stream=stream;

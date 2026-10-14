@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
@@ -41,6 +42,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
     private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
+    private float lpX, lpY;                         // точка последнего касания — для elementFromPoint при долгом тапе
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
@@ -96,6 +98,9 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);          // localStorage: токен входа
         s.setDatabaseEnabled(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        // страница всегда с сервера: кэш WebView не должен отдать старый фронт после редеплоя —
+        // иначе обновлённый APK работает со старой страницей и её старыми обработчиками
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
@@ -125,24 +130,28 @@ public class MainActivity extends Activity {
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        String reqHost = request.getOrigin() == null ? null : request.getOrigin().getHost();
-                        String nowUrl = web == null ? null : web.getUrl();
-                        String nowHost = nowUrl == null ? null : Uri.parse(nowUrl).getHost();
-                        boolean ours = reqHost != null && (reqHost.equals(Uri.parse(url).getHost()) || reqHost.equals(nowHost));
-                        boolean audio = false;
-                        for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
-                        if (!ours || !audio) { request.deny(); return; }
-                        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
-                            return;
+                        try {
+                            String reqHost = request.getOrigin() == null ? null : request.getOrigin().getHost();
+                            String nowUrl = web == null ? null : web.getUrl();
+                            String nowHost = nowUrl == null ? null : Uri.parse(nowUrl).getHost();
+                            boolean ours = reqHost != null && (reqHost.equals(Uri.parse(url).getHost()) || reqHost.equals(nowHost));
+                            boolean audio = false;
+                            for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                            if (!ours || !audio) { request.deny(); return; }
+                            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                                return;
+                            }
+                            // ВАЖНО: системный диалог поверх pending-запроса WebView отменяет его на части
+                            // устройств (onPermissionRequestCanceled), и getUserMedia падает без объяснений —
+                            // «Микрофон недоступен». Поэтому запрос страницы закрываем СРАЗУ, разрешение
+                            // просим отдельно, а страница повторяет нажатие (см. виджет: micStatus/askMic).
+                            request.deny();
+                            askMicPermission(true);
+                            Toast.makeText(MainActivity.this, "Разрешите микрофон — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
+                        } catch (Exception ignored) {
+                            // запрос WebView мог быть уже отменён (onPermissionRequestCanceled) — не роняем приложение
                         }
-                        // ВАЖНО: системный диалог поверх pending-запроса WebView отменяет его на части
-                        // устройств (onPermissionRequestCanceled), и getUserMedia падает без объяснений —
-                        // «Микрофон недоступен». Поэтому запрос страницы закрываем СРАЗУ, разрешение
-                        // просим отдельно, а страница повторяет нажатие (см. виджет: micStatus/askMic).
-                        request.deny();
-                        askMicPermission(true);
-                        Toast.makeText(MainActivity.this, "Разрешите микрофон — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -196,10 +205,23 @@ public class MainActivity extends Activity {
         // долгое нажатие — служебное меню (сменить адрес);
         // страница помечает нажатия на кнопках (window.__lpOnBtn), чтобы меню не выскакивало
         // поверх виджета — раньше долгий тап по «Голосовая команда» открывал «Сменить адрес».
+        // Страховка не только на флаг страницы (он есть не во всех версиях фронта): открыта ли
+        // шторка (#sheet.on) и что лежит под пальцем (elementFromPoint по точке касания).
+        web.setOnTouchListener((v, ev) -> {
+            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) { lpX = ev.getX(); lpY = ev.getY(); }
+            return false;   // не перехватываем — касания обрабатывает сам WebView
+        });
         web.setOnLongClickListener(v -> {
-            web.evaluateJavascript("window.__lpOnBtn===true", new ValueCallback<String>() {
+            float scale = web.getScale() > 0 ? web.getScale() : 1f;
+            final String js = "(function(){try{"
+                    + "if(window.__lpOnBtn===true)return true;"
+                    + "if(document.querySelector('#sheet.on'))return true;"
+                    + "var e=document.elementFromPoint(" + ((lpX + web.getScrollX()) / scale) + "," + ((lpY + web.getScrollY()) / scale) + ");"
+                    + "return !!(e&&e.closest&&e.closest('button,a,input,select,textarea,[onclick]'));"
+                    + "}catch(x){return false}})()";
+            web.evaluateJavascript(js, new ValueCallback<String>() {
                 public void onReceiveValue(String value) {
-                    if ("true".equals(value)) return;   // долгий тап по кнопке — не служебное меню
+                    if ("true".equals(value)) return;   // долгий тап по кнопке/шторке — не служебное меню
                     new AlertDialog.Builder(MainActivity.this)
                             .setTitle("Кабинет репетитора")
                             .setItems(new String[]{"Сменить адрес сервера"}, (dlg, which) -> {
