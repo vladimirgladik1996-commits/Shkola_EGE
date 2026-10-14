@@ -1474,6 +1474,21 @@ async def api_data(request):
         join students s on s.id=p.student_id order by p.id desc limit 200""")]
     return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR, "env": APP_ENV})
 
+MATERIALS = {   # id → файл в materials/ (раздел «Материалы» мини-аппа и APK)
+    "oge-essays-2027": "oge-essays-2027.html",
+    "ege-essays-2027": "ege-essays-2027.html",
+}
+
+@guarded
+async def api_material(request):
+    """Отдаёт HTML материала только после входа (X-Init / X-Session), как и остальные /api/*.
+    Страница открывается во фрейме мини-аппа: фронт забирает её с заголовками и показывает через blob-URL."""
+    name = MATERIALS.get(request.match_info["mid"])
+    if name is None:
+        raise ValueError
+    return web.FileResponse(os.path.join(HERE, "materials", name),
+                            headers={"Cache-Control": "private, max-age=3600", "Content-Type": "text/html; charset=utf-8"})
+
 def user_id(request):
     """Кто спрашивает: из подписи initData (Telegram), из токена X-Session (standalone)
     или из подписной ссылки на PDF (?tok=)."""
@@ -1843,6 +1858,7 @@ def make_app():
     app.router.add_get("/apk/kabinet-repetitora.apk", api_apk)
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
+    app.router.add_get("/api/materials/{mid}", api_material)
     app.router.add_get("/api/pdf_link", api_pdf_link)
     app.router.add_post("/api/pdf_link", api_pdf_link)   # POST — для закэшированной страницы, см. api_pdf_link
     app.router.add_post("/api/week/send", api_week_send)
