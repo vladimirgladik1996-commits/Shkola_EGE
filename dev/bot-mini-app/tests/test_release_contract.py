@@ -65,7 +65,8 @@ def main():
     other_name = "prod" if HERE == "dev" else "dev"
     other = os.path.join(REPO, other_name, "bot-mini-app")
     if os.path.isdir(other):
-        skip = {".env.example", "DEPLOY.md", "deploy.sh", "__pycache__", "data", "backups", ".pytest_cache"}
+        skip = {".env.example", "DEPLOY.md", "deploy.sh", "__pycache__", "data", "backups", ".pytest_cache",
+                "kabinet-repetitora.apk"}   # APK в docs/ у dev и prod разные (как и сборки) — сверяется отдельно ниже
         diffs = []
         for a, b, tag in ((ROOT, other, other_name), (other, ROOT, HERE)):
             for dirpath, dirnames, filenames in os.walk(a):
@@ -113,6 +114,13 @@ def main():
     assert re.fullmatch(r"[0-9a-fA-F:]{64,95}", pin), \
         "apk-sign/SHA256.txt должен содержать отпечаток ключа подписи (64 hex) — CI сверяет его с подписью APK"
     ok("отпечаток ключа подписи закреплён в apk-sign/SHA256.txt")
+
+    # 6в. кабинет отдаёт APK со своего адреса: копия в docs/ не отстаёт от сборки
+    srv = os.path.join(ROOT, "docs", "kabinet-repetitora.apk")
+    assert os.path.exists(srv), "нет docs/kabinet-repetitora.apk — ссылка на скачивание с домена кабинета не работает"
+    assert read(srv, True) == read(os.path.join(apk, "kabinet-repetitora.apk"), True), \
+        "docs/kabinet-repetitora.apk отстаёт от текущей сборки — обновите копию (так делает CI)"
+    ok("кабинет отдаёт APK со своего адреса (docs/kabinet-repetitora.apk = текущая сборка)")
 
     # 7. workflow-файлы не должны снова стать невалидным YAML:
     #    двоеточие с пробелом внутри plain-скалара ломает парсер GitHub Actions

@@ -6,7 +6,10 @@ src = open(os.path.join(ROOT, "bot.py"), encoding="utf-8").read()
 tree = ast.parse(src)
 
 api = [n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name.startswith("api_")]
-assert not [n.name for n in api if not any(getattr(d, "id", "") == "guarded" for d in n.decorator_list)]
+PUBLIC = {"api_apk"}   # отдача APK со своего домена — публична (бинарь бесполезен без входа в кабинет);
+                       # исключение намеренное и единственное: всё, что трогает данные — под @guarded
+assert not [n.name for n in api if n.name not in PUBLIC
+            and not any(getattr(d, "id", "") == "guarded" for d in n.decorator_list)]
 routes = re.findall(r'add_(?:get|post)\("([^"]+)", (\w+|lambda)', src)
 assert not [(p, h) for p, h in routes if not (h.startswith("api_") or p == "/")]
 print(f"✓ все {len(api)} API-обработчиков под @guarded, других открытых маршрутов нет")

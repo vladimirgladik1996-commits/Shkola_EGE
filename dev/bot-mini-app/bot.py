@@ -1826,10 +1826,21 @@ async def cors_mw(request, handler):
     return resp
 
 
+async def api_apk(_request):
+    """APK приложения для скачивания — отдаётся с того же адреса, что и кабинет.
+
+    Файл лежит в docs/ (его кладёт и обновляет CI рядом со сборкой),
+    поэтому ссылка всегда ведёт на актуальную версию."""
+    return web.FileResponse(os.path.join(HERE, "docs", "kabinet-repetitora.apk"),
+                            headers={"Content-Disposition": 'attachment; filename="kabinet-repetitora.apk"'})
+
+
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
+    app.router.add_get("/apk", api_apk)
+    app.router.add_get("/apk/kabinet-repetitora.apk", api_apk)
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_get("/api/pdf_link", api_pdf_link)
