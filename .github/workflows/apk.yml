@@ -1,7 +1,11 @@
 # Сборка APK (prod + dev) автоматически: подпись ключом из секретов,
-# номер версии растёт и коммитится обратно, готовые APK крепятся к релизу
-# «apk-latest» (файлы в релизе заменяются новой сборкой) и остаются
-# артефактами запуска.
+# номер версии растёт и коммитится обратно (вместе с «текущим» APK в корне
+# */apk/), готовые APK крепятся к релизу «apk-latest» (файлы в релизе
+# заменяются новой сборкой) и остаются артефактами запуска.
+#
+# Отпечаток ключа подписи закреплён в apk-sign/SHA256.txt: сборка ПАДАЕТ,
+# если подпись другая — иначе обновления поверх установленного APK молча
+# ломаются (ключи уже терялись и менялись, см. RELEASE.md, п. 4).
 #
 # Секреты репозитория (Settings → Secrets and variables → Actions):
 #   APK_KEYSTORE_B64  — base64 от keystore.jks (или .p12) ключа подписи
@@ -108,14 +112,30 @@ jobs:
           KEYSTORE_PASS: ${{ env.KEYSTORE_PASS }}
         run: sh build.sh
 
+      - name: "Проверка ключа подписи: отпечаток должен совпадать с apk-sign/SHA256.txt"
+        run: |
+          set -e
+          PIN="$(tr -d '[:space:]' < apk-sign/SHA256.txt | tr 'a-f' 'A-F')"
+          for d in prod/apk dev/apk; do
+            FP="$(keytool -printcert -jarfile "$d/kabinet-repetitora.apk" | grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}' | head -1 | tr -d ':')"
+            echo "$d: отпечаток ключа подписи $FP"
+            if [ "$FP" != "$PIN" ]; then
+              echo "::error::Ключ подписи $d изменился ($FP, ожидался $PIN). Обновления поверх установленного APK сломаются. Если прежний ключ действительно потерян — вручную замените отпечаток в apk-sign/SHA256.txt (пользователям понадобится переустановка)."
+              exit 1
+            fi
+          done
+          echo "Ключ подписи прежний: обновления поверх старых APK работают."
+
       - name: Номера версий и история APK — коммит обратно в репозиторий
         continue-on-error: true   # если push запрещён (защита ветки / права workflow) — релиз всё равно собираем
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add prod/apk/version-code dev/apk/version-code prod/apk/releases dev/apk/releases apk-sign
+          # включая «текущий» APK в корне */apk/ — чтобы kabinet-repetitora.apk не отставал
+          # от истории (build/ и keystore.* исключены в .gitignore)
+          git add prod/apk dev/apk apk-sign
           if ! git diff --cached --quiet; then
-            git commit -m "apk: сборка $(cat prod/apk/version-code) [skip ci]"
+            git commit -m "apk: сборка prod $(( $(cat prod/apk/version-code) - 1 )), dev $(( $(cat dev/apk/version-code) - 1 )) [skip ci]"
             git push
           fi
 
@@ -138,3 +158,15 @@ jobs:
           tag_name: apk-latest
           name: APK — последняя сборка
           files: dist/*.apk
+
+      - name: "Уборка релиза: удалить старый общий файл kabinet-repetitora.apk"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ID="$(gh api "repos/${{ github.repository }}/releases/tags/apk-latest" \
+            --jq '.assets[] | select(.name == "kabinet-repetitora.apk") | .id' 2>/dev/null || true)"
+          if [ -n "$ID" ]; then
+            gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$ID" && echo "старый артефакт удалён (id $ID)"
+          else
+            echo "старого общего артефакта в релизе нет — удалять нечего"
+          fi

@@ -95,6 +95,25 @@ def main():
         "build.sh должен складывать собранные APK в releases/ с номером версии"
     ok(f"APK на месте (version-code {vc}); сборка складывает версии в apk/releases/; ключ подписи — вне git")
 
+    # 6а. «текущий APK» не отстаёт от истории сборок (раньше отставал — CI коммитил только releases/)
+    rel_dir = os.path.join(apk, "releases")
+    rels = [f for f in os.listdir(rel_dir) if re.fullmatch(r"kabinet-repetitora-\d+\.apk", f)] \
+        if os.path.isdir(rel_dir) else []
+    assert rels, "apk/releases/ пуст — история сборок потеряна"
+    newest = max(rels, key=lambda f: int(re.search(r"(\d+)\.apk", f).group(1)))
+    assert read(os.path.join(apk, "kabinet-repetitora.apk"), True) == read(os.path.join(rel_dir, newest), True), \
+        f"apk/kabinet-repetitora.apk отстаёт от последней сборки releases/{newest} — скопируйте свежий APK в корень (так делают build.sh и CI)"
+    n = int(re.search(r"(\d+)\.apk", newest).group(1))
+    assert int(vc) == n + 1, f"version-code ({vc}) должен указывать на следующую сборку ({n} + 1)"
+    ok(f"текущий APK = последняя сборка releases/{newest}; version-code {vc} — следующий")
+
+    # 6б. отпечаток ключа подписи закреплён — тихая смена ключа ломает обновления поверх старых APK
+    pin_path = os.path.join(REPO, "apk-sign", "SHA256.txt")
+    pin = read(pin_path).strip() if os.path.exists(pin_path) else ""
+    assert re.fullmatch(r"[0-9a-fA-F:]{64,95}", pin), \
+        "apk-sign/SHA256.txt должен содержать отпечаток ключа подписи (64 hex) — CI сверяет его с подписью APK"
+    ok("отпечаток ключа подписи закреплён в apk-sign/SHA256.txt")
+
     # 7. workflow-файлы не должны снова стать невалидным YAML:
     #    двоеточие с пробелом внутри plain-скалара ломает парсер GitHub Actions
     #    (run падает сразу, 0 jobs, и всё молча не собирается — так и было с apk.yml).
