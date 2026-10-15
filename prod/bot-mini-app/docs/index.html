@@ -933,19 +933,17 @@ function allocate(sid){
     res[p.id]={list,left}});
   return res}
 function payCard(id,isNew){
-  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at);
-  const G={d:[],t:[],f:[]};
-  a.list.forEach(x=>{const k=x.l.day<pd?"d":x.l.day==pd?"t":"f",full=x.covered>=x.l.price;
-    G[k].push(`<div class="row" style="cursor:default;align-items:flex-start"><span class="info"><b>${dmy2(x.l.day)}</b>${full?"":`<small style="display:block">${k=="f"?"Частичная предоплата":"Частичная оплата"}: ${money(x.covered)} из ${money(x.l.price)}</small>`}</span><b>${money(x.l.price)}</b></div>`)});
-  const sec=(t,k,extra="")=>G[k].length||extra?`<h2>${t}</h2>${G[k].join("")}${extra}`:"";
-  const left=a.left>0?`<div class="row" style="cursor:default;align-items:flex-start"><span class="info"><b>Остаток без занятия</b><small style="display:block">Пока нет занятий, на которые его можно списать — останется предоплатой</small></span><b class="pos">+${money(a.left)}</b></div>`:"";
-  const body=sec("Долги","d")+sec("Сегодня","t")+sec("Предоплаты","f",left)||'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
-  const bl=s.b==0?money(0):(s.b>0?"+":"−")+money(s.b);
-  open(`<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${isNew?"✅ Пополнение прошло успешно":esc(s.name)}</h3><p class="sub" style="margin:0">${isNew?esc(s.name):"Оплата · "+when(p.at)}</p></div></div>
+  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at),gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
+  const row=(info,amt,cls="")=>`<div class="row" style="cursor:default;align-items:flex-start"><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
+  /* одним списком: дата и время урока, чем он закрыт, и сколько именно списано с ЭТОЙ оплаты */
+  const items=a.list.map(x=>{const full=x.covered>=x.l.price,k=x.l.day<pd?"Закрыт долг":x.l.day==pd?"Занятие сегодня":"Предоплата";
+    return row(`<b>${dmy2(x.l.day)}, ${x.l.time}</b><small style="display:block">${k}${full?"":` · оплачено ${money(x.covered)} из ${money(x.l.price)}`}</small>`,"−"+money(x.take))}).join("");
+  const left=a.left>0?row(`<b>Остаток без занятия</b><small style="display:block">Пока нет занятий, на которые его можно списать</small>`,"+"+money(a.left),"pos"):"";
+  const body=items+left||'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
+  open(`${isNew?'<p class="sub" style="margin:0 0 10px;color:var(--grn);font-weight:700">✅ Пополнение прошло успешно</p>':""}<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${esc(s.name)}</h3><p class="sub" style="margin:0">${esc(gr)}</p></div></div>
   <div class="stat" style="margin:14px 0 4px"><small>Сумма пополнения</small><b class="pos" style="font-size:24px">+${money(p.amt)}</b></div>
+  <div class="stat" style="margin:4px 0"><small>Дата пополнения</small><b>${when(p.at)}</b></div>
   <h2 style="margin-top:14px">На что распределилась сумма</h2>${body}
-  <div class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}">Баланс: ${bl}</div>
-  <p class="gcap">${s.b<0?"Есть долги":s.b>0?"Есть предоплаты":"Все оплачено, долгов нет"}</p>
   <div class="btns">${isNew?'<button class="btn pri" onclick="close_()">Готово</button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div>`)}
 function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-label="Назад" onclick="payCard(${id})">‹</button><h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
