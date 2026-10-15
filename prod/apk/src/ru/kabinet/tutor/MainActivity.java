@@ -15,6 +15,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Looper;
+import android.util.Base64;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,9 +35,15 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 /** Обёртка кабинета репетитора: WebView поверх того же адреса, что и мини-апп. */
 public class MainActivity extends Activity {
@@ -46,6 +54,10 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
+    private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
+    private File micFile;
+    private long micT0;
+    private boolean webPaused;                      // WebView приостановлен (onPause) — не гасить его повторно
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -299,6 +311,148 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        /** Диагностика для виджета: кто реально держит микрофон, не идёт ли вызов — факты вместо «занят другим приложением». */
+        @JavascriptInterface
+        public String micDiag() {
+            try {
+                return micDiagUi();
+            } catch (Exception e) {
+                return "диагностика недоступна: " + e.getClass().getSimpleName();
+            }
+        }
+
+        /**
+         * Нативная запись голоса: start / stop (готовый файл в base64) / cancel.
+         * WebView на части устройств не может поднять микрофон (getUserMedia → NotReadableError),
+         * хотя обычные приложения пишут звук без проблем — тогда страница пишет через этот мост.
+         */
+        @JavascriptInterface
+        public String nativeRec(final String action) {
+            try {
+                return callOnUi(new Callable<String>() {
+                    public String call() { return nativeRecUi(action); }
+                });
+            } catch (Exception e) {
+                return "{\"ok\":false,\"err\":\"" + e.getClass().getSimpleName() + "\"}";
+            }
+        }
+    }
+
+    /** Выполнить на UI-потоке и дождаться результата. JS-мост работает в фоновом потоке, а MediaRecorder — только из UI. */
+    private String callOnUi(Callable<String> c) throws Exception {
+        if (Looper.myLooper() == Looper.getMainLooper()) return c.call();
+        FutureTask<String> ft = new FutureTask<>(c);
+        runOnUiThread(ft);
+        return ft.get(5, TimeUnit.SECONDS);
+    }
+
+    /** Кто держит микрофон, включён ли mute и не идёт ли вызов — факты вместо «занят другим приложением». */
+    private String micDiagUi() {
+        AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (am == null) return "аудиосервис недоступен";
+        StringBuilder sb = new StringBuilder();
+        sb.append("активная запись: ");
+        List<AudioRecordingConfiguration> cfgs = am.getActiveRecordingConfigurations();
+        if (cfgs.isEmpty()) sb.append("не видно (Android скрывает чужие записи, или их нет)");
+        else for (AudioRecordingConfiguration c : cfgs) {
+            String pkg = "?";
+            String[] pkgs = getPackageManager().getPackagesForUid(c.getClientUid());
+            if (pkgs != null && pkgs.length > 0) pkg = pkgs[0];
+            sb.append(pkg).append(" (источник ").append(c.getClientAudioSource()).append(") ");
+        }
+        sb.append(" · микрофон заглушён: ").append(am.isMicrophoneMute() ? "да" : "нет");
+        int mode = am.getMode();
+        String[] modes = {"норма", "рингтон", "телефонный вызов", "VoIP-вызов"};
+        sb.append(" · режим звука: ").append(mode >= 0 && mode < modes.length ? modes[mode] : String.valueOf(mode));
+        return sb.toString();
+    }
+
+    /* ===== Нативная запись голоса (см. JsBridge.nativeRec) =====
+       Пишем через системный MediaRecorder — тот же путь, что и у приложений-рекордеров, —
+       и отдаём странице готовый файл. getUserMedia остаётся основным путём, это запасной. */
+    private String nativeRecUi(String action) {
+        if ("cancel".equals(action)) { releaseNativeRec(true); return "{\"ok\":true}"; }
+        if ("stop".equals(action)) {
+            if (micRec == null) return "{\"ok\":false,\"err\":\"not-recording\"}";
+            try {
+                micRec.stop();
+            } catch (Exception e) {
+                releaseNativeRec(true);
+                return "{\"ok\":false,\"err\":\"stop-failed\"}";
+            }
+            String b64;
+            long dur = Math.max(1, (System.currentTimeMillis() - micT0) / 1000);
+            try {
+                b64 = readB64(micFile);
+            } catch (Exception e) {
+                releaseNativeRec(true);
+                return "{\"ok\":false,\"err\":\"read-failed\"}";
+            }
+            releaseNativeRec(true);
+            return "{\"ok\":true,\"audio\":\"" + b64 + "\",\"mime\":\"audio/mp4\",\"dur\":" + dur + "}";
+        }
+        if (!"start".equals(action)) return "{\"ok\":false,\"err\":\"bad-action\"}";
+        if (micRec != null) return "{\"ok\":true}";                        // уже пишем
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            askMicPermission(true);
+            return "{\"ok\":false,\"err\":\"noperm\"}";
+        }
+        File dir = getCacheDir();
+        if (dir == null) return "{\"ok\":false,\"err\":\"no-cache\"}";
+        micFile = new File(dir, "mic-" + System.currentTimeMillis() + ".m4a");
+        micT0 = System.currentTimeMillis();
+        // MIC не поднялся (занят или не поддержан) — пробуем запасные источники записи
+        int[] sources = {MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.DEFAULT};
+        String err = "start-failed";
+        for (int src : sources) {
+            MediaRecorder r = new MediaRecorder();
+            try {
+                r.setAudioSource(src);
+                r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+                r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                r.setAudioChannels(1);
+                r.setAudioSamplingRate(16000);
+                r.setAudioEncodingBitRate(32000);
+                r.setOutputFile(micFile.getAbsolutePath());
+                r.prepare();
+                r.start();
+                micRec = r;
+                return "{\"ok\":true}";
+            } catch (Exception e) {
+                err = e.getClass().getSimpleName();
+                try { r.reset(); } catch (Exception ignored) {}
+                try { r.release(); } catch (Exception ignored) {}
+            }
+        }
+        releaseNativeRec(true);
+        return "{\"ok\":false,\"err\":\"" + err + "\"}";
+    }
+
+    private void releaseNativeRec(boolean deleteFile) {
+        if (micRec != null) {
+            try { micRec.reset(); } catch (Exception ignored) {}
+            try { micRec.release(); } catch (Exception ignored) {}
+            micRec = null;
+        }
+        if (deleteFile && micFile != null) {
+            try { micFile.delete(); } catch (Exception ignored) {}
+            micFile = null;
+        }
+    }
+
+    private static String readB64(File f) throws Exception {
+        InputStream in = null;
+        try {
+            in = new FileInputStream(f);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);   // NO_WRAP: JS atob не переваривает переводы строк
+        } finally {
+            if (in != null) try { in.close(); } catch (Exception ignored) {}
+        }
     }
 
     private static String safePdfName(String name) {
@@ -394,8 +548,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Сворачиваем — освобождаем микрофон и гасим WebView. Иначе запись, забытая в фоне,
+     * держит микрофон, и следующая попытка падает «микрофон занят другим приложением».
+     */
+    @Override
+    protected void onPause() {
+        releaseNativeRec(true);
+        if (web != null) {
+            try { web.evaluateJavascript("window.__lpPause&&window.__lpPause()", null); } catch (Exception ignored) {}
+            webPaused = true;
+            web.postDelayed(new Runnable() {
+                public void run() {
+                    if (web != null && webPaused) web.onPause();   // даём странице сначала отпустить поток записи
+                }
+            }, 150);
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        webPaused = false;
+        if (web != null) web.onResume();
+    }
+
     @Override
     protected void onDestroy() {
+        releaseNativeRec(false);
         for (BroadcastReceiver r : new ArrayList<>(shareReceivers)) {
             try { unregisterReceiver(r); } catch (Exception ignored) {}
         }

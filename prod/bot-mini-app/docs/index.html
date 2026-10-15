@@ -1387,19 +1387,32 @@ async function voiceToggle(){
   if(st==="denied"){micSettings();chrSay("Микрофон выключен в настройках приложения — включите его и нажмите ещё раз");return}
   if(st==="prompt"){if(A.askMic)try{A.askMic()}catch(e){}chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}
   const me=vc={raf:0,lv:[]};chrSay("");micUi(true);
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
-  let stream=null,err=null;
-  const tries=A.micStatus?2:3;   // повторные попытки: WebView на части устройств падает сразу после выдачи разрешения; старая обёртка состояние не сообщает — пробуем дольше
-  for(let k=0;k<tries;k++){
-    try{stream=await navigator.mediaDevices.getUserMedia({audio:true});err=null;break}
-    catch(e){err=e;if(k<tries-1){await new Promise(r=>setTimeout(r,400));continue}break}}
+  if(!A.nativeRec&&(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)){vc=null;micUi(false);chrSay("Запись голоса не поддерживается на этом устройстве");return}
+  let stream=null,err=null,nj=null;
+  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+  const tries=A.micStatus?3:4;   // повторные попытки: WebView на части устройств падает сразу после выдачи разрешения; старая обёртка состояние не сообщает — пробуем дольше
+  const AUD=[{audio:true},{audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}];   // вариант без эффектов: на части прошивок WebRTC-цепочка записи не поднимается
+  outer:for(const c of AUD){
+    for(let k=0;k<tries;k++){
+      try{stream=await navigator.mediaDevices.getUserMedia(c);err=null;break outer}
+      catch(e){err=e;if(k<tries-1){await new Promise(r=>setTimeout(r,400));continue}}}}
+  }
+  /* веб-стек WebView не поднял микрофон (обычно NotReadableError) — пишем нативно, через обёртку APK:
+     она стучится в тот же системный AudioRecord, что и приложения-рекордеры, и работает там, где getUserMedia — нет */
+  if(!stream&&A.nativeRec){
+    try{nj=JSON.parse(A.nativeRec("start"))}catch(e){nj=null}
+    if(nj&&nj.ok){me.native=nj;me.t0=Date.now();me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}
+    else if(nj&&nj.err==="noperm"){vc=null;micUi(false);chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}}
+  if(!me.native){
   if(!stream){vc=null;micUi(false);
     const n=(err&&err.name)||"";
     let msg=n==="NotAllowedError"?"Нет доступа к микрофону — разрешите его в настройках приложения"
       :n==="NotFoundError"?"Микрофон не найден на этом устройстве"
-      :n==="NotReadableError"?"Микрофон занят другим приложением — закройте его и попробуйте ещё раз"
+      :n==="NotReadableError"?"Микрофон недоступен для записи — закройте звонки и приложения с микрофоном и попробуйте ещё раз"
       :"Микрофон недоступен — проверьте разрешения приложения";
     if(n)msg+=" (код: "+n+")";   // точный код ошибки — диагностика с первого раза
+    if(A.micDiag){try{msg+=" · "+A.micDiag()}catch(e){}}   // по данным Android: кто реально держит микрофон, не идёт ли вызов
+    if(nj&&nj.err)msg+=" · нативная запись: "+nj.err;
     if(oldWrap)msg+=" · Приложение устарело — нажмите «Обновить приложение», установите скачанный файл и вернитесь сюда";
     chrSay(msg);
     if(oldWrap)micUpdate();
@@ -1414,6 +1427,7 @@ async function voiceToggle(){
     rec.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};rec.start(250);me.rec=rec;me.ch=ch;me.t0=Date.now();
     me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}}catch(e){}   // сбой рекордера — не то же самое, что сбой микрофона
   if(!me.rec)chrSay("Микрофон включён, но запись звука не поддерживается — команда не сохранится");
+  }
   const cv=$("#eq"),g=cv.getContext("2d"),cs=getComputedStyle(document.documentElement),c1=cs.getPropertyValue("--yel").trim()||"#FFC93C",c2=cs.getPropertyValue("--acc").trim()||"#0F2E6E",data=me.an?new Uint8Array(me.an.fftSize):null;
   const W=[{f:.021,s:.0042,a:1,w:3,al:1,p:0},{f:.033,s:-.0058,a:.7,w:2.2,al:.6,p:2},{f:.014,s:.0031,a:.5,w:1.6,al:.35,p:4}];
   const tick=t=>{if(vc!==me)return;
@@ -1430,12 +1444,22 @@ async function voiceToggle(){
     me.raf=requestAnimationFrame(tick)};
   me.raf=requestAnimationFrame(tick)}
 function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.raf);clearTimeout(v.lim);
-  const ctx0=vctx||voiceCtx();
+  const ctx0=vctx||voiceCtx(),A=window.Android||{};
+  if(v.native){   // нативная запись: обёртка отдаёт готовый файл — веб-стек записи не участвует
+    let j=null;try{j=JSON.parse(A.nativeRec(done?"stop":"cancel"))}catch(e){}
+    if(done&&j&&j.ok&&j.audio){const b=atob(j.audio),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
+      voiceSend(new Blob([a],{type:j.mime||"audio/mp4"}),ctx0,Math.min(60,Math.round((Date.now()-v.t0)/10)/10))}
+    else if(done)toast("Не получилось записать голос — попробуйте ещё раз")}
+  else{
   if(v.rec&&v.rec.state!=="inactive"){const rec=v.rec,ch=v.ch,dur=(Date.now()-v.t0)/1000;
     rec.onstop=()=>{if(done&&ch.length)voiceSend(new Blob(ch,{type:rec.mimeType||"audio/webm"}),ctx0,dur)};try{rec.stop()}catch(e){}}
-  if(v.stream)v.stream.getTracks().forEach(t=>t.stop());if(v.ctx&&v.ctx.close)v.ctx.close().catch(()=>{});
+  if(v.stream)v.stream.getTracks().forEach(t=>t.stop());if(v.ctx&&v.ctx.close)v.ctx.close().catch(()=>{})}
   {const c=$("#eq");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height)}micUi(false);
-  if(done&&!v.rec)toast("Запись звука не поддерживается — команда не сохранится")}
+  if(done&&!v.rec&&!v.native)toast("Запись звука не поддерживается — команда не сохранится")}
+/* свернули приложение или ушли с вкладки — запись и микрофон освобождаются сразу:
+   забытый в фоне поток держит микрофон, и следующая запись падает «микрофон занят» */
+window.__lpPause=()=>{if(vc)voiceStop(false)};
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&vc)voiceStop(false)});
 async function voiceSend(blob,ctx,dur){const say=chrSay;
   say("Отправляю…");chrBtns(false);
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});

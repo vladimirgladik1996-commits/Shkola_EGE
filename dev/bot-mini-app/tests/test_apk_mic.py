@@ -74,4 +74,18 @@ ok("точный код ошибки getUserMedia виден пользоват�
 assert "__lpOnBtn" in html and "contextmenu" in html, "страница не помечает нажатия на кнопках для служебного меню"
 ok("страница помечает нажатия на кнопках (__lpOnBtn) и глушит contextmenu")
 
+# --- нативная запись + честная диагностика NotReadableError ---------------
+assert "nativeRec" in java and "MediaRecorder" in java, \
+    "без нативной записи WebView остаётся один на один с NotReadableError там, где веб-стек записи не поднимается"
+assert re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?nativeRec\s*\(", java), "нет JS-моста nativeRec()"
+assert re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?micDiag\s*\(", java) and "getActiveRecordingConfigurations" in java, \
+    "нет диагностики micDiag(): пользователь видит «занят другим приложением» без фактов"
+ok("нативная запись (MediaRecorder) + micDiag: запись не зависит от веб-стека WebView, причина сбоя видна")
+
+assert "A.nativeRec" in html and "__lpPause" in html and "visibilitychange" in html, \
+    "виджет не переходит на нативную запись при сбое getUserMedia / не освобождает микрофон при сворачивании"
+assert re.search(r"protected void onPause\(\)", java) and "web.onPause" in java and "releaseNativeRec" in java, \
+    "обёртка не гасит запись и WebView при сворачивании — забытый поток держит микрофон в фоне"
+ok("микрофон освобождается при сворачивании (__lpPause + visibilitychange, обёртка: onPause → releaseNativeRec)")
+
 print("ИТОГ: контракт «микрофон APK ↔ виджет» соблюдён")
