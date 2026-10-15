@@ -27,6 +27,7 @@ import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -127,14 +128,37 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
                 String scheme = u.getScheme(), host = u.getHost(), baseHost = Uri.parse(url).getHost();
+                // Вложенные фреймы (материалы во фрейме, скачивание PDF через blob) остаются внутри
+                // WebView: их нельзя отдавать наружу — ни один браузер их не откроет, а startActivity
+                // без обработчика сворачивает/роняет приложение (так вылетало при открытии материалов).
+                if (!r.isForMainFrame()) return false;
                 // blob: / data: / about: — служебные ссылки страницы (материалы, скачивание PDF через blob).
-                // Их нельзя отдавать наружу: ни один браузер их не откроет, и пользователь получает ошибку Android.
                 if (scheme == null || "blob".equals(scheme) || "data".equals(scheme) || "about".equals(scheme)) return false;
                 if ("https".equals(scheme) && host != null
                         && (host.equals(baseHost) || host.endsWith(".telegram.org") || host.equals("t.me"))) {
                     return false;                       // свой сервер и Telegram — внутри приложения
                 }
-                startActivity(new Intent(Intent.ACTION_VIEW, u));   // всё наружу — системным браузером
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, u));   // всё наружу — системным браузером
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Не получилось открыть ссылку", Toast.LENGTH_LONG).show();
+                }
+                return true;
+            }
+
+            /** Рендерер WebView умер (нехватка памяти, сбой внутри страницы). Без этого обработчика
+             *  Android просто закрывает приложение («сворачивается» на рабочий стол). Возвращаем true
+             *  и пересоздаём WebView — пользователь остаётся в приложении. */
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        try { view.destroy(); } catch (Exception ignored) {}
+                        if (web == view) web = null;
+                        String u = prefs.getString("url", "");
+                        if (u.isEmpty()) showSetup(""); else showWeb(u);
+                    }
+                });
                 return true;
             }
         });

@@ -127,5 +127,33 @@ async def main():
             assert rr.status == 400, (b, rr.status)
         ok("неполные данные входа → 400")
 
+        # --- оплаты и занятия из APK (X-Session): полный цикл без сюрпризов ---
+        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+                         headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
+        stok = (await r.json())["token"]
+        r = await c.post("/api/student/add", json={"name": "Оплата Тест", "price": 1500}, headers={"X-Session": stok})
+        sid = (await r.json())["id"]
+        r = await c.post("/api/payment/add", json={"student_id": sid, "amount": 3000}, headers={"X-Session": stok})
+        j = await r.json()
+        assert r.status == 200 and j.get("ok") and j.get("id"), (r.status, j)
+        pid = j["id"]
+        r = await c.get("/api/data", headers={"X-Session": stok})
+        pays = [p for p in (await r.json())["payments"] if p["id"] == pid]
+        assert pays and pays[0]["student_id"] == sid and pays[0]["amount"] == 3000, pays
+        r = await c.post("/api/payment/update", json={"id": pid, "amount": 4500}, headers={"X-Session": stok})
+        assert r.status == 200, r.status
+        r = await c.post("/api/payment/delete", json={"id": pid}, headers={"X-Session": stok})
+        assert r.status == 200, r.status
+        r = await c.post("/api/lesson/add", json={"student_id": sid, "day": "2027-01-12", "time": "15:00", "dur": 60},
+                         headers={"X-Session": stok})
+        assert r.status == 200, (r.status, await r.text())
+        r = await c.get("/api/data", headers={"X-Session": stok})
+        ls = [l for l in (await r.json())["lessons"] if l["day"] == "2027-01-12" and l["student_id"] == sid]
+        assert ls, "занятие не встало в расписание"
+        # несуществующий ученик — честный 404 no_student, а не молчаливая потеря записи
+        r = await c.post("/api/payment/add", json={"student_id": 999999, "amount": 100}, headers={"X-Session": stok})
+        assert r.status == 404 and (await r.json()).get("error") == "no_student", r.status
+        ok("из APK: оплата (добавить/изменить/удалить) и занятие в календарь проходят; чужой id ученика → 404 no_student")
+
 asyncio.run(main())
 print("OK")

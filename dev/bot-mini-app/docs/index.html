@@ -624,7 +624,7 @@ function brand(){if(tg.initData)document.documentElement.dataset.theme=tg.colorS
   const c=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   try{tg.setHeaderColor(c);tg.setBackgroundColor(c);if(tg.setBottomBarColor)tg.setBottomBarColor(c)}catch(e){}}
 brand();if(tg.onEvent)tg.onEvent("themeChanged",brand);
-let S=[],L=[],P=[],cur="₽";const w0=mon(T);
+let S=[],L=[],P=[],cur="₽",loaded=false;const w0=mon(T);   /* loaded: реальные данные уже были — их нельзя подменять демо/пустотой */
 // API_BASE — откуда брать backend API.
 // ""  → тот же домен (бот сам раздаёт страницу и API, всё как раньше);
 // URL → мини-апп на GitHub Pages, а бот работает отдельно (нужен ALLOW_ORIGIN на боте).
@@ -645,7 +645,7 @@ function loginScreen(code){document.body.textContent="";const d=document.createE
   const inp="width:100%;padding:12px;font:inherit;border:1px solid #d5dbe3;border-radius:10px;box-sizing:border-box";
   const lab="display:block;font-size:13px;color:#6b7785;margin:14px 0 4px";
   d.innerHTML=`<h2 style="margin:0 0 8px">🔐 Вход в кабинет</h2>
-  <p style="color:#6b7785;font-size:14px">Введите логин и пароль кабинета.</p>
+  <p style="color:#6b7785;font-size:14px">${code==403?"Сессия приложения устарела — войдите заново. ":""}Введите логин и пароль кабинета — те же, что в боте. Ученики, занятия и оплаты живут на том же сервере.</p>
   <label style="${lab}">Логин</label><input id="lg_l" style="${inp}" autocomplete="username" autocapitalize="off" maxlength="64">
   <label style="${lab}">Пароль</label><input id="lg_p" type="text" style="${inp}" autocomplete="current-password" maxlength="128">
   <button id="lg_b" style="width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:#0F2E6E;border:0;border-radius:10px">Войти</button>
@@ -673,24 +673,13 @@ document.addEventListener("visibilitychange",wake);
 if(tg.onEvent)tg.onEvent("activated",wake);
 async function api(p,b){const h={"X-Init":tg.initData,"Content-Type":"application/json"};
   if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
-  const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:h,body:b?JSON.stringify(b):undefined});
+  const r=await fetch(API_BASE+p,{method:b?"POST":"GET",headers:h,body:b?JSON.stringify(b):undefined,cache:"no-store"});
   if(r.status==401||r.status==403){lockScreen(r.status);return null}
   if(r.status==409){toast("Время занято или пересекается с другим занятием");return null}
-  if(!r.ok){toast("Не получилось, попробуйте ещё раз");return null}return r.json()}
-function demoData(){const w=mon(T),dd=n=>iso(addD(w,n)),now=new Date();
-  const ts=k=>{const d=new Date(now);d.setDate(d.getDate()-k);return iso(d)+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":00"};
-  const st=[{id:1,name:"Анна Смирнова",grade:"11",subject:"ЕГЭ по русскому",price:1500,paid:9000,done:5,balance:1500,spent:7500,photo:null,deleted:0},
-            {id:2,name:"Иван Петров",grade:"9",subject:"ОГЭ по математике",price:1500,paid:4500,done:4,balance:-1500,spent:6000,photo:null,deleted:0},
-            {id:3,name:"Мария Ким",grade:"10",subject:"Литература",price:2000,paid:6000,done:3,balance:0,spent:6000,photo:null,deleted:0}];
-  /* как в /api/data: у занятий есть цена и флаг «проведено», поэтому демо живёт теми же расчётами, что и боевые данные */
-  const nowMin=now.getHours()*60+now.getMinutes();
-  const ls=[[1,dd(0),"15:00",60,null],[2,dd(1),"10:00",90,null],[3,dd(2),"18:30",60,null],[1,dd(3),"15:00",60,11],[2,dd(4),"12:00",60,null]]
-    .map(([sid,day,time,dur,rep],i)=>({id:i+1,student_id:sid,day,time,dur,regular_id:rep,price:(st.find(s=>s.id==sid)||{}).price||0,
-      past:day<iso(T)||(day==iso(T)&&mins(time)<=nowMin)?1:0}));
-  return{cur:"₽",students:st,lessons:ls,
-    payments:[{id:1,student_id:1,amount:3000,created:ts(1),name:"Анна Смирнова"},
-              {id:2,student_id:3,amount:2000,created:ts(2),name:"Мария Ким"},
-              {id:3,student_id:2,amount:1500,created:ts(4),name:"Иван Петров"}]}}
+  if(!r.ok){const j=await r.json().catch(()=>({}));   /* точная причина вместо общего «не получилось» */
+    toast(j.error==="no_student"?"Ученик не найден — возможно, он удалён. Обновите раздел «Ученики»"
+      :j.error==="busy"?"Время занято или пересекается с другим занятием"
+      :"Не получилось, попробуйте ещё раз");return null}return r.json()}
 function ingest(d){
   if(d.env==="dev"&&!document.getElementById("devbadge")){document.title+=" · DEV";
     const b=document.createElement("div");b.id="devbadge";b.textContent="DEV";
@@ -699,8 +688,11 @@ function ingest(d){
   cur=d.cur;S=d.students.map(s=>({...s,b:s.balance}));L=d.lessons.map(l=>({id:l.id,sid:l.student_id,day:l.day,time:l.time,dur:l.dur,rep:l.regular_id,price:l.price,past:l.past}));
   P=d.payments.map(p=>({id:p.id,sid:p.student_id,amt:p.amount,at:new Date(p.created.replace(" ","T"))}));render()}
 async function load(){const d=await api("/api/data");
-  if(!d){if(locked)return;ingest(demoData());toast("Демо-режим — данные примерные");return}
-  ingest(d)}
+  /* Нет ответа — но уже загруженные реальные данные НЕ подменяются демо-примерами и не пропадают:
+     в APK такая подмена выглядела как «нет доступа к базе учеников», а занятие/оплата по демо-id
+     (1–3) могла уйти чужому настоящему ученику. Первый запуск без связи — честная ошибка + «Повторить». */
+  if(!d){if(locked)return;if(loaded){toast("Не получилось обновить данные — показаны прежние");return}throw 0}
+  loaded=true;ingest(d)}
 const bal=s=>s;
 const act=()=>S.filter(s=>!s.deleted);
 const when=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
@@ -712,7 +704,7 @@ const stName=id=>S.find(s=>s.id==id).name;
 const TOAST_RULES=[
   [/^Оплата принята/,"ok","💰"],[/^Ученик добавлен/,"ok","🎉"],[/^Ученик удалён/,"ok","🗑️"],[/^Профиль сохранён/,"ok","💾"],
   [/^Фото обновлено/,"ok","📸"],[/^Фото удалено/,"ok","🗑️"],[/^Занятие добавлено/,"ok","📅"],[/^Занятие перенесено/,"ok","🔁"],
-  [/отменен/i,"ok","🚫"],[/^Файл сохранён/,"ok","📄"],[/^Демо-режим/,"info","🧪"],
+  [/отменен/i,"ok","🚫"],[/^Файл сохранён/,"ok","📄"],
   [/^Часть повторов/,"warn","⚠️"],[/^Время занято/,"warn","⏰"],[/^Укажите дату/,"warn","🗓️"],[/^Выберите ученика/,"warn","👆"],
   [/^Сначала добавьте ученика/,"warn","👤"],[/^Введите сумму/,"warn","🔢"],[/^Введите имя/,"warn","✏️"],
   [/^Микрофон/,"err","🎙️"],[/^Не получилось/,"err","😕"]];
@@ -1554,17 +1546,22 @@ function matGrid(){const m=MATS[matCat],ix=matIdx[m.id];
   return about+(L.length?L.map(v=>`<button class="mt-chip mt-v" type="button" onclick="matOpen(${matCat},${v.n})"><span class="mi mn">${v.n}</span><span class="mt-t"><b>Вариант ${v.n}</b><small>${esc(v.sub)}</small></span></button>`).join(""):`<p class="empty" style="grid-column:1/-1">Ничего не найдено</p>`)}
 function matFind(v){matQ=v;const g=$("#mtg");if(g)g.innerHTML=matGrid()}
 async function matCatOpen(i){const m=MATS[i];if(!m)return;
-  matCat=i;matQ="";render();scrollTo({top:0,behavior:"instant"});
+  matCat=i;matQ="";render();scrollTo(0,0);
   if(matIdx[m.id])return;
   try{const r=await matGet("/api/materials/"+m.id);if(!r){matCat=null;return}
     matIdx[m.id]=(await r.json()).variants}
   catch(e){if(matCat===i)matCat=null;if(tab=="mt")render();toast("Не получилось загрузить каталог, попробуйте ещё раз");return}
   if(tab=="mt"&&matCat===i)render()}
-function matBack(){matCat=null;matQ="";render();scrollTo({top:0,behavior:"instant"})}
+function matBack(){matCat=null;matQ="";render();scrollTo(0,0)}
+/* Фрейм материала пересоздаётся, а не перезагружается: сброс src/srcdoc — это навигация about:blank,
+   а любые навигации внутри фрейма в Android WebView уходят в обёртку приложения и на старых её
+   версиях уводят приложение наружу (браузер/ошибка) — приложение «сворачивается» при открытии материала. */
+function matFr(){const old=$("#mvf"),fr=document.createElement("iframe");fr.id="mvf";fr.title="Материал";
+  if(old)old.replaceWith(fr);else $("#mv").appendChild(fr);return fr}
 async function matOpen(ci,part){   // part — номер варианта 1…36 или "about"
   const m=MATS[ci];if(!m||matIsOpen)return;
-  const key=m.id+"/"+part,mv=$("#mv"),fr=$("#mvf"),ld=$("#mvl");
-  mv.classList.remove("pg");$("#mvt").innerHTML=mtT(m.s)+" · "+(part=="about"?"О каталоге и источники":"Вариант "+part);fr.removeAttribute("src");fr.removeAttribute("srcdoc");ld.hidden=false;
+  const key=m.id+"/"+part,mv=$("#mv"),fr=matFr(),ld=$("#mvl");
+  mv.classList.remove("pg");$("#mvt").innerHTML=mtT(m.s)+" · "+(part=="about"?"О каталоге и источники":"Вариант "+part);ld.hidden=false;
   matIsOpen=true;mv.classList.add("on");
   try{history.pushState({mv:1},"")}catch(e){}
   try{tg.BackButton.show()}catch(e){}
@@ -1585,7 +1582,7 @@ async function matOpen(ci,part){   // part — номер варианта 1…3
   catch(e){ld.hidden=true;matClose();toast("Не получилось открыть материал, попробуйте ещё раз")}}
 function matClose(fromPop){
   if(!matIsOpen)return;matIsOpen=false;
-  const fr=$("#mvf");$("#mv").classList.remove("on","pg");fr.removeAttribute("src");fr.removeAttribute("srcdoc");
+  matFr();$("#mv").classList.remove("on","pg");   /* свежий пустой фрейм вместо сброса src/srcdoc (см. matFr) */
   if(!fromPop){try{if(history.state&&history.state.mv)history.back()}catch(e){}}
   if(!navOpen){try{tg.BackButton.hide()}catch(e){}}}
 addEventListener("popstate",()=>{if(matIsOpen)matClose(true)});
@@ -1625,7 +1622,7 @@ async function go(t,btn){
     if(!REDUCE){
       const out={duration:140,easing:"ease-out",fill:"forwards"};
       await Promise.all([app.animate([{opacity:1},{opacity:0}],out).finished,ttl.animate([{opacity:1},{opacity:0}],out).finished])}
-    tab=t;render();scrollTo({top:0,behavior:"instant"});
+    tab=t;render();scrollTo(0,0);   /* scrollTo(0,0) вместо {behavior:"instant"} — enum кидает TypeError в старом WebView */
     if(!REDUCE){
       app.getAnimations().forEach(a=>a.cancel());ttl.getAnimations().forEach(a=>a.cancel());
       const inn={duration:320,easing:"cubic-bezier(.22,1,.36,1)"};
