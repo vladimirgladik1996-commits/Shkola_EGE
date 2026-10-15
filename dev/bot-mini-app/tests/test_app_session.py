@@ -1,9 +1,9 @@
-"""Standalone-вход (APK вне Telegram): только логин и пароль — отдельная от Telegram сессия;
+"""Standalone-вход (APK вне Telegram): только пароль — отдельная от Telegram сессия;
 плюс устаревший вход по одноразовой ссылке. Запросы с X-Session — тот же API, что и мини-апп."""
 import asyncio, hashlib, hmac, json, os, sqlite3, sys, time
 from urllib.parse import urlencode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.environ.update(BOT_TOKEN="123456:TESTTOKEN", AUTH_LOGIN="Admin", PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
+os.environ.update(BOT_TOKEN="123456:TESTTOKEN", PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID"): os.environ.pop(k, None)
 sys.path.insert(0, ROOT)
 _db_existed = os.path.exists(os.path.join(ROOT, "data", "tutor.db"))
@@ -26,9 +26,9 @@ async def main():
     app = bot.make_app()
     auth.setup(app)                                  # как в bot.run(): регистрирует /login и /api/login
     async with TestClient(TestServer(app)) as c:
-        # --- выдача токена через обычный вход (ссылка из бота + логин/пароль) ---
+        # --- выдача токена через обычный вход (ссылка из бота + пароль) ---
         t = auth.new_link(42, "Gladik_N").split("#")[1]
-        r = await c.post("/api/login", json={"t": t, "login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+        r = await c.post("/api/login", json={"t": t, "password": "Tst-Only-Pw-7qZ4!"},
                          headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
         j = await r.json()
         assert r.status == 200 and j["ok"] and j.get("token"), (r.status, j)
@@ -90,8 +90,8 @@ async def main():
         assert n >= 2 and mem.execute("select count(*) from api_tokens where tg_id=?", (42,)).fetchone()[0] == 0
         ok("повторные входы дают новые токены; logout чистит все сразу")
 
-        # --- standalone-вход (APK): ТОЛЬКО логин и пароль, без ссылки из бота и Telegram ---
-        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+        # --- standalone-вход (APK): ТОЛЬКО пароль, без ссылки из бота и Telegram ---
+        r = await c.post("/api/login", json={"password": "Tst-Only-Pw-7qZ4!"},
                          headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
         j = await r.json()
         assert r.status == 200 and j["ok"] and j.get("token"), (r.status, j)
@@ -99,7 +99,7 @@ async def main():
         r = await c.get("/api/data", headers={"X-Session": stok})
         assert r.status == 200, r.status
         assert mem.execute("select tg_id from api_tokens where h=?", (auth._h(stok),)).fetchone()[0] == 0
-        ok("standalone: вход только по логину и паролю выдаёт токен (tg_id=0), тот же API работает")
+        ok("standalone: вход только по паролю выдаёт токен (tg_id=0), тот же API работает")
 
         # --- независимость от Telegram: logout Telegram-пользователя не трогает standalone-токены ---
         auth.issue_token(42); auth.logout(42)
@@ -108,10 +108,10 @@ async def main():
 
         # --- неверные пароли → 401, после лимита → 429; смена пароля гасит standalone-токены ---
         for i in range(auth.MAX_FAILS):
-            r = await c.post("/api/login", json={"login": "Admin", "password": "wrong-pass"},
+            r = await c.post("/api/login", json={"password": "wrong-pass"},
                              headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
             assert r.status == 401, r.status
-        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+        r = await c.post("/api/login", json={"password": "Tst-Only-Pw-7qZ4!"},
                          headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
         assert r.status == 429, r.status
         mem.execute("delete from auth_fails where tg_id=?", (auth.STANDALONE_UID,)); mem.commit()
@@ -121,14 +121,14 @@ async def main():
         ok("standalone: лимит попыток работает, смена пароля гасит выданные токены")
 
         # --- неполные данные входа → 400 без траты попыток ---
-        for b in (b"{}", b'{"login":"Admin"}', b'{"password":"x"}', b'{"t":"","login":"","password":""}'):
+        for b in (b"{}", b'{"password":""}', b'{"t":"","password":""}', b'{"t":"x"}', b'{"login":"Admin"}'):
             rr = await c.post("/api/login", data=b, headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin",
                                                              "Content-Type": "application/json"})
             assert rr.status == 400, (b, rr.status)
         ok("неполные данные входа → 400")
 
         # --- оплаты и занятия из APK (X-Session): полный цикл без сюрпризов ---
-        r = await c.post("/api/login", json={"login": "Admin", "password": "Tst-Only-Pw-7qZ4!"},
+        r = await c.post("/api/login", json={"password": "Tst-Only-Pw-7qZ4!"},
                          headers={"Origin": auth.BASE, "Sec-Fetch-Site": "same-origin"})
         stok = (await r.json())["token"]
         r = await c.post("/api/student/add", json={"name": "Оплата Тест", "price": 1500}, headers={"X-Session": stok})

@@ -24,8 +24,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 export BOT_TOKEN="***"          # от @BotFather
-export AUTH_LOGIN="..."         # свой логин и хэш пароля: python auth.py
-export AUTH_PASSWORD_HASH="..."
+export AUTH_PASSWORD_HASH="..."  # хэш пароля: python auth.py (вход только по паролю, без логина)
 export PUBLIC_URL="https://<туннель>"
 # кто допущен — по умолчанию три ника из ALLOWED_USERNAMES (см. ниже)
 export WEBAPP_URL="https://<туннель>"   # подставите после запуска туннеля
@@ -131,7 +130,7 @@ WantedBy=multi-user.target
 | `BOT_TOKEN` | токен от @BotFather | да |
 | `ALLOWED_USERNAMES` | @ники (без @) через запятую, кому разрешён доступ. По умолчанию: `Gladik_Vladimir,Gladik_N,hungerrr` | да (или `ALLOWED_IDS`) |
 | `ALLOWED_IDS` | числовые Telegram-ID, допускаются без проверки ника (`OWNER_ID` — то же самое, старое имя) | нет |
-| `AUTH_LOGIN`, `AUTH_PASSWORD_HASH` | логин и scrypt-хэш пароля (`python auth.py`) | да |
+| `AUTH_PASSWORD_HASH` | scrypt-хэш пароля — вход только по паролю, без логина (`python auth.py`) | да |
 | `PUBLIC_URL` | https-адрес backend, где открывается `/login` | да (если не совпадает с `WEBAPP_URL`) |
 | `SESSION_DAYS` | срок сессии без активности, по умолчанию 30; пока пользуются — продлевается, пароль повторно не спрашивается | нет |
 | `WEBAPP_URL` | публичный https-адрес мини-аппа (для кнопки меню) | да для кнопки |
@@ -170,7 +169,7 @@ git push -u origin main
 - **Бэкапы:** `deploy.sh` делает консистентную копию (`sqlite3 backup`), права 600, хранит 14 последних. Копии лежат на том же сервере —
   настройте регулярную выгрузку в зашифрованное хранилище вне сервера (restic/age).
 - **Секреты:** `.env` — `chmod 600`, владелец — пользователь деплоя. Токен бота скомпрометирован → перевыпустите в @BotFather, перезапустите бота.
-- **Доступ по людям:** трое допущенных входят каждый со своего аккаунта по одному логину/паролю. Хотите отозвать человека — уберите ник из
+- **Доступ по людям:** трое допущенных входят каждый со своего Telegram-аккаунта по одному паролю кабинета (логин не нужен). Хотите отозвать человека — уберите ник из
   `ALLOWED_USERNAMES` и перезапустите: его сессия перестаёт действовать сразу. Сменили Telegram-аккаунт — удалите старую привязку:
   `sqlite3 data/tutor.db "delete from auth_pins where username='<ник маленькими буквами>'"`.
 

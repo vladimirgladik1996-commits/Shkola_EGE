@@ -57,10 +57,8 @@ services:
       # --- секреты: значения вводятся в панели Render, не в коде ---
       - key: BOT_TOKEN
         sync: false # токен от @BotFather (рабочий бот)
-      - key: AUTH_LOGIN
-        sync: false # логин входа в кабинет
       - key: AUTH_PASSWORD_HASH
-        sync: false # scrypt-хэш пароля: python auth.py (--gen)
+        sync: false # scrypt-хэш пароля (вход только по паролю, без логина): python auth.py (--gen)
       - key: ALLOWED_USERNAMES
         sync: false # @ники через запятую, без @ (кому разрешён доступ)
       - key: ALLOWED_IDS
@@ -98,7 +96,7 @@ services:
   # Секреты (BOT_TOKEN и др.) вводятся в панели Render при синхронизации
   # blueprint — в репозиторий они не попадают.
   # ВНИМАНИЕ: сервис tutor-bot-dev ниже АКТИВЕН и добавляет в blueprint свои
-  # секреты sync: false (BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH,
+  # секреты sync: false (BOT_TOKEN, AUTH_PASSWORD_HASH,
   # ALLOWED_USERNAMES, WEBAPP_URL, PUBLIC_URL, KIMI_API_KEY, WHISPER_API_KEY).
   # Render не завершает синхронизацию blueprint, пока значения всех sync: false
   # не введены в панели, и из-за этого НЕ ПРИМЕНЯЮТСЯ изменения tutor-bot
@@ -131,10 +129,8 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false # СВОЙ токен от второго бота @BotFather (не рабочий!)
-      - key: AUTH_LOGIN
-        sync: false
       - key: AUTH_PASSWORD_HASH
-        sync: false # можно тот же логин/пароль, что и в прод
+        sync: false # можно тот же пароль, что и в прод
       - key: ALLOWED_USERNAMES
         sync: false # те же люди, что и в прод
       - key: WEBAPP_URL

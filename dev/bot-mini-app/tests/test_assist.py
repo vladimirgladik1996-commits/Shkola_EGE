@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from urllib.parse import urlencode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOK = "123456:TESTTOKEN"
-os.environ.update(BOT_TOKEN=TOK, AUTH_LOGIN="Admin", PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
+os.environ.update(BOT_TOKEN=TOK, PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID", "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
           "WHISPER_API_KEY", "WHISPER_BASE_URL"):
     os.environ.pop(k, None)

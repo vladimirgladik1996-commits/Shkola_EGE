@@ -3,7 +3,7 @@
 import asyncio, datetime as dt, json, os, sqlite3, sys, time, hmac, hashlib
 from urllib.parse import urlencode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.environ.update(BOT_TOKEN="123456:TESTTOKEN", AUTH_LOGIN="Admin", PUBLIC_URL="https://bot.example.com")
+os.environ.update(BOT_TOKEN="123456:TESTTOKEN", PUBLIC_URL="https://bot.example.com")
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID"): os.environ.pop(k, None)
 sys.path.insert(0, ROOT)
 _db_existed = os.path.exists(os.path.join(ROOT, "data", "tutor.db"))
@@ -48,7 +48,7 @@ def link_of(calls_):
                 if b.url: return b.url
 async def login(uid, username):
     c = await say(uid, username, "/start"); url = link_of(c); assert url and url.startswith("https://bot.example.com/login#"), url
-    code, msg, tid = await auth.attempt(url.split("#")[1], "Admin", "Tst-Only-Pw-7qZ4!")
+    code, msg, tid = await auth.attempt(url.split("#")[1], "Tst-Only-Pw-7qZ4!")
     assert code == 200 and tid == uid, (code, msg)
 
 def init_data(uid, username=None, token="123456:TESTTOKEN"):
@@ -118,7 +118,7 @@ async def main():
     auth.logout(102); c = await say(102, "Gladik_N", "/start"); url = link_of(c); assert url
     auth.USERNAMES.discard("gladik_n"); auth.ALLOWED_IDS.discard(102)
     mem.execute("delete from auth_pins where tg_id=102"); mem.commit()
-    code, msg, _ = await auth.attempt(url.split("#")[1], "Admin", "Tst-Only-Pw-7qZ4!"); assert code == 403, code
+    code, msg, _ = await auth.attempt(url.split("#")[1], "Tst-Only-Pw-7qZ4!"); assert code == 403, code
     auth.USERNAMES.clear(); auth.USERNAMES.update(saved)
     ok("ссылка на вход, выданная до исключения человека из списка, → 403")
 

@@ -784,7 +784,7 @@ async def start(m: Message, state: FSMContext):
         return
     await m.answer("🔐 Для работы нужно войти." + ENV_TAG, reply_markup=ReplyKeyboardRemove())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Войти", url=auth.new_link(m.from_user.id, m.from_user.username or ""))]])
-    await m.answer("Нажмите кнопку и введите логин и пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
+    await m.answer("Нажмите кнопку и введите пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
 
 @r.message(Command("logout"))
 async def logout(m: Message, state: FSMContext):

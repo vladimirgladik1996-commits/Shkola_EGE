@@ -635,28 +635,27 @@ function lockScreen(code){locked=true;
   document.body.textContent="";const d=document.createElement("div");
   d.style.cssText="padding:64px 28px;text-align:center;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
   const t=document.createElement("div");
-  t.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом, нажмите /start → «Войти» и введите логин и пароль. Затем вернитесь сюда — кабинет обновится сам."
+  t.textContent=code==401?"🔒 Нужен вход. Откройте чат с ботом, нажмите /start → «Войти» и введите пароль. Затем вернитесь сюда — кабинет обновится сам."
     :"🔒 Сессия устарела или доступ закрыт. Закройте кабинет (✕) и откройте его заново из чата с ботом.";d.appendChild(t);
   document.body.appendChild(d)}
-/* standalone-вход (APK вне Telegram): только логин и пароль → API-токен в localStorage.
+/* standalone-вход (APK вне Telegram): только пароль → API-токен в localStorage.
    Авторизация отдельная от Telegram-мини-аппа; данные — та же база на том же сервере. */
 function loginScreen(code){document.body.textContent="";const d=document.createElement("div");
   d.style.cssText="max-width:420px;margin:0 auto;padding:44px 22px;font:16px/1.5 system-ui,sans-serif;color:var(--tg-theme-text-color,#000)";
   const inp="width:100%;padding:12px;font:inherit;border:1px solid #d5dbe3;border-radius:10px;box-sizing:border-box";
   const lab="display:block;font-size:13px;color:#6b7785;margin:14px 0 4px";
   d.innerHTML=`<h2 style="margin:0 0 8px">🔐 Вход в кабинет</h2>
-  <p style="color:#6b7785;font-size:14px">${code==403?"Сессия приложения устарела — войдите заново. ":""}Введите логин и пароль кабинета — те же, что в боте. Ученики, занятия и оплаты живут на том же сервере.</p>
-  <label style="${lab}">Логин</label><input id="lg_l" style="${inp}" autocomplete="username" autocapitalize="off" maxlength="64">
+  <p style="color:#6b7785;font-size:14px">${code==403?"Сессия приложения устарела — войдите заново. ":""}Введите пароль кабинета — тот же, что в боте. Ученики, занятия и оплаты живут на том же сервере.</p>
   <label style="${lab}">Пароль</label><input id="lg_p" type="text" style="${inp}" autocomplete="current-password" maxlength="128">
   <button id="lg_b" style="width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:#0F2E6E;border:0;border-radius:10px">Войти</button>
   <div id="lg_m" role="alert" style="min-height:20px;margin-top:12px;font-size:14px;color:#d93025"></div>`;
   document.body.appendChild(d);
   const q=id=>document.getElementById(id);
   q("lg_b").onclick=async()=>{
-    if(!q("lg_l").value.trim()||!q("lg_p").value){q("lg_m").textContent="Введите логин и пароль";return}
+    if(!q("lg_p").value){q("lg_m").textContent="Введите пароль";return}
     q("lg_b").disabled=true;q("lg_m").textContent="";
     try{const r=await fetch(API_BASE+"/api/login",{method:"POST",credentials:"omit",cache:"no-store",
-      headers:{"Content-Type":"application/json"},body:JSON.stringify({login:q("lg_l").value.trim(),password:q("lg_p").value})});
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({password:q("lg_p").value})});
       const j=await r.json().catch(()=>({}));
       if(r.ok&&j.token){localStorage.sesTok=j.token;location.reload();return}
       q("lg_m").textContent=j.error||"Ошибка. Попробуйте ещё раз.";

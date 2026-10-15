@@ -9,7 +9,7 @@
 - **Второй бот от @BotFather** — dev-токен нельзя совмещать с продом
   (два сервиса с одним токеном конфликтуют).
 - Python 3.10+ и зависимости: `pip install -r requirements.txt`.
-- Логин и пароль для входа в кабинет: `python auth.py` (или `--gen` —
+- Пароль для входа в кабинет (вход только по паролю, без логина): `python auth.py` (или `--gen` —
   случайный сильный пароль) → полученный `AUTH_PASSWORD_HASH` в `.env`.
 
 ## Запуск локально (сценарий A из прод-документации)
@@ -18,7 +18,7 @@
 cd dev/bot-mini-app
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # заполнить: BOT_TOKEN, AUTH_LOGIN, AUTH_PASSWORD_HASH
+cp .env.example .env          # заполнить: BOT_TOKEN, AUTH_PASSWORD_HASH
 python bot.py                 # бот + API + страница на http://localhost:8080
 ```
 
@@ -33,7 +33,7 @@ cloudflared tunnel --url http://localhost:8080
 1. вписать в `WEBAPP_URL` и `PUBLIC_URL` в `.env` (перезапустить `python bot.py`);
 2. продублировать в @BotFather → `/setmenubutton` для dev-бота.
 
-Готово: dev-бот → кнопка «Кабинет» → вход по логину/паролю.
+Готово: dev-бот → кнопка «Кабинет» → вход по паролю.
 
 ## Запуск в Docker
 

@@ -1,10 +1,11 @@
 """Авторизация бота и мини-аппа.
 
-Два независимых входа:
+Два независимых входа, в обоих — только пароль (без логина):
   • Telegram-мини-апп: /start → бот шлёт одноразовую ссылку (10 минут, привязана к Telegram-ID) →
-    страница /login → логин и пароль → сессия на Telegram-ID;
-  • standalone-приложение (APK вне Telegram): только логин и пароль → API-токен (tg_id=0).
+    страница /login → пароль → сессия на Telegram-ID;
+  • standalone-приложение (APK вне Telegram): только пароль → API-токен (tg_id=0).
     Сессия отдельная от Telegram; данные — та же база того же сервера.
+Поле "login" в теле запроса старых клиентов принимается, но игнорируется.
 Бот и API пускают только с сессией/токеном.
 Пароль в коде и репозитории НЕ хранится — только scrypt-хэш в .env на сервере.
 Сгенерировать хэш:  python auth.py   (или  python auth.py --gen  — случайный сильный пароль)
@@ -12,7 +13,6 @@
 import asyncio, base64, hashlib, hmac, json, logging, os, re, secrets, sys, time
 from urllib.parse import urlsplit
 
-LOGIN = os.getenv("AUTH_LOGIN", "").strip()
 PW_HASH = os.getenv("AUTH_PASSWORD_HASH", "").strip()
 SESSION_SEC = int(os.getenv("SESSION_DAYS", "30")) * 86400    # «скользящая» сессия: срок продлевается при каждом использовании
 LINK_TTL = 600            # ссылка живёт 10 минут
@@ -109,19 +109,16 @@ def check_hash(password, stored):
         return False
     return hmac.compare_digest(got, want)
 
-def check_credentials(login, password):
-    # обе проверки выполняются всегда — по времени ответа не понять, что именно неверно
-    ok_pw = check_hash(password, PW_HASH)
-    ok_login = hmac.compare_digest(login.casefold().encode(), LOGIN.casefold().encode())
-    return ok_login and ok_pw
+def check_credentials(password):
+    """Вход только по паролю: логин не требуется и не проверяется."""
+    return check_hash(password, PW_HASH)
 
 def _fp():
-    """Отпечаток текущих учётных данных. Сменили логин/пароль → все старые сессии разом недействительны."""
-    return hashlib.sha256(f"{LOGIN.casefold()}\0{PW_HASH}".encode()).hexdigest()[:32]
+    """Отпечаток текущего пароля. Сменили пароль → все старые сессии разом недействительны."""
+    return hashlib.sha256(PW_HASH.encode()).hexdigest()[:32]
 
 def require_config():
     miss = []
-    if not LOGIN: miss.append("AUTH_LOGIN")
     if not USERNAMES and not ALLOWED_IDS: miss.append("ALLOWED_USERNAMES или ALLOWED_IDS (кому разрешён доступ)")
     try: _parse(PW_HASH)
     except Exception: miss.append("AUTH_PASSWORD_HASH (получить: python auth.py)")
@@ -194,7 +191,7 @@ def logout(tg_id):
     _db.commit()
 
 # ---------- API-токены для standalone-приложения (APK вне Telegram) ----------
-# Вход тот же (одноразовая ссылка из бота + логин и пароль), но приложение получает токен
+# Вход тот же (одноразовая ссылка из бота + пароль), но приложение получает токен
 # и передаёт его в заголовке X-Session вместо подписи Telegram initData.
 # В БД — только хэш токена; срок как у сессии, продлевается при использовании.
 def issue_token(tg_id):
@@ -248,7 +245,7 @@ async def _alert(tg_id, text):
 
 log = logging.getLogger("tutor.auth")
 
-async def attempt(token, login, password):
+async def attempt(token, password):
     """Одна попытка входа → (http-код, текст ошибки, tg_id)."""
     now = time.time()
     row = _db.execute("select tg_id, exp, fails, uname from auth_links where h=?", (_h(token),)).fetchone()
@@ -271,13 +268,13 @@ async def attempt(token, login, password):
         _db.execute("update auth_links set fails=fails+1 where h=?", (_h(token),))
     _db.commit()
     async with _sem:
-        ok = await asyncio.get_running_loop().run_in_executor(None, check_credentials, login, password)
+        ok = await asyncio.get_running_loop().run_in_executor(None, check_credentials, password)
     if not ok:
         if _locked(tg_id, time.time()):
             await _alert(tg_id, "⚠️ Заблокирован вход: слишком много неверных паролей. "
                                 "Если это были не вы — смените пароль на сервере.")
         log.warning("login failed: tg_id=%s", tg_id)
-        return 401, "Неверный логин или пароль.", tg_id
+        return 401, "Неверный пароль.", tg_id
     _db.execute("delete from auth_links where tg_id=?", (tg_id,))
     _db.execute("delete from auth_fails where tg_id=?", (tg_id,))
     _db.execute("delete from auth_sessions where exp<?", (now,))
@@ -288,13 +285,13 @@ async def attempt(token, login, password):
     return 200, "", tg_id
 
 
-# ---------- standalone-вход (APK вне Telegram): только логин и пароль ----------
+# ---------- standalone-вход (APK вне Telegram): только пароль ----------
 # Не зависит от Telegram и мини-аппа: нет ни ссылки из бота, ни Telegram-ID.
 # Учёт неудачных попыток — в общем «ведре» tg_id=0; токен сессии привязан к
-# отпечатку учётных данных и гаснет при смене логина/пароля.
+# отпечатку пароля и гаснет при смене пароля.
 STANDALONE_UID = 0
 
-async def attempt_standalone(login, password):
+async def attempt_standalone(password):
     """Одна попытка standalone-входа → (http-код, текст ошибки, tg_id=0)."""
     now, uid = time.time(), STANDALONE_UID
     if _locked(uid, now):
@@ -304,13 +301,13 @@ async def attempt_standalone(login, password):
     _db.execute("insert into auth_fails(tg_id, ts) values(?,?)", (uid, now))
     _db.commit()
     async with _sem:
-        ok = await asyncio.get_running_loop().run_in_executor(None, check_credentials, login, password)
+        ok = await asyncio.get_running_loop().run_in_executor(None, check_credentials, password)
     if not ok:
         if _locked(uid, time.time()):
             await _alert(uid, "⚠️ Заблокирован вход в приложение: слишком много неверных паролей. "
                               "Если это были не вы — смените пароль на сервере.")
         log.warning("standalone login failed")
-        return 401, "Неверный логин или пароль.", uid
+        return 401, "Неверный пароль.", uid
     _db.execute("delete from auth_fails where tg_id=?", (uid,))
     _db.commit()
     log.info("standalone login ok")
@@ -322,25 +319,26 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{20,64}")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 def parse_login(raw):
-    """Байты тела → (токен | None, логин, пароль) или ValueError.
-    Токен опущен или пуст → standalone-вход (APK): только логин и пароль, без Telegram."""
+    """Байты тела → (токен | None, пароль) или ValueError.
+    Токен опущен или пуст → standalone-вход (APK): только пароль, без Telegram.
+    Поле "login" (если прислано старым клиентом) игнорируется — вход только по паролю."""
     try:
         j = json.loads(raw)
     except RecursionError:                                         # «[[[[…» в 4 КБ
         raise ValueError
     if not isinstance(j, dict):
         raise ValueError
-    t, lg, pw = j.get("t"), j.get("login"), j.get("password")
-    if not all(isinstance(x, str) for x in (lg, pw)):
+    t, pw = j.get("t"), j.get("password")
+    if not isinstance(pw, str):
         raise ValueError
     if t is not None and (not isinstance(t, str) or not TOKEN_RE.fullmatch(t)):
         raise ValueError                                            # токен передан, но неверного формата
     if t == "":
         t = None
-    if not 0 < len(lg) <= 64 or not 0 < len(pw) <= 128 or CTRL_RE.search(lg + pw):
+    if not 0 < len(pw) <= 128 or CTRL_RE.search(pw):
         raise ValueError
-    lg.encode(); pw.encode()                                       # одиночные суррогаты → UnicodeError ⊂ ValueError
-    return t, lg, pw
+    pw.encode()                                                    # одиночные суррогаты → UnicodeError ⊂ ValueError
+    return t, pw
 
 
 # ---------- HTTP: страница и обработчик входа ----------
@@ -358,7 +356,7 @@ input:focus{outline:2px solid var(--ac);border-color:transparent}
 button{width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:var(--ac);border:0;border-radius:10px}
 button:disabled{opacity:.6}#msg{min-height:20px;margin-top:12px;font-size:14px;color:var(--er)}#msg.ok{color:var(--ac)}
 </style></head><body><main><h1>🔐 Вход</h1><p>Кабинет репетитора</p>
-<form id="f" method="post" action="/login"><label for="l">Логин</label><input id="l" autocomplete="username" autocapitalize="off" maxlength="64" required>
+<form id="f" method="post" action="/login">
 <label for="p">Пароль</label><input id="p" type="text" autocomplete="current-password" maxlength="128" required>
 <button id="b" type="submit">Войти</button><div id="msg" role="alert"></div></form></main>
 <script nonce="__N__">(()=>{const t=location.hash.slice(1);history.replaceState(null,"",location.pathname);
@@ -367,7 +365,7 @@ $("f").addEventListener("submit",async e=>{e.preventDefault();
 if(!t){say("Откройте ссылку из бота заново: нажмите /start");return}
 $("b").disabled=true;say("");
 try{const r=await fetch("/api/login",{method:"POST",credentials:"omit",cache:"no-store",headers:{"Content-Type":"application/json"},
-body:JSON.stringify({t,login:$("l").value.trim(),password:$("p").value})});
+body:JSON.stringify({t,password:$("p").value})});
 const j=await r.json().catch(()=>({}));
 if(r.ok){$("f").querySelectorAll("input,button").forEach(x=>x.disabled=true);$("p").value="";
 say("✅ Вход выполнен. Вернитесь в Telegram.",true);setTimeout(()=>window.close(),1500);return}
@@ -408,13 +406,13 @@ def setup(app, on_login=None, on_alert=None):
         if request.content_type != "application/json" or not (0 < (request.content_length or 0) <= 4096):
             return out(400, "Неверный запрос")
         try:
-            t, lg, pw = parse_login(await request.read())
+            t, pw = parse_login(await request.read())
         except ValueError:
             return out(400, "Проверьте введённые данные")
         if t:
-            code, msg, tg_id = await attempt(t, lg, pw)               # вход из Telegram по одноразовой ссылке
+            code, msg, tg_id = await attempt(t, pw)                   # вход из Telegram по одноразовой ссылке
         else:
-            code, msg, tg_id = await attempt_standalone(lg, pw)       # standalone (APK): только логин и пароль
+            code, msg, tg_id = await attempt_standalone(pw)           # standalone (APK): только пароль
         if code == 200 and on_login and tg_id:
             try: await on_login(tg_id)
             except Exception: pass                                 # сбой уведомления не отменяет вход
@@ -444,5 +442,5 @@ if __name__ == "__main__":
         if not _strong_enough(p):
             sys.exit("Слабый пароль: нужно от 12 символов и минимум 3 вида (строчные, ЗАГЛАВНЫЕ, цифры, символы). "
                      "Или запустите: python auth.py --gen")
-    print("\nДобавьте в .env на сервере:\nAUTH_LOGIN=Admin\nAUTH_PASSWORD_HASH=" + make_hash(p))
+    print("\nДобавьте в .env на сервере:\nAUTH_PASSWORD_HASH=" + make_hash(p))
     print("\nПосле смены перезапустите бота — все старые входы станут недействительными.")
