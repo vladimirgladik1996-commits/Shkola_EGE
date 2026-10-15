@@ -143,9 +143,12 @@ var d=document,tabs=[].slice.call(d.querySelectorAll('.tab')),pn=[].slice.call(d
 function show(id){
   tabs.forEach(function(t){t.setAttribute('aria-selected',t.getAttribute('data-p')===id?'true':'false')});
   pn.forEach(function(p){p.hidden=p.id!==id});
+  var h=d.documentElement,prev=h.style.scrollBehavior;
+  h.style.scrollBehavior='auto';   // новый раздел — всегда с начала: плавный скролл из CSS отменял бы сброс
   window.scrollTo(0,0);
   var a=d.querySelector('.tab[aria-selected="true"]');
-  if(a&&a.scrollIntoView){try{a.scrollIntoView({inline:'nearest',block:'nearest'})}catch(e){}}}
+  if(a&&a.scrollIntoView){try{a.scrollIntoView({inline:'nearest',block:'nearest'})}catch(e){}}
+  window.scrollTo(0,0);requestAnimationFrame(function(){window.scrollTo(0,0);h.style.scrollBehavior=prev})}
 tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('data-p'))})});
 [].forEach.call(d.querySelectorAll('[data-go]'),function(b){b.addEventListener('click',function(){show(b.getAttribute('data-go'))})});
 [].forEach.call(d.querySelectorAll('[data-nav]'),function(b){b.addEventListener('click',function(){
@@ -180,13 +183,16 @@ function later(){clearTimeout(tm);tm=setTimeout(upd,140)}
 d.addEventListener('selectionchange',later);
 window.addEventListener('scroll',function(){if(cur)later()},{passive:true});
 window.addEventListener('resize',later);
-['mousedown','touchstart','pointerdown'].forEach(function(ev){ask.addEventListener(ev,function(e){e.preventDefault()},{passive:false})});   // тап по кнопке не снимает выделение
-ask.addEventListener('click',function(e){
-  e.preventDefault();var c=cur||read();if(!c)return;
+['mousedown','touchstart','pointerdown'].forEach(function(ev){ask.addEventListener(ev,function(e){e.preventDefault()},{passive:false})});   // тап по кнопке не снимает выделение; preventDefault на touchstart подавляет click — действуем сами
+var sent=0;function go(e){
+  if(e&&e.cancelable)e.preventDefault();
+  if(Date.now()-sent<800)return;sent=Date.now();
+  var c=cur||read();if(!c)return;
   var msg={matAsk:{text:c.t,part:c.part,cat:body.getAttribute('data-cat'),n:+body.getAttribute('data-n')}};
   try{parent.postMessage(msg,'*')}catch(x){}
   try{window.getSelection().removeAllRanges()}catch(x){}
-  cur=null;ask.hidden=true})
+  cur=null;ask.hidden=true}
+['click','touchend','pointerup'].forEach(function(ev){ask.addEventListener(ev,go,{passive:false})});   // click на тач не приходит — слушаем touchend/pointerup
 })();
 var fs=17;try{fs=+localStorage.getItem('matfs')||17}catch(e){}
 function setfs(v){fs=Math.max(14,Math.min(26,v));d.documentElement.style.setProperty('--fs',fs+'px');try{localStorage.setItem('matfs',fs)}catch(e){}}

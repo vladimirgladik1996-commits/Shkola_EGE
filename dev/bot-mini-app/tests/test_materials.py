@@ -1,4 +1,4 @@
-"""Раздел «Материалы»: два каталога (ОГЭ-2027, ЕГЭ-2027) по 36 вариантов — файлы на месте, маршруты закрыты входом,
+"""Раздел «Материалы»: три каталога (ОГЭ-2027, ОГЭ-2027 «до 80 слов», ЕГЭ-2027) по 36 вариантов — файлы на месте, маршруты закрыты входом,
 во фронте: чипсины каталогов → чипсины 36 вариантов → открытие варианта.
 Статическая проверка (без сети и без запуска бота). Запуск: python3 tests/test_materials.py"""
 import json, os, re
@@ -10,6 +10,7 @@ def read(*p):
 bot, front = read("bot.py"), read("docs", "index.html")
 CATS = {   # id → (что внутри варианта, сколько сочинений в варианте)
     "oge-essays-2027": ("Дощинского", ["13.1", "13.2", "13.3"]),
+    "oge-essays-2027-vishenka": ("Дощинского", ["13.1", "13.2", "13.3"]),
     "ege-essays-2027": ("Дощинского", None),
 }
 
@@ -29,15 +30,16 @@ for cid in CATS:
         labels = re.findall(r'role="tab" data-p="[^"]+" aria-selected="(?:true|false)"(?: aria-label="[^"]*")?>([^<]+)</button>', page)
         assert labels == (["Текст", "27"] if cid.startswith("ege") else ["Текст", "13.1", "13.2", "13.3"]), (cid, n, labels)
         assert ('<div class="num">%d</div>' % n) in page and page.count('class="rd"') >= 1, (cid, n)
+        assert 'h.style.scrollBehavior' in page, (cid, n)   # переключение вкладок: новый раздел всегда с начала
         if cid.startswith("ege"):   # вкладки: текст · 27 (сочинение + критерии К1–К10)
             assert all(('id="p-%s"' % x) in page for x in ("text", "essay")) and "p-crit" not in page and page.count('<details class="cr">') == 10, (cid, n)
             assert 'class="chip">' in page and "норма ЕГЭ" in page and '<i class="sn">1</i>' in page, (cid, n)
         else:                       # вкладки: текст · 13.1 · 13.2 · 13.3, у каждого эссе свои критерии СК1–СК4
             assert all(('id="p-%s"' % x) in page for x in ("text", "131", "132", "133")), (cid, n)
             assert page.count('class="qb"') == 3 and page.count('<details class="cr">') == 12 and "норма ОГЭ" in page, (cid, n)
-            assert page.count('<p class="at">(По ') == 1, (cid, n)   # указание автора выделено в отдельную строку
+            assert page.count('<p class="at">(По ') == (1 if cid == "oge-essays-2027" else 0), (cid, n)   # автор: отдельной строкой либо в шапке (каталог «до 80 слов»)
     about = read("materials", cid, "about.html")
-    assert "Дощинск" in about and "критери" in about and 'data-nav="toc">Оглавление</button>' in about, cid
+    assert "Дощинск" in about and "критери" in about and 'data-nav="toc">Оглавление</button>' in about and 'h.style.scrollBehavior' in about, cid
     ok(f"materials/{cid}/: index.json + about.html + 36 страниц вариантов в дизайне приложения (хлебные крошки: Оглавление › Вариант › {'текст | 27' if cid.startswith('ege') else 'текст | 13.1 | 13.2 | 13.3'})")
 
 # --- бэкенд: маршруты под @guarded, имена файлов — только из белого списка
@@ -50,6 +52,7 @@ ok("/api/materials/{id} и /api/materials/{id}/{n|about} зарегистрир�
 
 # --- фронт: каталоги → чипсины 36 вариантов → вариант
 for t in ("Каталог эссе для ОГЭ-2027. Русский язык. По сборнику Р.А. Дощинского",
+          "Каталог эссе для ОГЭ-2027. Русский язык. По сборнику Р.А. Дощинского (До 80 слов)",
           "Каталог сочинений ЕГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"):
     assert t in front, t
 assert 'tab=="mt"?mat()' in front and "function matCatOpen" in front and "function matGrid" in front and "function matOpen(ci,part)" in front
@@ -69,6 +72,7 @@ for cid in CATS:
     for n in (1, 7, 36):
         page = read("materials", cid, "v%02d.html" % n)
         assert 'id="ask"' in page and ('data-cat="%s" data-n="%d"' % (cid, n)) in page and "matAsk" in page and 'src="vishenka.png"' in page, (cid, n)
+        assert "['click','touchend','pointerup']" in page, (cid, n)   # кнопка срабатывает и по тапу: preventDefault на touchstart подавляет click
     assert 'id="ask"' not in read("materials", cid, "about.html"), cid   # на странице «о каталоге» кнопки нет
 ok("страницы вариантов: при выделении текста появляется кнопка «Спросить у Вишенки» (на «о каталоге» её нет)")
 assert "function fragOpen(a)" in front and "e.data.matAsk" in front and 'api(fr?"/api/fragment":"/api/voice"' in front and "fqc" not in front and "FRAG_ASKS" not in front and "body:has(#mv.on) #sheet{z-index:90}" in front
