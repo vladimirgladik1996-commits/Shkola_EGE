@@ -1476,6 +1476,7 @@ async def api_data(request):
 
 MATERIALS = {   # id каталога → папка в materials/ (раздел «Материалы» мини-аппа и APK)
     "oge-essays-2027": "oge-essays-2027",
+    "oge-essays-2027-vishenka": "oge-essays-2027-vishenka",
     "ege-essays-2027": "ege-essays-2027",
 }
 MAT_VARIANTS = 36   # в каждом каталоге 36 вариантов: materials/<папка>/v01.html … v36.html + about.html + index.json
