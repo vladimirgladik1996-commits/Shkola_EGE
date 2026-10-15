@@ -455,10 +455,11 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 .mt-chip .mg{flex:0 0 auto;color:var(--hint);font-size:20px;line-height:1}
 #mv{display:none;position:fixed;inset:0;z-index:80;background:var(--bg);flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
 #mv.on{display:flex}
+#mv.pg .mvb{display:none}   /* когда страница варианта загружена, её собственные хлебные крошки заменяют верхнюю полосу */
 .mvb{display:flex;align-items:center;gap:10px;padding:8px 10px;flex:0 0 auto}
 .mvb .pill{flex:0 0 auto}
 .mvb b{flex:1;min-width:0;font-size:13px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-#mvf{flex:1;border:0;width:100%;background:#fff;margin-bottom:env(safe-area-inset-bottom,0px)}
+#mvf{flex:1;border:0;width:100%;background:var(--bg);margin-bottom:env(safe-area-inset-bottom,0px)}
 #mvl{position:absolute;inset:56px 0 0;display:grid;place-items:center;color:var(--hint);font-size:14px;pointer-events:none}
 #mvl[hidden]{display:none}
 /* ── Прелоадер загрузки ─────────────────────────────────────────────────────
@@ -500,6 +501,14 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 @keyframes st{to{background-position:25.5px 0,0 0}}
 @keyframes cap{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-14%) rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){#pl .art,#pl .l,#pl .sweep,#pl .glow,#pl .sp,#pl #plf,#pl .cap{animation-duration:12s}}
+.mt-bar{margin:0 0 8px}.mt-cat{font-weight:700;color:var(--tx);font-size:14px;line-height:1.3;margin:4px 4px 10px}
+.mt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media(min-width:520px){.mt-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mt-grid .mt-about{grid-column:1/-1}
+.mt-v{padding:8px 10px 8px 8px;gap:9px}
+.mt-v .mi{flex:0 0 36px;height:36px;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums}
+.mt-v b{display:block;font-size:14px}
+.mt-v small{display:block;margin-top:1px;font-size:11px;font-weight:500;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -567,7 +576,7 @@ frame()
 <button id="fab" onclick="fabGo()">+ Занятие</button><button id="chw" type="button" aria-label="Голосовой помощник Вишенка" onclick="chatOpen()"><span class="chi"><img id="chimg" alt=""></span><svg class="cht" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 3.6C22.6 10.6 23.7 17.4 24.6 24.6 17.4 23.8 8.6 22.8 1.2 21Z"/></svg></button>
 <div id="sheet"></div>
 <div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="$('#pr').classList.remove('on')">Назад</button><button class="btn pri" id="prs" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
-<div id="mv" role="dialog" aria-modal="true" aria-label="Материал"><div class="mvb"><button class="pill" type="button" onclick="matClose()">‹ Материалы</button><b id="mvt"></b></div><div id="mvl" hidden>Загружаю…</div><iframe id="mvf" title="Материал"></iframe></div>
+<div id="mv" role="dialog" aria-modal="true" aria-label="Материал"><div class="mvb"><button class="pill" type="button" onclick="matClose()">‹ Варианты</button><b id="mvt"></b></div><div id="mvl" hidden>Загружаю…</div><iframe id="mvf" title="Материал"></iframe></div>
 <div id="toast"></div>
 <script>
 const $=s=>document.querySelector(s);
@@ -1436,38 +1445,66 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;$("#sheet").classList.remove("on")}
-function render(){$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
+function render(){if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
 /* ---------- раздел «Материалы» ---------- */
-const MATS=[{id:"oge-essays-2027",t:"Каталог эссе для ОГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"},{id:"ege-essays-2027",t:"Каталог сочинений ЕГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"}];
+/* Два каталога → по нажатию на каталог показываются чипсины всех 36 вариантов → по нажатию на вариант во весь экран открывается
+   исходный текст + сочинение (ЕГЭ) или три эссе 13.1–13.3 (ОГЭ). Файлы на сервере: materials/<id>/index.json, about.html, v01…v36.html */
+const MATS=[{id:"oge-essays-2027",s:"ОГЭ-2027",t:"Каталог эссе для ОГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"},{id:"ege-essays-2027",s:"ЕГЭ-2027",t:"Каталог сочинений ЕГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"}];
 const MAT_ICO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 016.5 3H19v15H6.5A1.5 1.5 0 005 19.5z"/><path d="M5 19.5A1.5 1.5 0 006.5 21H19v-3M9 7.5h6M9 11h6"/></svg>';
-let matUrl={},matIsOpen=false;
-function mat(){return `<p class="mt-h">Учебные материалы</p><div class="mt-list">${MATS.map((m,i)=>`<button class="mt-chip" type="button" onclick="matOpen(${i})"><span class="mi">${MAT_ICO}</span><span class="mt-t">${m.t.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</span><span class="mg" aria-hidden="true">›</span></button>`).join("")}</div>`}
-async function matOpen(i){
-  const m=MATS[i];if(!m||matIsOpen)return;
-  const mv=$("#mv"),fr=$("#mvf"),ld=$("#mvl");
-  $("#mvt").textContent=m.t;fr.removeAttribute("src");ld.hidden=false;
+let matTxt={},matBlob=null,matIsOpen=false,matCat=null,matIdx={},matQ="";
+function matTheme(){const t=document.documentElement.dataset.theme;return t==="dark"||(!t&&matchMedia("(prefers-color-scheme:dark)").matches)?"dark":"light"}   // страница варианта подстраивается под тему приложения
+async function matGet(path){   // GET с входом, как у остальных /api/*; null — доступ закрыт (показан экран блокировки), ошибка сети/сервера — throw
+  const h={"X-Init":tg.initData};if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
+  const r=await fetch(API_BASE+path,{headers:h});
+  if(r.status==401||r.status==403){lockScreen(r.status);return null}
+  if(!r.ok)throw 0;return r}
+function mat(){return matCat===null?matCats():matVars()}
+function matCats(){return `<p class="mt-h">Учебные материалы</p><div class="mt-list">${MATS.map((m,i)=>`<button class="mt-chip" type="button" onclick="matCatOpen(${i})"><span class="mi">${MAT_ICO}</span><span class="mt-t">${esc(m.t)}</span><span class="mg" aria-hidden="true">›</span></button>`).join("")}</div>`}
+function matVars(){const m=MATS[matCat];
+  return `<div class="mt-bar"><button class="pill" type="button" onclick="matBack()">‹ Материалы</button></div><p class="mt-h mt-cat">${esc(m.t)}</p>
+  <input id="mtq" class="srch" type="search" placeholder="🔍 Номер, автор или проблема" value="${esc(matQ)}" oninput="matFind(this.value)" autocomplete="off">
+  <div class="mt-grid" id="mtg">${matGrid()}</div>`}
+function matGrid(){const m=MATS[matCat],ix=matIdx[m.id];
+  if(!ix)return `<p class="empty" style="grid-column:1/-1">Загружаю…</p>`;
+  const q=matQ.trim().toLowerCase(),num=/^\d+$/.test(q);
+  const L=ix.filter(v=>!q||(num?String(v.n).startsWith(q):v.q.toLowerCase().includes(q)));
+  const about=q?"":`<button class="mt-chip mt-about" type="button" onclick="matOpen(${matCat},'about')"><span class="mi">${MAT_ICO}</span><span class="mt-t">О каталоге, критерии и источники</span><span class="mg" aria-hidden="true">›</span></button>`;
+  return about+(L.length?L.map(v=>`<button class="mt-chip mt-v" type="button" onclick="matOpen(${matCat},${v.n})"><span class="mi mn">${v.n}</span><span class="mt-t"><b>Вариант ${v.n}</b><small>${esc(v.sub)}</small></span></button>`).join(""):`<p class="empty" style="grid-column:1/-1">Ничего не найдено</p>`)}
+function matFind(v){matQ=v;const g=$("#mtg");if(g)g.innerHTML=matGrid()}
+async function matCatOpen(i){const m=MATS[i];if(!m)return;
+  matCat=i;matQ="";render();scrollTo({top:0,behavior:"instant"});
+  if(matIdx[m.id])return;
+  try{const r=await matGet("/api/materials/"+m.id);if(!r){matCat=null;return}
+    matIdx[m.id]=(await r.json()).variants}
+  catch(e){if(matCat===i)matCat=null;if(tab=="mt")render();toast("Не получилось загрузить каталог, попробуйте ещё раз");return}
+  if(tab=="mt"&&matCat===i)render()}
+function matBack(){matCat=null;matQ="";render();scrollTo({top:0,behavior:"instant"})}
+async function matOpen(ci,part){   // part — номер варианта 1…36 или "about"
+  const m=MATS[ci];if(!m||matIsOpen)return;
+  const key=m.id+"/"+part,mv=$("#mv"),fr=$("#mvf"),ld=$("#mvl");
+  mv.classList.remove("pg");$("#mvt").textContent=m.s+" · "+(part=="about"?"О каталоге и источники":"Вариант "+part);fr.removeAttribute("src");ld.hidden=false;
   matIsOpen=true;mv.classList.add("on");
   try{history.pushState({mv:1},"")}catch(e){}
   try{tg.BackButton.show()}catch(e){}
   try{
-    if(!matUrl[m.id]){
-      const h={"X-Init":tg.initData};if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
-      const r=await fetch(API_BASE+"/api/materials/"+m.id,{headers:h});
-      if(r.status==401||r.status==403){matClose();lockScreen(r.status);return}
-      if(!r.ok)throw 0;
-      const html=(await r.text()).replace(/src="vishenka(?:_cover)?\.png"/g,'src="'+$("#tmk").src+'"');   /* обложка каталога ссылается на файл рядом — подставляем талисман, уже встроенный в приложение */
-      matUrl[m.id]=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}))}
+    if(!matTxt[key]){
+      const r=await matGet("/api/materials/"+key);
+      if(!r){matClose();return}
+      matTxt[key]=(await r.text()).replace(/src="vishenka(?:_cover)?\.png"/g,'src="'+$("#tmk").src+'"')}   /* обложка («о каталоге») ссылается на файл рядом — подставляем талисман, уже встроенный в приложение */
     if(!matIsOpen)return;
-    fr.onload=()=>{ld.hidden=true};fr.src=matUrl[m.id]}
+    if(matBlob)URL.revokeObjectURL(matBlob);
+    matBlob=URL.createObjectURL(new Blob([matTxt[key].replace('<html lang="ru">','<html lang="ru" data-theme="'+matTheme()+'">')],{type:"text/html;charset=utf-8"}));
+    fr.onload=()=>{ld.hidden=true;mv.classList.add("pg")};fr.src=matBlob}
   catch(e){ld.hidden=true;matClose();toast("Не получилось открыть материал, попробуйте ещё раз")}}
 function matClose(fromPop){
   if(!matIsOpen)return;matIsOpen=false;
-  $("#mv").classList.remove("on");$("#mvf").removeAttribute("src");
+  $("#mv").classList.remove("on","pg");$("#mvf").removeAttribute("src");if(matBlob){URL.revokeObjectURL(matBlob);matBlob=null}
   if(!fromPop){try{if(history.state&&history.state.mv)history.back()}catch(e){}}
   if(!navOpen){try{tg.BackButton.hide()}catch(e){}}}
 addEventListener("popstate",()=>{if(matIsOpen)matClose(true)});
+addEventListener("message",e=>{if(matIsOpen&&e.source===$("#mvf").contentWindow&&e.data&&e.data.matNav==="toc")matClose()});   // «Оглавление» в хлебных крошках страницы → назад к сетке вариантов
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose()});
 
 /* ---------- меню-гамбургер ---------- */

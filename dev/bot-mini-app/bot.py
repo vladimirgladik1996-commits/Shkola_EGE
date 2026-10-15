@@ -1474,20 +1474,43 @@ async def api_data(request):
         join students s on s.id=p.student_id order by p.id desc limit 200""")]
     return web.json_response({"students": st, "lessons": lessons, "payments": pays, "cur": CUR, "env": APP_ENV})
 
-MATERIALS = {   # id → файл в materials/ (раздел «Материалы» мини-аппа и APK)
-    "oge-essays-2027": "oge-essays-2027.html",
-    "ege-essays-2027": "ege-essays-2027.html",
+MATERIALS = {   # id каталога → папка в materials/ (раздел «Материалы» мини-аппа и APK)
+    "oge-essays-2027": "oge-essays-2027",
+    "ege-essays-2027": "ege-essays-2027",
 }
+MAT_VARIANTS = 36   # в каждом каталоге 36 вариантов: materials/<папка>/v01.html … v36.html + about.html + index.json
+
+def _material_file(mid, part=None):
+    """Путь к файлу материала. Только из белого списка: id каталога, «about» или номер варианта 1…36,
+    иначе ValueError (→ 400) — произвольные пути наружу не уходят."""
+    folder = MATERIALS.get(mid)
+    if folder is None:
+        raise ValueError
+    if part is None:
+        name, ctype = "index.json", "application/json; charset=utf-8"
+    else:
+        ctype = "text/html; charset=utf-8"
+        if part == "about":
+            name = "about.html"
+        elif re.fullmatch(r"[0-9]{1,2}", part) and 1 <= int(part) <= MAT_VARIANTS:
+            name = "v%02d.html" % int(part)
+        else:
+            raise ValueError
+    return os.path.join(HERE, "materials", folder, name), ctype
 
 @guarded
 async def api_material(request):
-    """Отдаёт HTML материала только после входа (X-Init / X-Session), как и остальные /api/*.
-    Страница открывается во фрейме мини-аппа: фронт забирает её с заголовками и показывает через blob-URL."""
-    name = MATERIALS.get(request.match_info["mid"])
-    if name is None:
-        raise ValueError
-    return web.FileResponse(os.path.join(HERE, "materials", name),
-                            headers={"Cache-Control": "private, max-age=3600", "Content-Type": "text/html; charset=utf-8"})
+    """Каталог материала: список 36 вариантов (номер, автор текста, строка для поиска) — по нему фронт рисует чипсины.
+    Отдаётся только после входа (X-Init / X-Session), как и остальные /api/*."""
+    path, ctype = _material_file(request.match_info["mid"])
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=3600", "Content-Type": ctype})
+
+@guarded
+async def api_material_part(request):
+    """Страница одного варианта (/api/materials/{mid}/7: текст + сочинение или три эссе) либо «о каталоге»
+    (/api/materials/{mid}/about). Открывается во фрейме мини-аппа: фронт забирает её с заголовками и показывает через blob-URL."""
+    path, ctype = _material_file(request.match_info["mid"], request.match_info["part"])
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=3600", "Content-Type": ctype})
 
 def user_id(request):
     """Кто спрашивает: из подписи initData (Telegram), из токена X-Session (standalone)
@@ -1859,6 +1882,7 @@ def make_app():
     app.router.add_get("/api/data", api_data)
     app.router.add_get("/api/week.pdf", api_week_pdf)
     app.router.add_get("/api/materials/{mid}", api_material)
+    app.router.add_get("/api/materials/{mid}/{part}", api_material_part)
     app.router.add_get("/api/pdf_link", api_pdf_link)
     app.router.add_post("/api/pdf_link", api_pdf_link)   # POST — для закэшированной страницы, см. api_pdf_link
     app.router.add_post("/api/week/send", api_week_send)
