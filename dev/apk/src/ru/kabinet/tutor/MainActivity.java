@@ -358,11 +358,10 @@ public class MainActivity extends Activity {
         sb.append("активная запись: ");
         List<AudioRecordingConfiguration> cfgs = am.getActiveRecordingConfigurations();
         if (cfgs.isEmpty()) sb.append("не видно (Android скрывает чужие записи, или их нет)");
-        else for (AudioRecordingConfiguration c : cfgs) {
-            String pkg = "?";
-            String[] pkgs = getPackageManager().getPackagesForUid(c.getClientUid());
-            if (pkgs != null && pkgs.length > 0) pkg = pkgs[0];
-            sb.append(pkg).append(" (источник ").append(c.getClientAudioSource()).append(") ");
+        else for (AudioRecordingConfiguration c : cfgs) {   // имя держателя микрофона Android не отдаёт (нет публичного API) — показываем факты, которые есть
+            sb.append("сессия ").append(c.getClientAudioSessionId())
+              .append(" (источник ").append(c.getClientAudioSource())
+              .append(", приглушена: ").append(c.isClientSilenced() ? "да" : "нет").append(") ");
         }
         sb.append(" · микрофон заглушён: ").append(am.isMicrophoneMute() ? "да" : "нет");
         int mode = am.getMode();
