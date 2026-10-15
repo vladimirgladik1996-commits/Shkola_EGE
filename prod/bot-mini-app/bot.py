@@ -1841,6 +1841,123 @@ async def api_voice_cancel(request):
     res = assist.cancel_page(user_id(request))
     return web.json_response({"ok": True, **res})
 
+# ---------- «Спросить у Вишенки» по выделенному фрагменту материала ----------
+# Мини-апп присылает фрагмент + голосовую (или готовую текстовую) задачу. Голос расшифровывается сразу
+# (Whisper), мини-апп получает «принято», а модель отвечает в фоне — результат приходит в чат с ботом.
+FRAG_MAX = 3000                          # символов фрагмента
+FRAG_PARTS = {"p-text", "p-essay", "p-131", "p-132", "p-133", "other"}
+FRAG_BUSY = {}                           # uid -> сколько ответов сейчас готовится (не больше 2 одновременно)
+FRAG_TASKS = set()                       # ссылки на фоновые задачи, чтобы их не собрал GC
+
+def fragment_meta(j):
+    """(фрагмент, {cat, n, part}) из запроса; всё нестандартное — ValueError (→ 400)."""
+    frag = j.get("fragment")
+    if not isinstance(frag, str):
+        raise ValueError
+    frag = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", frag)
+    frag = "\n".join(re.sub(r"[ \t\u00a0]+", " ", ln).strip() for ln in frag.split("\n")).strip()
+    if not 3 <= len(frag) <= FRAG_MAX:
+        raise ValueError
+    cat = j.get("cat")
+    if cat not in MATERIALS:
+        raise ValueError
+    n = _int_id(j.get("n"))
+    if not 1 <= n <= MAT_VARIANTS:
+        raise ValueError
+    part = j.get("part") or "other"
+    if part not in FRAG_PARTS:
+        raise ValueError
+    return frag, {"cat": cat, "n": n, "part": part}
+
+async def tg_send_long(tg_bot, uid, text, buttons=None):
+    """Сообщение в чат: длинный текст режется кусками (лимит Telegram — 4096), кнопки — на последнем куске."""
+    parts, cur = [], ""
+    for para in (text or "—").split("\n"):
+        if cur and len(cur) + len(para) + 1 > 3800:
+            parts.append(cur); cur = para
+        else:
+            cur = para if not cur else cur + "\n" + para
+    parts.append(cur)
+    kb = ai_kb(buttons)
+    for i, p in enumerate(parts):
+        await tg_bot.send_message(uid, p, reply_markup=kb if i == len(parts) - 1 else None)
+
+def fragment_head(fragment, instruction, meta):
+    short = fragment if len(fragment) <= 160 else fragment[:157].rstrip() + "…"
+    short = " ".join(short.split())
+    tag = "ЕГЭ-2027" if meta["cat"].startswith("ege") else "ОГЭ-2027"
+    return f"🍒 Вишенка · вариант {meta['n']}, {tag}\nФрагмент: «{short}»\nЗадача: «{instruction}»"
+
+async def fragment_job(tg_bot, uid, fragment, instruction, meta):
+    """Фон: модель отвечает на задачу по фрагменту, ответ уходит в чат пользователя с ботом."""
+    typing = asyncio.create_task(_typing_loop(tg_bot, uid))
+    try:
+        prompt = assist.fragment_prompt(fragment, instruction, meta)
+        try:
+            ans = await assist.answer_fragment(prompt)
+        finally:
+            typing.cancel()
+            with suppress(asyncio.CancelledError):
+                await typing
+        buttons = None
+        if ans and assist.remember_fragment(uid, prompt):
+            buttons = [("🧠 Разобрать глубже", "ai:deep")]
+        body = ans or "Модель не ответила — выделите фрагмент и попробуйте ещё раз."
+        await tg_send_long(tg_bot, uid, fragment_head(fragment, instruction, meta) + "\n\n" + body, buttons)
+        log.info("fragment: tg_id=%s cat=%s n=%s part=%s ok=%s", uid, meta["cat"], meta["n"], meta["part"], bool(ans))
+    except TelegramAPIError as e:
+        log.warning("fragment send failed: tg_id=%s err=%s", uid, e)
+    except Exception:
+        log.exception("fragment job failed: tg_id=%s", uid)
+        with suppress(Exception):
+            await tg_bot.send_message(uid, "Не получилось подготовить ответ по фрагменту — попробуйте ещё раз.")
+    finally:
+        FRAG_BUSY[uid] = max(0, FRAG_BUSY.get(uid, 1) - 1)
+        if not FRAG_BUSY[uid]:
+            FRAG_BUSY.pop(uid, None)
+
+@guarded
+async def api_fragment(request):
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    fragment, meta = fragment_meta(j)
+    audio, mime = voice_audio(j)
+    text = j.get("text")
+    if text is not None and (not isinstance(text, str) or len(text) > 500):
+        raise ValueError
+    dur = j.get("dur")
+    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not 0 <= dur <= VOICE_MAX_SEC):
+        raise ValueError
+    text = " ".join((text or "").split())
+    if audio is None and not text:
+        raise ValueError
+    uid, tg_bot = user_id(request), request.app.get("bot")
+    if not isinstance(uid, int) or tg_bot is None:
+        return web.json_response({"error": "unavailable"}, status=503)
+    if not kimi.enabled():
+        return web.json_response({"ok": True, "stage": "stub", "reply": "Ассистент не подключён: на сервере не задан KIMI_API_KEY."})
+    heard = ""
+    if not text:
+        if not whisper.enabled():
+            return web.json_response({"ok": True, "stage": "stub", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
+        heard = " ".join((await whisper.transcribe(audio, mime) or "").split())
+        if not heard:
+            return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись — нажмите кнопку и скажите ещё раз."})
+        text = heard[:500]
+    if FRAG_BUSY.get(uid, 0) >= 2:
+        return web.json_response({"ok": True, "stage": "busy", "reply": "Предыдущие ответы ещё готовятся — подождите минуту и повторите.",
+                                  **({"heard": heard} if heard else {})})
+    FRAG_BUSY[uid] = FRAG_BUSY.get(uid, 0) + 1
+    task = asyncio.create_task(fragment_job(tg_bot, uid, fragment, text, meta))
+    FRAG_TASKS.add(task)
+    task.add_done_callback(FRAG_TASKS.discard)
+    log.info("fragment: tg_id=%s cat=%s n=%s part=%s frag=%sch audio=%sB", uid, meta["cat"], meta["n"], meta["part"], len(fragment), len(audio or b""))
+    res = {"ok": True, "stage": "sent", "reply": "Принято! Ответ пришлёт бот в чат Telegram — обычно через полминуты."}
+    if heard:
+        res["heard"] = heard
+    return web.json_response(res)
+
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
 # либо "*". Если ALLOW_ORIGIN не задан, заголовки не добавляются и всё работает как раньше
@@ -1901,6 +2018,7 @@ def make_app():
     app.router.add_post("/api/voice", api_voice)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
+    app.router.add_post("/api/fragment", api_fragment)
     return app
 
 

@@ -63,4 +63,37 @@ assert "vishenka(?:_cover)?" in front and 'src="vishenka_cover.png"' in read("ma
 ok("обложки страниц «о каталоге» подменяются встроенным талисманом (отдельного png нет)")
 assert "fr.srcdoc=" in front and "matBlob" not in front, "вариант должен открываться через srcdoc: Android WebView не открывает blob:-URL во фрейме (net::ERR_FILE_NOT_FOUND)"
 ok("страница варианта идёт во фрейм через srcdoc (без blob-URL — ломалось в Android WebView)")
+# --- «Спросить у Вишенки»: кнопка при выделении текста → виджет голосом → ответ в чат с ботом
+asst = read("assist.py")
+for cid in CATS:
+    for n in (1, 7, 36):
+        page = read("materials", cid, "v%02d.html" % n)
+        assert 'id="ask"' in page and ('data-cat="%s" data-n="%d"' % (cid, n)) in page and "matAsk" in page and 'src="vishenka.png"' in page, (cid, n)
+    assert 'id="ask"' not in read("materials", cid, "about.html"), cid   # на странице «о каталоге» кнопки нет
+ok("страницы вариантов: при выделении текста появляется кнопка «Спросить у Вишенки» (на «о каталоге» её нет)")
+assert "function fragOpen(a)" in front and "e.data.matAsk" in front and 'api(fr?"/api/fragment":"/api/voice"' in front and "fqc" not in front and "FRAG_ASKS" not in front and "body:has(#mv.on) #sheet{z-index:90}" in front
+assert 'add_post("/api/fragment", api_fragment)' in bot and re.search(r'@guarded\s+async def api_fragment\(', bot), "маршрут /api/fragment должен быть под @guarded"
+ok("мини-апп открывает виджет Вишенки по выделенному фрагменту; /api/fragment закрыт входом (@guarded)")
+
+# логика проверки запроса и промпта (чистые функции вырезаются из исходников: бот целиком без aiogram не импортируется)
+ns = {"re": re, "MATERIALS": {"oge-essays-2027": "oge-essays-2027", "ege-essays-2027": "ege-essays-2027"}, "MAT_VARIANTS": 36}
+exec(bot[bot.index("def _int_id(x):"):bot.index("def _day(x):")], ns)
+exec(bot[bot.index("FRAG_MAX = 3000"):bot.index("async def tg_send_long")], ns)
+good = {"fragment": "  Однажды   осенью\u00a0я ехал.\n\n\n  Моим попутчиком  ", "cat": "ege-essays-2027", "n": 7, "part": "p-text"}
+frag, meta = ns["fragment_meta"](good)
+assert frag == "Однажды осенью я ехал.\n\n\nМоим попутчиком" or frag.startswith("Однажды осенью я ехал."), frag
+assert meta == {"cat": "ege-essays-2027", "n": 7, "part": "p-text"}
+assert ns["fragment_meta"]({**good, "part": None})[1]["part"] == "other"
+for bad in ({**good, "fragment": "ab"}, {**good, "fragment": "я" * 3001}, {**good, "fragment": 5}, {**good, "cat": "../x"}, {**good, "n": 0},
+            {**good, "n": 37}, {**good, "n": True}, {**good, "n": "7"}, {**good, "part": "p-999"}, {k: v for k, v in good.items() if k != "cat"}):
+    try:
+        ns["fragment_meta"](bad); raise SystemExit("не отсеяно: %r" % (bad,))
+    except ValueError:
+        pass
+assert "\x00" not in ns["fragment_meta"]({**good, "fragment": "до\x00после текста"})[0]
+ns2 = {}
+exec(asst[asst.index("FRAG_SYS = ("):asst.index("async def answer_fragment")], ns2)
+pr = ns2["fragment_prompt"]("Текст фрагмента.", "перепиши короче", {"cat": "oge-essays-2027", "n": 12, "part": "p-132"})
+assert "вариантом 12 каталога эссе ОГЭ-2027" in pr and "сочинения 13.2" in pr and "«Текст фрагмента.»" in pr and "ЗАДАЧА РЕПЕТИТОРА: перепиши короче" in pr, pr
+ok("проверка запроса (3…3000 символов, каталог из белого списка, вариант 1…36, часть страницы) и сбор задачи для модели")
 print("OK")

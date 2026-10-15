@@ -79,6 +79,11 @@ details.task .tb{padding:0 14px 14px;font-size:13.5px;line-height:1.5;color:var(
 .box.warn{box-shadow:inset 4px 0 0 var(--red)}
 .box .bh{font-weight:800;margin-bottom:4px}
 .box p{margin:0}
+#ask{position:fixed;z-index:30;left:0;top:0;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px 0 6px;border-radius:99px;background:var(--acc);color:var(--on);font-weight:800;font-size:13.5px;white-space:nowrap;box-shadow:0 10px 22px -8px rgba(15,46,110,.6),0 0 0 2px var(--yel);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;animation:askIn .18s ease-out}
+#ask img{width:30px;height:30px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#FBF7E9;box-shadow:0 0 0 2px var(--yel)}
+#ask:active{transform:scale(.96)}
+@keyframes askIn{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){#ask{animation:none}}
 .args{display:flex;flex-direction:column;gap:6px;margin-top:4px}
 .arg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--bg)}
 .arg i{flex:0 0 28px;height:28px;border-radius:50%;background:var(--yel);color:var(--yon);font:800 12px/28px system-ui,sans-serif;font-style:normal;text-align:center}
@@ -118,6 +123,43 @@ tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribu
 [].forEach.call(d.querySelectorAll('[data-nav]'),function(b){b.addEventListener('click',function(){
   if(b.getAttribute('data-nav')==='toc'){try{parent.postMessage({matNav:'toc'},'*')}catch(e){}}
   else if(tabs.length){show(tabs[0].getAttribute('data-p'))}})});
+(function(){
+var ask=d.getElementById('ask');if(!ask)return;
+var cur=null,tm=0,body=d.body;
+function clean(r){   // текст выделения без номеров предложений, с абзацами
+  var box=d.createElement('div');box.style.cssText='position:fixed;left:-9999px;top:0;width:600px;white-space:pre-wrap';
+  box.appendChild(r.cloneContents());[].forEach.call(box.querySelectorAll('.sn'),function(e){e.remove()});
+  d.body.appendChild(box);var t=box.innerText||box.textContent||'';box.remove();
+  return t.replace(/[ \t\u00a0]+/g,' ').replace(/\n{3,}/g,'\n\n').trim()}
+function read(){
+  var s=window.getSelection();if(!s||!s.rangeCount||s.isCollapsed)return null;
+  var r=s.getRangeAt(0),n=r.commonAncestorContainer;n=n.nodeType===1?n:n.parentNode;
+  var pn=n&&n.closest?n.closest('.pn'):null;if(!pn)return null;
+  var t=clean(r);if(t.length<3)return null;
+  return{t:t,part:pn.id,r:r}}
+function place(r){
+  var b=r.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight,w=ask.offsetWidth||200,h=ask.offsetHeight||42;
+  var x=Math.max(8,Math.min(vw-w-8,(b.left+b.right)/2-w/2));
+  var y=b.bottom+34;                                    // под выделением — над ручками системное меню «Копировать»
+  if(y+h>vh-8)y=b.top-h-52;                             // не влезает снизу — над выделением
+  if(y<8||y+h>vh-8)y=vh-h-16;                           // длинное выделение — прижимаем к низу экрана
+  ask.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)'}
+function upd(){
+  var c=read();cur=c;
+  if(!c){ask.hidden=true;return}
+  ask.hidden=false;place(c.r)}
+function later(){clearTimeout(tm);tm=setTimeout(upd,140)}
+d.addEventListener('selectionchange',later);
+window.addEventListener('scroll',function(){if(cur)later()},{passive:true});
+window.addEventListener('resize',later);
+['mousedown','touchstart','pointerdown'].forEach(function(ev){ask.addEventListener(ev,function(e){e.preventDefault()},{passive:false})});   // тап по кнопке не снимает выделение
+ask.addEventListener('click',function(e){
+  e.preventDefault();var c=cur||read();if(!c)return;
+  var msg={matAsk:{text:c.t,part:c.part,cat:body.getAttribute('data-cat'),n:+body.getAttribute('data-n')}};
+  try{parent.postMessage(msg,'*')}catch(x){}
+  try{window.getSelection().removeAllRanges()}catch(x){}
+  cur=null;ask.hidden=true})
+})();
 var fs=17;try{fs=+localStorage.getItem('matfs')||17}catch(e){}
 function setfs(v){fs=Math.max(14,Math.min(26,v));d.documentElement.style.setProperty('--fs',fs+'px');try{localStorage.setItem('matfs',fs)}catch(e){}}
 setfs(fs);

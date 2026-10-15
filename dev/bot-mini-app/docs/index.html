@@ -466,6 +466,16 @@ button:focus-visible,[role=button]:focus-visible{outline:2.5px solid var(--yel);
 #mvf{flex:1;border:0;width:100%;background:var(--bg);margin-bottom:env(safe-area-inset-bottom,0px)}
 #mvl{position:absolute;inset:56px 0 0;display:grid;place-items:center;color:var(--hint);font-size:14px;pointer-events:none}
 #mvl[hidden]{display:none}
+body:has(#mv.on) #sheet{z-index:90}   /* виджет Вишенки поверх открытого варианта */
+.chs .fq{margin:0 6px 10px;padding:10px 12px;text-align:left;background:var(--card);border-radius:16px;box-shadow:0 0 0 1px var(--ln);border-left:5px solid var(--yel);color:var(--tx)}
+.chs .fq span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font:14px/1.45 Georgia,"Times New Roman",serif;word-break:break-word}
+.chs .fq small{display:block;margin-top:6px;font:700 11px/1.2 -apple-system,system-ui,sans-serif;color:var(--hint)}
+.chs.frg .chb{width:72px;height:72px;margin-bottom:8px}
+.chs.frg p{margin:4px 8px 10px;font-size:14px}
+.chs.frg .zone{min-height:40px;margin-bottom:10px}
+body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}   /* поверх варианта плавающей кнопки Вишенки нет — запас снизу не нужен */
+.chs .act.dn{gap:10px}.chs .act.dn button{flex:1 1 0;padding:13px 14px;opacity:1;pointer-events:auto}
+.chs .act.dn .sec{background:var(--card);color:var(--tx);box-shadow:0 0 0 1.5px var(--ln)}
 /* ── Прелоадер загрузки ─────────────────────────────────────────────────────
    Показывается на старте (#pl) и гаснет, когда кабинет получил данные:
    внизу страницы window.__bootRetry() зовёт window.__done() / window.__fail().
@@ -1336,11 +1346,31 @@ function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]}
     else if(tab=="s"&&pf&&pf!=="all")c.filter=String(pf).slice(0,20)}catch(e){}
   return c}
 var vc=null;   // состояние записи: {raf, stream, ctx, an}
-function chatOpen(){if($("#sheet.on .chs")){close_();return}vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Нажмите кнопку и скажите команду.</p>
+var vfrag=null;   // режим «Спросить у Вишенки»: {fragment, cat, n, part} — запись уходит на /api/fragment, ответ приходит в чат с ботом
+function chatOpen(){if($("#sheet.on .chs")){close_();return}vfrag=null;vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Нажмите кнопку и скажите команду.</p>
   <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
   <div class="chh" id="chh" aria-live="polite"></div>
   <p class="chr" id="chr" aria-live="polite"></p></div>
   <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">✅ Выполнить</button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">❌ Отмена</button></div></div>`)}
+/* ---------- «Спросить у Вишенки»: выделили текст в варианте → виджет просит голосом уточнить задачу → ответ приходит в чат с ботом ---------- */
+function fragOpen(a){
+  const t=String(a.text||"").replace(/\r/g,"").replace(/[ \t\u00a0]+/g," ").trim().slice(0,3000),m=MATS.find(x=>x.id===a.cat),n=Number(a.n);
+  if(t.length<3||!m||!Number.isInteger(n)||n<1||n>36)return;
+  vfrag={fragment:t,cat:m.id,n,part:/^p-(text|essay|13[123])$/.test(a.part)?a.part:"other"};vctx=null;
+  const q=t.length>220?t.slice(0,217).trimEnd()+"…":t,k=t.length,w=k%10==1&&k%100!=11?"символ":k%10>=2&&k%10<=4&&(k%100<10||k%100>=20)?"символа":"символов";
+  open(`<div class="chs frg"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Спросить у Вишенки</h3>
+  <blockquote class="fq"><span>${esc(q).replace(/\n+/g," ")}</span><small>${k} ${w} · вариант ${n}, ${esc(m.s)}</small></blockquote>
+  <p>Что сделать с этим фрагментом? Нажмите кнопку и скажите — например, «перепиши» или «найди аргументы получше».</p>
+  <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+  <div class="chh" id="chh" aria-live="polite"></div>
+  <p class="chr" id="chr" aria-live="polite"></p></div>
+  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Сказать, что сделать</span></button><button type="button" class="ok" id="cok" inert aria-hidden="true"></button><button type="button" class="no" id="cno" inert aria-hidden="true"></button></div>
+</div>`)}
+function fragReply(r){chrHeard(r&&r.heard||"");
+  if(r&&r.ok&&r.stage==="sent"){chrSay(r.reply);fragDone();return}
+  chrSay(r&&r.reply?r.reply:"Не получилось отправить — попробуйте ещё раз")}
+function fragDone(){const h=document.querySelector(".chs.frg>p");if(h)h.remove();const a=$("#cha");if(!a)return;a.className="act dn";
+  a.innerHTML='<button type="button" class="mic" onclick="close_()">К тексту</button>'+(tg.initData?'<button type="button" class="sec" onclick="try{tg.close()}catch(e){}">В чат с ботом</button>':"")}
 function chrBtns(confirm){const a=$("#cha");if(!a)return;confirm=!!confirm;a.classList.toggle("cf",confirm);   // микрофон плавно превращается в «Выполнить» / «Отмена» и обратно
   for(const [id,off] of [["micb",confirm],["cok",!confirm],["cno",!confirm]]){const b=$("#"+id);if(b){b.inert=off;off&&id!=="micb"?b.setAttribute("aria-hidden","true"):b.removeAttribute("aria-hidden")}}}
 function chrHeard(t){const e=$("#chh");if(!e)return;e.classList.remove("on");e.textContent=t?"«"+t+"»":"";if(t){void e.offsetWidth;e.classList.add("on")}}
@@ -1384,7 +1414,7 @@ async function voiceCancel(){chrBtns(false);
   let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
   chrSay(r&&r.reply?r.reply:"Отменил — ничего не менял")}
 function voiceReply(r){const say=chrSay;chrHeard(r&&r.heard||"");say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
-function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
+function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":vfrag?"Сказать, что сделать":"Голосовая команда")+"</span>";const e=$("#eq");if(e)e.classList.toggle("on",rec)}
 function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
 let micFix=0;
 function micSettings(){micFix=1;const b=$("#micb");if(b){b.classList.remove("rec");b.innerHTML="⚙️<span>Микрофон в настройках</span>"}const e=$("#eq");if(e)e.classList.remove("on")}
@@ -1483,14 +1513,15 @@ async function voiceSend(blob,ctx,dur){const say=chrSay;
   say("Отправляю…");chrBtns(false);
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});
   if(!audio){say("Не удалось прочитать запись");return}
-  let r=null;try{r=await api("/api/voice",{ctx,audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.min(60,Math.round(dur*10)/10)})}catch(e){}
-  voiceReply(r)}
+  const fr=vfrag,body={audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.min(60,Math.round(dur*10)/10)};
+  let r=null;try{r=await api(fr?"/api/fragment":"/api/voice",fr?{...fr,...body}:{ctx,...body})}catch(e){}
+  fr?fragReply(r):voiceReply(r)}
 /* переход между экранами внутри уже открытой шторки (день → занятие, карточка → правка, «‹ назад») меняет содержимое на месте:
    без повторного выезда окна и мигания затемнения */
 function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelector(".sh:not(.fly)"):null;
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
-function close_(){if(vc)voiceStop();scr=null;$("#sheet").classList.remove("on")}
+function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
 function render(){if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
@@ -1558,7 +1589,9 @@ function matClose(fromPop){
   if(!fromPop){try{if(history.state&&history.state.mv)history.back()}catch(e){}}
   if(!navOpen){try{tg.BackButton.hide()}catch(e){}}}
 addEventListener("popstate",()=>{if(matIsOpen)matClose(true)});
-addEventListener("message",e=>{if(matIsOpen&&e.source===$("#mvf").contentWindow&&e.data&&e.data.matNav==="toc")matClose()});   // «Оглавление» в хлебных крошках страницы → назад к сетке вариантов
+addEventListener("message",e=>{if(!matIsOpen||e.source!==$("#mvf").contentWindow||!e.data||typeof e.data!=="object")return;
+  if(e.data.matNav==="toc")matClose();   // «Оглавление» в хлебных крошках страницы → назад к сетке вариантов
+  else if(e.data.matAsk)fragOpen(e.data.matAsk)});   // выделенный фрагмент + «Спросить у Вишенки»
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose()});
 
 /* ---------- меню-гамбургер ---------- */
