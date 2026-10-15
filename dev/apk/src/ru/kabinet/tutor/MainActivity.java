@@ -126,8 +126,11 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
-                String host = u.getHost(), baseHost = Uri.parse(url).getHost();
-                if ("https".equals(u.getScheme()) && host != null
+                String scheme = u.getScheme(), host = u.getHost(), baseHost = Uri.parse(url).getHost();
+                // blob: / data: / about: — служебные ссылки страницы (материалы, скачивание PDF через blob).
+                // Их нельзя отдавать наружу: ни один браузер их не откроет, и пользователь получает ошибку Android.
+                if (scheme == null || "blob".equals(scheme) || "data".equals(scheme) || "about".equals(scheme)) return false;
+                if ("https".equals(scheme) && host != null
                         && (host.equals(baseHost) || host.endsWith(".telegram.org") || host.equals("t.me"))) {
                     return false;                       // свой сервер и Telegram — внутри приложения
                 }

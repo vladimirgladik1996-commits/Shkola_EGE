@@ -57,8 +57,10 @@ assert 'class="mt-chip mt-v"' in front and "Вариант ${v.n}" in front and 
 ok("во фронте: чипсины каталогов → сетка чипсин всех вариантов (с поиском) → открытие варианта")
 assert 'data-theme="\'+matTheme()' in front and "function matTheme" in front and 'e.data.matNav==="toc"' in front and "#mv.pg .mvb{display:none}" in front
 ok("страница варианта подстраивается под тему приложения (светлая/тёмная)")
-assert front.count('img:"data:image/jpeg;base64,') == 2 and 'class="mi mc"><img src="${m.img}"' in front and ".mt-list .mi.mc{flex:0 0 58px;height:58px" in front
+assert front.count('img:"data:image/jpeg;base64,') == 3 and 'class="mi mc"><img src="${m.img}"' in front and ".mt-list .mi.mc{flex:0 0 58px;height:58px" in front
 ok("у каталогов круглые иконки-обложки (встроены в приложение, 58px вместо 40px)")
 assert "vishenka(?:_cover)?" in front and 'src="vishenka_cover.png"' in read("materials", "oge-essays-2027", "about.html") and 'src="vishenka.png"' in read("materials", "ege-essays-2027", "about.html")
 ok("обложки страниц «о каталоге» подменяются встроенным талисманом (отдельного png нет)")
+assert "fr.srcdoc=" in front and "matBlob" not in front, "вариант должен открываться через srcdoc: Android WebView не открывает blob:-URL во фрейме (net::ERR_FILE_NOT_FOUND)"
+ok("страница варианта идёт во фрейм через srcdoc (без blob-URL — ломалось в Android WebView)")
 print("OK")
