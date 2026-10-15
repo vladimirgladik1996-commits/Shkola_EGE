@@ -949,6 +949,25 @@ function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
 function payDel(id){tg.showConfirm("Удалить платёж? Баланс пересчитается.",async ok=>{if(ok&&await api("/api/payment/delete",{id})){close_();load()}})}
 
+/* Карточка долга из ленты оплат — та же структура, что у карточки пополнения:
+   ученик (аватар, имя, класс) → сумма → дата → из чего сложился долг. Баланса ученика здесь нет. */
+function debtCard(lid){
+  const e=debtEntries().find(x=>x.lid==lid);if(!e){close_();return}
+  const s=S.find(x=>x.id==e.sid),l=L.find(x=>x.id==lid),al=allocate(e.sid),gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
+  const row=(info,amt,cls="")=>`<div class="row" style="cursor:default;align-items:flex-start"><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
+  /* какие оплаты частично закрыли это занятие (по тому же распределению, что и в карточке пополнения) */
+  const cov=P.filter(p=>p.sid==s.id).sort((a,b)=>a.at-b.at||a.id-b.id).map(p=>({p,x:((al[p.id]||{}).list||[]).find(z=>z.l.id==lid)})).filter(c=>c.x);
+  const earlier=Math.max(0,l.price-e.amt-cov.reduce((t,c)=>t+c.x.take,0));   // оплаты старше загруженных 200
+  const items=row(`<b>Занятие · ${dmy2(l.day)}, ${l.time}</b><small style="display:block">Стоимость занятия</small>`,money(l.price))
+    +cov.map(c=>row(`<b>Оплата · ${when(c.p.at)}</b><small style="display:block">Покрыла часть занятия</small>`,"+"+money(c.x.take),"pos")).join("")
+    +(earlier>0?row(`<b>Более ранние оплаты</b><small style="display:block">Покрыли часть занятия</small>`,"+"+money(earlier),"pos"):"")
+    +row(`<b>Долг</b><small style="display:block">${cov.length||earlier>0?"Не покрыто оплатами":"Оплат по этому занятию не было"}</small>`,money(e.amt),"neg");
+  open(`<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${esc(s.name)}</h3><p class="sub" style="margin:0">${esc(gr)}</p></div></div>
+  <div class="stat" style="margin:14px 0 4px"><small>Сумма долга</small><b class="neg" style="font-size:24px">${money(e.amt)}</b></div>
+  <div class="stat" style="margin:4px 0"><small>Дата занятия</small><b>${when(e.at)}</b></div>
+  <h2 style="margin-top:14px">Из чего сложился долг</h2>${items}
+  <div class="btns"><button class="btn pri" onclick="payNew(${s.id})">Внести оплату</button><button class="btn" onclick="card(${s.id})">Карточка ученика</button></div>`)}
+
 /* ---------- Оплаты ---------- */
 const PAL=["#2F6FD0","#FFC93C","#2FB37F","#9A6BF0","#F08A3C","#E0527A"];
 let pst="all",psort="new",fresh=0,pd1="",pd2="",pty="all",cal;   // выбранный ученик, порядок ленты, id только что внесённой оплаты, период, тип записи, состояние календаря
@@ -972,7 +991,7 @@ function payFeedList(){
   const SPK=[0,60,120,180,240,300].map(a=>`<i class="spk" style="--a:${a}deg"></i>`).join("");
   return sm+f.map(e=>{const s=S.find(x=>x.id==e.sid);
     return e.k=="pay"?`<div class="feed${e.id==fresh?" fresh":""}" onclick="payCard(${e.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b>${e.id==fresh?SPK:""}</div>`
-      :`<div class="feed" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг за занятие · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
+      :`<div class="feed" onclick="debtCard(${e.lid})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг за занятие · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
 function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);
   const b=$("#pstb");if(b){b.className="stb"+(pst!="all"?" on":"");b.innerHTML=stbHtml()}const so=$("#psrt");if(so)so.classList.toggle("on",psort!="new");const tf=$("#ptf");if(tf)tf.classList.toggle("on",pty!="all")}
 const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
@@ -1308,7 +1327,7 @@ const MIC_I='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width
 /* ---------- контекст для голосового помощника ---------- */
 // scr — какой экран открыт поверх вкладки (карточка, форма…). Функции-открыватели оборачиваются, чтобы запомнить имя и id/день.
 var scr=null,vctx=null;
-(function(){const M={form:"lesson_form",dayCard:"day_card",card:"student_card",studNew:"student_new",payCard:"payment_card",payEdit:"payment_edit",payNew:"payment_new",balPop:"balance",debtPop:"debts",prePop:"print_preview",gradeFilter:"grade_filter",calShow:"period_calendar",payStu:"payment_student_pick",paySort:"payment_sort"};
+(function(){const M={form:"lesson_form",dayCard:"day_card",card:"student_card",studNew:"student_new",payCard:"payment_card",payEdit:"payment_edit",payNew:"payment_new",balPop:"balance",debtPop:"debts",debtCard:"debts",prePop:"print_preview",gradeFilter:"grade_filter",calShow:"period_calendar",payStu:"payment_student_pick",paySort:"payment_sort"};
   for(const k in M){const f=window[k];if(typeof f!=="function")continue;
     window[k]=function(...a){scr={n:M[k],a:a.filter(x=>typeof x==="number"||(typeof x==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(x))).slice(0,4)};return f.apply(this,a)}}})();
 function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]};
