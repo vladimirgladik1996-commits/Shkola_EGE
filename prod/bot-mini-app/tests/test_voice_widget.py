@@ -83,4 +83,24 @@ assert re.search(r'a=="cancel_lesson".*?\.animate\(', vd, re.S) and re.search(r'
 ok("отмена занятия — ячейка гаснет; новый ученик — вспыхивает в списке")
 assert "voiceFold()" in vd and vd.rstrip().endswith("await voiceFold();await load()}")
 ok("для остальных действий — сворачивание виджета и обновление данных")
+# --- прогресс обработки: голос ушёл → сервер думает → ответ ---------------------------------------
+assert html.count('id="chp"') == 2, "прогресс-бар должен быть в обоих окнах: команда и «Спросить у Вишенки»"
+zp = re.search(r'<div class="zone">.*?id="chp".*?</div>\s*<div class="act"', body, re.S)
+assert zp, "прогресс-бар лежит не в зоне статуса — над кнопками" 
+ok("прогресс-бар в зоне статуса обоих окон")
+pg = re.search(r"function chrProg\(s\)\{(.*?)\n(?=function |let |var |const |async )", html, re.S)
+assert pg and '"#chp"' in pg.group(1) and "done" in pg.group(1), "нет chrProg — полосу некем включать и доводить до конца"
+vs = re.search(r"async function voiceSend\(blob,ctx,dur\)\{(.*?)\n(?=function |async function |window\.|document\.|/\*)", html, re.S).group(1)
+assert re.search(r"chrProg\(1\).*?api\(", vs, re.S), "voiceSend: полоса должна стартовать ДО запроса к серверу"
+assert re.search(r"api\(.*?chrProg\(", vs, re.S) and re.search(r"chrProg\(r\?2:0\)", vs), \
+    "voiceSend: полоса живёт до ответа сервера — до конца при успехе, гаснет при сбое"
+vc_ = re.search(r"async function voiceConfirm\(\)\{(.*?)\n(?=/\* «Выполнить»)", html, re.S).group(1)
+assert "chrProg(1)" in vc_ and "chrProg(2)" in vc_ and "chrProg(0)" in vc_, "у «Применить» тоже есть прогресс обработки"
+assert re.search(r"async function voiceToggle\(\)\{.{0,200}?chrProg\(0\)", html, re.S), \
+    "новая запись должна гасить прогресс предыдущей обработки"
+assert re.search(r"\.chs \.pr\{", html) and "prFill" in html and "prDone" in html and "prShine" in html, \
+    "стили полосы: рост, доведение до 100% и живой блик"
+assert re.search(r"prefers-reduced-motion:reduce\)\{\.chs \.pr", html), \
+    "при «уменьшить анимацию» блик должен выключаться, рост полосы — оставаться"
+ok("полоса идёт от «Отправляю…» до ответа, у «Применить» — своя; новая запись гасит старую")
 print("OK")

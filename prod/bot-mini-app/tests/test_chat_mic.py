@@ -36,8 +36,8 @@ blk = mm.group(1)
 assert "function chMic()" in blk and "MediaRecorder" in blk and '"/api/stt"' in blk, \
     "микрофон чата не записывает звук и не отправляет его на /api/stt"
 ok("кнопка микрофона в чате пишет звук (MediaRecorder) и отправляет на /api/stt")
-assert "getUserMedia" in blk and "nativeRec" in blk, "нет защищённого пути записи (getUserMedia + нативная запись обёртки)"
-ok("запись переиспользует путь микрофона Вишенки: getUserMedia с повторами + нативная запись APK")
+assert "micTake" in blk and "nativeRec" in blk, "нет защищённого пути записи (общий микрофон micTake + нативная запись обёртки)"
+ok("запись переиспользует общий микрофон сеанса (micTake — разрешение просят один раз) + нативную запись APK")
 assert "micStatus" in blk and "askMic" in blk, "состояние микрофона не спрашивается до getUserMedia"
 ok("обёртка APK спрашивается о микрофоне ДО getUserMedia — без гонок с системным диалогом")
 assert "chSendRec" in blk and "chRecKill" in blk and "function chStop()" in blk, \
