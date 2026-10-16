@@ -524,6 +524,53 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .mt-v .mi{flex:0 0 36px;height:36px;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums}
 .mt-v b{display:block;font-size:14px}
 .mt-v small{display:block;margin-top:1px;font-size:11px;font-weight:500;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---------- Чат с ИИ ---------- */
+.aic{display:flex;flex-direction:column;min-height:calc(100dvh - 190px - env(safe-area-inset-top,0px))}
+.aic-h{display:flex;justify-content:flex-end;margin-bottom:6px}
+.aic-clr{flex:none;width:44px;height:44px;border-radius:12px;background:var(--card);color:var(--hint);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1px var(--ln)}
+.aic-clr svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.aic-clr[disabled]{opacity:.4}
+#aic-l{display:flex;flex-direction:column;gap:8px;flex:1;padding-bottom:88px}
+.aim{max-width:86%;padding:10px 13px;border-radius:18px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;font-size:15px;line-height:1.42;animation:aimin .22s cubic-bezier(.22,1,.36,1)}
+.aim.u{align-self:flex-end;background:var(--acc);color:var(--on);border-bottom-right-radius:6px}
+.aim.a{align-self:flex-start;background:var(--card);box-shadow:0 0 0 1px var(--ln);border-bottom-left-radius:6px}
+.aim.e{align-self:flex-start;background:color-mix(in srgb,var(--red) 12%,var(--card));box-shadow:0 0 0 1px color-mix(in srgb,var(--red) 40%,transparent);border-bottom-left-radius:6px}
+.aim .aimb{display:flex;gap:14px;margin-top:6px;font-size:12.5px;font-weight:700;color:var(--hint)}
+.aim .aimb button{color:inherit;font:inherit;padding:2px 0}
+.aim.e .aimb button{color:var(--red)}
+.aim.dots{display:flex;gap:5px;align-items:center;padding:14px 16px}
+.aim.dots i{width:7px;height:7px;border-radius:50%;background:var(--hint);animation:aimd 1.1s infinite ease-in-out}
+.aim.dots i:nth-child(2){animation-delay:.16s}.aim.dots i:nth-child(3){animation-delay:.32s}
+.aim.dots small{margin-left:6px;color:var(--hint);font-size:12.5px}
+@keyframes aimd{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@keyframes aimin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.aic-e{text-align:center;margin:6vh 0 4px}
+.aic-e .e0i{font-size:40px;margin-bottom:6px}
+.aic-e b{display:block;font-size:18px;font-weight:800}
+.aic-e p{color:var(--hint);margin:4px 0 14px}
+#aic-c{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#aic-c .aic-row{position:relative;max-width:560px;margin:0 auto}
+.aic-box{display:flex;gap:2px;align-items:flex-end;padding:5px;border-radius:26px;background:var(--card);box-shadow:0 0 0 1px var(--ln)}
+.aic-box:focus-within{box-shadow:0 0 0 2px var(--acc)}
+#aic-c textarea{flex:1;min-width:0;resize:none;max-height:132px;min-height:36px;padding:8px 6px;border:0;outline:0;background:transparent;color:var(--tx);font:inherit;line-height:1.3}
+.aic-ib{flex:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--hint);font-size:18px;line-height:1;transition:background .15s,color .15s}
+.aic-ib svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.aic-ib.deep{color:var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.aic-ib.rec{color:#fff;background:var(--red);animation:aicp 1.3s infinite}
+.aic-ib.rec svg{fill:currentColor}
+#aic-s{flex:none;width:36px;height:36px;border-radius:50%;background:var(--acc);color:var(--on);display:flex;align-items:center;justify-content:center;transition:transform .12s,opacity .15s}
+#aic-s svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+#aic-s:active{transform:scale(.92)}#aic-s[disabled]{opacity:.4}
+.aic-menu{position:absolute;left:0;bottom:calc(100% + 8px);min-width:284px;padding:6px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 8px 28px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:2px;animation:aimin .16s cubic-bezier(.22,1,.36,1)}
+.aic-menu[hidden]{display:none}
+.aic-menu button{display:flex;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:12px;color:var(--tx)}
+.aic-menu button svg{flex:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.aic-menu button b{display:block;font-size:14px}
+.aic-menu button small{display:block;font-size:12px;font-weight:500;color:var(--hint)}
+.aic-menu button.on{background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.aic-menu button.on svg{color:var(--acc)}
+@keyframes aicp{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 50%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
+@media (prefers-reduced-motion:reduce){.aim,.aim.dots i,.aic-menu,.aic-ib.rec{animation:none!important}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -1513,7 +1560,7 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
-function render(){if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
+function render(){try{if(tab!="ch")chStop()}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():soon();const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=tab=="ch"?"none":"";if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
 /* ---------- раздел «Материалы» ---------- */
@@ -1589,6 +1636,77 @@ addEventListener("message",e=>{if(!matIsOpen||e.source!==$("#mvf").contentWindow
   if(e.data.matNav==="toc")matClose();   // «Оглавление» в хлебных крошках страницы → назад к сетке вариантов
   else if(e.data.matAsk)fragOpen(e.data.matAsk)});   // выделенный фрагмент + «Спросить у Вишенки»
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose()});
+
+/* ---------- Чат с ИИ (раздел «ch») ---------- */
+let CH=[],chDeep=false,chBusy=false,chRec=null;
+try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40)}catch(e){}
+const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err).slice(-40))}catch(e){}};
+const CH_SVG=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>')};
+const CH_SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function chat(){
+  return `<div class="aic"><div class="aic-h">
+  <button type="button" class="aic-clr" id="aic-x" aria-label="Очистить чат" onclick="chClear()" ${CH.length?"":"disabled"}><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div>
+  <div id="aic-l" aria-live="polite">${chList()}</div></div>
+  <div id="aic-c"><div class="aic-row">
+  <div class="aic-menu" id="aic-m" role="menu" aria-label="Режим ответа" hidden>
+    <button type="button" role="menuitemradio" class="${chDeep?"":"on"}" aria-checked="${!chDeep}" onclick="chMode(false)"><span><b>⚡ Быстрый ответ на простой вопрос</b></span></button>
+    <button type="button" role="menuitemradio" class="${chDeep?"on":""}" aria-checked="${chDeep}" onclick="chMode(true)"><span><b>🧠 Долгий ответ на сложный вопрос</b></span></button></div>
+  <div class="aic-box">
+    <button type="button" id="aic-md" class="aic-ib${chDeep?" deep":""}" aria-haspopup="menu" aria-expanded="false" aria-label="${chDeep?"Режим: долгий ответ":"Режим: быстрый ответ"}" onclick="chMenu()">${chDeep?"🧠":"⚡"}</button>
+    <textarea id="aic-in" rows="1" maxlength="4000" placeholder="Спросите что угодно…" enterkeyhint="send" oninput="chGrow(this)" onkeydown="chKey(event)"></textarea>
+    <button type="button" id="aic-mic" class="aic-ib" aria-label="Записать голосом" onclick="chMic()">${CH_IC.mic}</button>
+    <button type="button" id="aic-s" aria-label="Отправить" onclick="chSend()"><svg viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button></div></div></div>`}
+function chList(){
+  if(!CH.length&&!chBusy)return `<div class="aic-e"><div class="e0i">💬</div><b>Чат с ИИ</b><p>Помощник по урокам, сочинениям и разбору заданий.</p></div>`;
+  const last=CH.length-1;
+  return CH.map((m,i)=>m.r=="u"?`<div class="aim u">${esc(m.t)}</div>`
+    :m.err?`<div class="aim e">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">↻ Повторить</button></div></div>`
+    :`<div class="aim a">${esc(m.t)}<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div></div>`).join("")
+    +(chBusy?`<div class="aim a dots" aria-label="ИИ отвечает"><i></i><i></i><i></i>${chDeep?"<small>думаю глубже…</small>":""}</div>`:"")}
+function chUpd(toEnd){const l=$("#aic-l");if(!l)return;l.innerHTML=chList();
+  const x=$("#aic-x");if(x)x.disabled=!CH.length;const b=$("#aic-s");if(b)b.disabled=chBusy;
+  if(toEnd)scrollTo(0,document.documentElement.scrollHeight)}
+function chMenu(open){const m=$("#aic-m"),b=$("#aic-md");if(!m||!b)return;const o=open===undefined?m.hidden:open;m.hidden=!o;b.setAttribute("aria-expanded",String(o))}
+function chMode(d){chDeep=!!d;chModeUi();chMenu(false)}
+function chModeUi(){const b=$("#aic-md");if(b){b.innerHTML=chDeep?"🧠":"⚡";b.classList.toggle("deep",chDeep);b.setAttribute("aria-label",chDeep?"Режим: долгий ответ":"Режим: быстрый ответ")}
+  document.querySelectorAll("#aic-m button").forEach((x,i)=>{x.classList.toggle("on",!!i==chDeep);x.setAttribute("aria-checked",String(!!i==chDeep))})}
+document.addEventListener("click",e=>{const m=$("#aic-m");if(m&&!m.hidden&&!e.target.closest("#aic-m,#aic-md"))m.hidden=true});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")chMenu(false)});
+function chMicUi(){const b=$("#aic-mic");if(!b)return;b.classList.toggle("rec",!!chRec);b.setAttribute("aria-label",chRec?"Остановить запись":"Записать голосом");b.innerHTML=chRec?CH_IC.stop:CH_IC.mic}
+function chStop(){if(!chRec)return;const r=chRec;chRec=null;r.onresult=r.onerror=r.onend=null;try{r.abort()}catch(e){}chMicUi()}
+function chMic(){
+  if(chRec){chRec.stop();return}
+  if(!CH_SR){toast("Голосовой ввод здесь недоступен — наберите текст");return}
+  const el=$("#aic-in");if(!el)return;
+  try{if(vc)voiceStop()}catch(e){}
+  const base=el.value&&!/\s$/.test(el.value)?el.value+" ":el.value,r=new CH_SR();
+  r.lang="ru-RU";r.interimResults=true;r.continuous=true;
+  r.onresult=e=>{let s="";for(let i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;const t=$("#aic-in");if(t){t.value=(base+s).slice(0,4000);chGrow(t)}};
+  r.onerror=e=>{if(e.error=="not-allowed"||e.error=="service-not-allowed")toast("Нет доступа к микрофону — разрешите его в настройках");else if(e.error!="no-speech"&&e.error!="aborted")toast("Не расслышал — попробуйте ещё раз")};
+  r.onend=()=>{if(chRec===r)chRec=null;chMicUi()};
+  try{r.start();chRec=r;chMicUi()}catch(e){toast("Не получилось записать голос — попробуйте ещё раз")}}
+function chGrow(t){t.style.height="auto";t.style.height=Math.min(t.scrollHeight,132)+"px"}
+function chKey(e){if(e.key=="Enter"&&!e.shiftKey&&!e.isComposing&&matchMedia("(pointer:fine)").matches){e.preventDefault();chSend()}}
+function chClear(){if(chBusy||!CH.length)return;CH=[];chSave();chUpd()}
+function chCopy(i){const t=(CH[i]||{}).t||"";
+  const ok=()=>toast("Скопировано"),fb=()=>{try{const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();document.execCommand("copy");a.remove();ok()}catch(e){toast("Не получилось скопировать")}};
+  try{navigator.clipboard.writeText(t).then(ok,fb)}catch(e){fb()}}
+function chRetry(){if(chBusy)return;if(CH.length&&CH[CH.length-1].err)CH.pop();chAsk()}
+function chSend(){
+  if(chBusy)return;const el=$("#aic-in");if(!el)return;const t=el.value.trim();if(!t)return;chStop();chMenu(false);
+  CH.push({r:"u",t});el.value="";chGrow(el);chAsk()}
+async function chAsk(){
+  chBusy=true;chSave();chUpd(true);
+  const msgs=CH.filter(m=>!m.err).slice(-20).map(m=>({role:m.r=="u"?"user":"assistant",text:m.t})),deep=chDeep;
+  let reply=null,why="Не получилось получить ответ. Проверьте связь и повторите.";
+  try{const d=await api("/api/chat",{messages:msgs,deep});
+    if(d&&typeof d.reply=="string"&&d.reply)reply=d.reply;
+    else if(d&&d.enabled===false)why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY.";
+    else if(d)why="ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}catch(e){}
+  chBusy=false;
+  if(tab!="ch"){if(reply)CH.push({r:"a",t:reply});chSave();return}   // ушли из раздела — ответ сохраняем, интерфейс не трогаем
+  CH.push(reply?{r:"a",t:reply}:{r:"a",t:why,err:1});chSave();chUpd(true)}
 
 /* ---------- меню-гамбургер ---------- */
 const ORDER=["c","p","s","ch","mt","kn"],NAMES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат с ИИ",mt:"Материалы",kn:"Канал"};

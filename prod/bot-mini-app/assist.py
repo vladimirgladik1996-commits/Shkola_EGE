@@ -361,6 +361,36 @@ def remember_fragment(uid, prompt):
         _keep(uid, phase="mode", text=prompt)
         return True
     return False
+CHAT_SYS_APP = CHAT_SYS + " Это диалог: учитывай предыдущие реплики."
+CHAT_MAX_MSGS, CHAT_MAX_CHARS = 20, 4000
+
+
+def chat_history(raw):
+    """Очищенная история чата из мини-аппа: [{role: user|assistant, content}], последняя реплика — от пользователя.
+    ValueError — если формат неверный (бот ответит 400)."""
+    if not isinstance(raw, list) or not raw or len(raw) > 2 * CHAT_MAX_MSGS:
+        raise ValueError
+    out = []
+    for m in raw[-CHAT_MAX_MSGS:]:
+        if not isinstance(m, dict) or m.get("role") not in ("user", "assistant"):
+            raise ValueError
+        t = m.get("text")
+        if not isinstance(t, str) or len(t) > CHAT_MAX_CHARS:
+            raise ValueError
+        t = t.strip()
+        if t:
+            out.append({"role": m["role"], "content": t})
+    while out and out[0]["role"] != "user":      # модель ждёт, что диалог начинает пользователь
+        out.pop(0)
+    if not out or out[-1]["role"] != "user":
+        raise ValueError
+    return out
+
+
+async def chat_reply(history, deep=False):
+    """Ответ в многоходовом чате мини-аппа (str) или None, если модель недоступна."""
+    tail = (" Дай подробный, обстоятельный разбор: рассуждение, детали, готовый результат." if deep else " Ответь коротко и по существу.")
+    return await kimi.ask([{"role": "system", "content": CHAT_SYS_APP + tail}] + history, deep=bool(deep))
 
 
 # ---------- общий конвейер для Telegram-бота ----------

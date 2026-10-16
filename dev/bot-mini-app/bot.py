@@ -1957,6 +1957,22 @@ async def api_fragment(request):
     if heard:
         res["heard"] = heard
     return web.json_response(res)
+@guarded
+async def api_chat(request):
+    """Чат с ИИ в мини-аппе: клиент присылает последние реплики, сервер ничего не хранит."""
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    hist = assist.chat_history(j.get("messages"))
+    deep = j.get("deep", False)
+    if not isinstance(deep, bool):
+        raise ValueError
+    uid = user_id(request)
+    if not kimi.enabled():
+        return web.json_response({"ok": True, "reply": None, "enabled": False})
+    reply = await assist.chat_reply(hist, deep)
+    log.info("chat: tg_id=%s msgs=%s deep=%s ok=%s", uid, len(hist), deep, reply is not None)
+    return web.json_response({"ok": reply is not None, "reply": reply, "enabled": True})
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
@@ -2016,6 +2032,7 @@ def make_app():
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
     app.router.add_post("/api/voice", api_voice)
+    app.router.add_post("/api/chat", api_chat)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)
