@@ -586,7 +586,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-hid{display:none!important}   /* общий input{…} приложения перебивает атрибут hidden — без этого поля выбора файла видны как белые карточки */
 #aic-c textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--hint);opacity:.85}
 @keyframes aicp{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 50%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
-@media (prefers-reduced-motion:reduce){.aim,.aim.dots i,.aic-menu,.aic-ib.rec{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.aim,.aim.dots i,.aim.st .aist i,.aic-menu,.aic-ib.rec{animation:none!important}}
 /* ===== Патч: карточки пополнения и долга; строки ленты оплат всегда одной высоты ===== */
 .feed{box-sizing:border-box;height:62px;min-height:62px}
 .feed .info b,.feed .info small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -633,9 +633,13 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aim .aia{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;white-space:normal}
 .aim .aia:last-child{margin-bottom:0}
 .aim .aia img{display:block;max-width:100%;max-height:220px;border-radius:12px}
-.live .aist{font-size:13.5px;font-weight:700;color:var(--acc)}
-.live .aith{margin-top:6px;max-height:132px;overflow:hidden;font-size:12.5px;line-height:1.5;color:var(--hint);font-style:italic;white-space:pre-wrap;-webkit-mask-image:linear-gradient(180deg,#000 72%,transparent);mask-image:linear-gradient(180deg,#000 72%,transparent)}
-.live .aitx{margin-top:6px;white-space:pre-wrap}
+/* шаги работы Вишенки — свои сообщения в ленте (новое под старым): «Вишенка думает…», «Вишенка конвертирует HTML в PDF» */
+.aim.st{padding:8px 12px;max-width:92%;font-size:13px;background:color-mix(in srgb,var(--card) 55%,transparent)}
+.aim.st .aist{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:var(--acc)}
+.aim.st .aist i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--acc);animation:aimd 1.1s infinite ease-in-out}
+.aim.st .aith{margin-top:4px;font-size:12.5px;line-height:1.5;color:var(--hint);font-style:italic;white-space:pre-wrap;overflow-wrap:anywhere}
+.aim.st .aitx{margin-top:4px;font-size:13px;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere}
+.aimtg{margin-top:6px;font-size:11.5px;font-weight:700;color:var(--hint)}
 .aif{display:inline-flex;gap:6px;align-items:center;max-width:100%;padding:4px 9px;border-radius:10px;background:color-mix(in srgb,currentColor 14%,transparent);font-size:13px;font-weight:600}
 .aif span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
@@ -1762,7 +1766,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose(
 let CH=[],chDeep=false,chFmt=0,chAtt=[],chBusy=false,chRec=null;
 const CH_MAX=5,CH_BYTES=8*1024*1024,CH_EXT=["pdf","docx","txt","md","csv"],CH_FMT=["text","docx","pdf","image"];
 try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40).map(m=>({r:m.r,t:m.t,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k})):undefined}))}catch(e){}
-const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k}));return c}))}catch(e){}};   // в память телефона — только текст и имена файлов
+const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err&&!m.live&&!m.step).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k}));return c}))}catch(e){}};   // в память телефона — только текст и имена файлов (шаги работы — нет)
 const CH_SVG=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const CH_DOC=l=>CH_SVG('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'+(l?`<text x="12" y="17" font-size="6" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700" font-family="sans-serif">${l}</text>`:""));
 const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>'),
@@ -1801,12 +1805,34 @@ function chList(){
   if(!CH.length&&!chBusy)return `<div class="aic-e"><div class="e0i">💬</div><b>Чат с Вишенкой</b><p>Помощник по урокам, сочинениям и разбору заданий.</p></div>`;
   return CH.map((m,i)=>m.r=="u"?`<div class="aim u">${chAtts(m.a)}${esc(m.t)}</div>`
     :m.err?`<div class="aim e">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">↻ Повторить</button></div></div>`
-    :m.live?`<div class="aim a live">${chLive(m)}</div>`
-    :`<div class="aim a">${chAtts(m.a)}${esc(m.t)}${m.a&&m.a.length?"":`<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div>`}</div>`).join("")
-    +(chBusy?`<div class="aim a dots" aria-label="Вишенка отвечает"><i></i><i></i><i></i><small>Вишенка на связи…</small></div>`:"")}
-const CH_ST={read:"читает материалы…",think:"думает…",write:"пишет ответ…",file:"оформляет файл…"};
-function chLive(m){return `<div class="aist">💜 Вишенка ${CH_ST[m.st]||"думает…"}</div>`
-  +(m.th?`<div class="aith">${esc(m.th)}</div>`:"")+(m.t?`<div class="aitx">${esc(m.t)}</div>`:"")}
+    :m.step?`<div class="aim a st${m.live?" live":""}">${chStep(m)}</div>`
+    :`<div class="aim a">${chAtts(m.a)}${esc(m.t)}${m.a&&m.a.length?"":`<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div>`}${m.tg?`<div class="aimtg">✅ Ответ также отправлен в Telegram</div>`:""}</div>`).join("")
+    +(chBusy&&(!CH.length||CH[CH.length-1].r=="u")?`<div class="aim a dots" aria-label="Вишенка отвечает"><i></i><i></i><i></i><small>Вишенка на связи…</small></div>`:"")}
+/* Шаги мышления и работы Вишенки — отдельные сообщения в диалоге: новое под старым, готовый ответ — в самом конце.
+   Каждый шаг и каждая мысль показываются от имени Вишенки: «Вишенка думает», «Вишенка читает требования Fipi.ru»,
+   «Вишенка конвертирует HTML в PDF» — и так любая операция модели и сервера. */
+const CH_ST={read:"читает материалы",think:"думает",write:"пишет ответ",file:"оформляет документ",pdf:"конвертирует HTML в PDF",png:"рисует инфографику"};
+const CH_STEP_MAX=700;                                  // мысль длиннее — следующее сообщение списком под старым
+function chLabel(st,fmt){return st=="file"&&fmt?(fmt=="docx"?"оформляет Word-документ":"оформляет PDF-документ"):CH_ST[st]||"работает"}
+function chStep(m){return `<div class="aist">💜 Вишенка ${esc(m.lbl||"думает")}${m.live?"<i></i>":""}</div>`
+  +(m.t?(m.st=="think"?`<div class="aith">${esc(m.t)}</div>`:`<div class="aitx">${esc(m.t)}</div>`):"")}
+function chStepNew(st,fmt,lbl){chStepEnd();const m={r:"a",step:1,st,t:"",live:1,lbl:lbl||chLabel(st,fmt)};CH.push(m);return m}
+function chStepCur(st,fmt){const m=CH[CH.length-1];return m&&m.live&&m.step&&m.st==st?m:chStepNew(st,fmt)}
+function chStepEnd(){CH.forEach(m=>{if(m.live)m.live=0})}
+function chThink(v,fmt){                                 // мысли Кими стримятся от имени Вишенки: каждая — своим сообщением
+  let s=chStepCur("think",fmt);s.t+=v;
+  for(let br;(br=/(?:\r?\n){2,}/.exec(s.t));){            // новый абзац размышления — новое сообщение под старым
+    const head=s.t.slice(0,br.index).trim(),rest=s.t.slice(br.index+br[0].length);
+    if(!head){s.t=rest;continue}
+    s.t=head;s=chStepNew("think",fmt);s.t=rest}
+  while(s.t.length>CH_STEP_MAX){                          // длинный поток без абзацев — режем по границе предложения
+    const cut=Math.max(s.t.lastIndexOf(". ",CH_STEP_MAX),s.t.lastIndexOf("! ",CH_STEP_MAX),s.t.lastIndexOf("? ",CH_STEP_MAX));
+    if(cut<180)break;
+    const rest=s.t.slice(cut+1).trim();s.t=s.t.slice(0,cut+1).trim();s=chStepNew("think",fmt);s.t=rest}}
+function chReadLabel(a){                                  // шаг «читает …» называет сами вложения: «Вишенка читает требования Fipi.ru»
+  const d=(a||[]).filter(x=>x.k=="doc").map(x=>x.n),img=(a||[]).some(x=>x.k=="img");
+  const nm=d.map(n=>n.length>44?n.slice(0,42)+"…":n).join(", ");
+  return d.length?(img?"смотрит фото и читает "+nm:"читает "+nm):"смотрит фото"}
 function chUpd(toEnd){const l=$("#aic-l");if(!l)return;l.innerHTML=chList();
   const x=$("#aic-x");if(x)x.disabled=!CH.length;const b=$("#aic-s");if(b)b.disabled=chBusy;
   if(toEnd)scrollTo(0,document.documentElement.scrollHeight)}
@@ -1916,7 +1942,8 @@ function chClear(){if(chBusy||!CH.length)return;CH=[];chSave();chUpd()}
 function chCopy(i){const t=(CH[i]||{}).t||"";
   const ok=()=>toast("Скопировано"),fb=()=>{try{const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();document.execCommand("copy");a.remove();ok()}catch(e){toast("Не получилось скопировать")}};
   try{navigator.clipboard.writeText(t).then(ok,fb)}catch(e){fb()}}
-function chRetry(){if(chBusy)return;if(CH.length&&CH[CH.length-1].err)CH.pop();chAsk()}
+function chRetry(){if(chBusy)return;if(CH.length&&CH[CH.length-1].err)CH.pop();
+  let u=-1;CH.forEach((m,i)=>{if(m.r=="u")u=i});CH=CH.filter((m,i)=>!m.step||i<u);chAsk()}   // шаги неудачной попытки убираем — ответ готовится заново
 async function chSend(){
   if(chBusy)return;const el=$("#aic-in");if(!el)return;const t=el.value.trim();if(!t&&!chAtt.length)return;
   if(chBytes(chAtt)>CH_BYTES){toast("Вложения больше 8 МБ в сумме — прикрепите меньше");return}
@@ -1926,30 +1953,42 @@ async function chSend(){
   CH.push({r:"u",t,a:chAtt.length?chAtt:undefined});chAtt=[];chAttUi();el.value="";chGrow(el);chAsk()}
 async function chAsk(){
   chBusy=true;chSave();chUpd(true);
-  const ok=CH.filter(m=>!m.err&&!m.live),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
+  const ok=CH.filter(m=>!m.err&&!m.live&&!m.step),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
   const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
     if(a.length&&m.r=="u"){if(m===last)t=t||"Разбери вложенные материалы.";else t+=" [вложения: "+a.map(x=>x.n).join(", ")+"]"}
     return {role:m.r=="u"?"user":"assistant",text:t.slice(0,4000)}});
   const files=((last&&last.a)||[]).filter(x=>x.d).map(x=>({name:x.n,mime:x.mime||"",data:x.d}));
-  const live={r:"a",t:"",th:"",st:"",live:1};CH.push(live);chUpd(true);   // живой ответ Вишенки: думает/пишет на виду
-  let reply=null,file=null,why="Не получилось получить ответ. Проверьте связь и повторите.";
+  const atts=(last&&last.r=="u"&&last.a)||[];
+  let acc="",file=null,fin=false,why="Не получилось получить ответ. Проверьте связь и повторите.";
+  const finish=()=>{                       // хвосты шагов закрываем — готовый ответ остаётся последним сообщением
+    if(fin)return;fin=true;chBusy=false;chStepEnd();
+    CH=CH.filter(m=>!(m.step&&m.st=="think"&&!m.t.trim()));
+    chSave();if(tab=="ch")chUpd(true)};
+  const answer=text=>{                     // ответ — последним сообщением, под всеми шагами Вишенки
+    let m;
+    if(fmt=="text"){
+      const w=CH.filter(x=>x.step&&x.st=="write").pop();
+      if(w){w.step=0;w.st="";w.lbl="";w.t=text;m=w}   // шаг «пишет ответ» сам и становится ответом
+      else{m={r:"a",t:text};CH.push(m)}
+    }else{m={r:"a",t:text,a:file?[file]:undefined};CH.push(m)}
+    m.tg=0;finish()};
   try{await apiStream("/api/chat",{messages:msgs,deep,format:fmt,files},ev=>{
     if(!ev||typeof ev!="object")return;
-    if(ev.t=="status"&&typeof ev.v=="string")live.st=ev.v;
-    else if(ev.t=="think"&&typeof ev.v=="string")live.th+=ev.v;
-    else if(ev.t=="text"&&typeof ev.v=="string")live.t+=ev.v;
-    else if(ev.t=="off"){reply=null;why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
-    else if(ev.t=="fail"){reply=null;why=ev.why=="send"?"Не получилось отправить файл в диалог с ботом. Попробуйте ещё раз."
+    if(ev.t=="status"&&typeof ev.v=="string")chStepNew(ev.v,fmt,ev.v=="read"?chReadLabel(atts):"");
+    else if(ev.t=="think"&&typeof ev.v=="string")chThink(ev.v,fmt);
+    else if(ev.t=="text"&&typeof ev.v=="string"){acc+=ev.v;chStepCur("write",fmt).t+=ev.v}
+    else if(ev.t=="tg"){const a=CH[CH.length-1];if(a&&a.r=="a"&&!a.err&&!a.step)a.tg=1}   // ответ ушёл и в Telegram
+    else if(ev.t=="off"){why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
+    else if(ev.t=="fail"){why=ev.why=="send"?"Не получилось отправить файл в диалог с ботом. Попробуйте ещё раз."
       :ev.why=="build"?"Не получилось оформить файл. Попробуйте ещё раз."
       :"ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}
-    else if(ev.t=="done"){reply=typeof ev.reply=="string"&&ev.reply?ev.reply:reply;
-      if(ev.file&&typeof ev.file.name=="string")file={n:ev.file.name,k:"out",img:typeof ev.file.img=="string"&&/^data:image\/png;base64,/.test(ev.file.img)?ev.file.img:undefined}}
+    else if(ev.t=="done"){
+      if(ev.file&&typeof ev.file.name=="string")file={n:ev.file.name,k:"out",img:typeof ev.file.img=="string"&&/^data:image\/png;base64,/.test(ev.file.img)?ev.file.img:undefined};
+      const t=typeof ev.reply=="string"&&ev.reply?ev.reply:acc;
+      if(t)answer(t);else finish()}
     if(tab=="ch")chUpd(true)})}catch(e){}
-  if(CH[CH.length-1]===live)CH.pop();       // живой ответ заменяем итоговым сообщением
-  chBusy=false;
-  const msg=reply?{r:"a",t:reply,a:file?[file]:undefined}:{r:"a",t:why,err:1};
-  CH.push(msg);chSave();
-  if(tab=="ch")chUpd(true)}   // ушли из раздела — ответ сохранён, интерфейс не трогаем
+  if(!fin){chBusy=false;chStepEnd();CH.push({r:"a",t:why,err:1});chSave();if(tab=="ch")chUpd(true)}
+}   // ушли из раздела — ответ сохранён, интерфейс не трогаем
 
 /* ---------- меню-гамбургер ---------- */
 const ORDER=["c","p","s","ch","mt"],NAMES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат с ИИ",mt:"Материалы"};
