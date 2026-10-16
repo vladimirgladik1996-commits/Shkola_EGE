@@ -1687,7 +1687,7 @@ async def api_payment_delete(request):
 # Мини-апп шлёт запись и КОНТЕКСТ: на какой вкладке и экране пользователь нажал «Голосовая команда»,
 # какой фильтр/период выбран, какая карточка открыта. Контекст приходит от клиента, поэтому проверяется
 # по белому списку: лишние ключи отбрасываются, неверный тип или значение → 400.
-VOICE_TABS = {"c": "Расписание", "p": "Оплаты", "s": "Ученики", "ch": "Чат", "mt": "Материалы", "kn": "Канал"}
+VOICE_TABS = {"c": "Расписание", "p": "Оплаты", "s": "Ученики", "ch": "Чат", "mt": "Материалы"}
 VOICE_SCREENS = {"lesson_form", "day_card", "student_card", "student_new", "payment_card", "payment_edit",
                  "payment_new", "balance", "debts", "print_preview", "grade_filter", "period_calendar",
                  "payment_student_pick", "payment_sort"}
