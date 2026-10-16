@@ -1,6 +1,7 @@
 """Виджет Вишенки (голосовой помощник): в окне только голосовое управление.
 1. Строка ввода и кнопка «Спросить» — баг; тест не даёт им вернуться.
-2. Кнопка голосовой команды анимированно превращается в «✅ Выполнить» и «❌ Отмена».
+2. Кнопка голосовой команды анимированно превращается в «✅ Применить» и «❌ Отмена»,
+   а сама остаётся кнопкой «Поправить распознанное» под ними — ею можно озвучить корректировку.
 3. Расшифровка команды показывается отдельной строкой НАД кнопками — и до, и после превращения."""
 import os, re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,27 +24,34 @@ ok("обработчик текстового ввода удалён из ми�
 assert not re.search(r"\.chs\s+\.chi\b", html)
 ok("стили строки ввода удалены")
 
-# --- одна зона действий: микрофон + «Выполнить» + «Отмена» ---------------------
+# --- одна зона действий: микрофон + «Применить» + «Отмена» ---------------------
 act = re.search(r'<div class="act" id="cha">(.*?)</div>', body, re.S)
 assert act, "нет контейнера #cha"
 btns = re.findall(r"<button\b[^>]*>", act.group(1))
 assert len(btns) == 3 and 'id="micb"' in btns[0] and 'id="cok"' in btns[1] and 'id="cno"' in btns[2], btns
 assert len(re.findall(r"<button\b", body)) == 3
-ok("в окне ровно три кнопки в одном контейнере: микрофон, «Выполнить», «Отмена»")
+ok("в окне ровно три кнопки в одном контейнере: микрофон, «Применить», «Отмена»")
 assert all("inert" in b for b in btns[1:]) and "inert" not in btns[0]
-ok("до команды «Выполнить»/«Отмена» скрыты и недоступны с клавиатуры (inert)")
-assert "Выполнить" in act.group(1) and "Отмена" in act.group(1)
-ok("подписи «✅ Выполнить» и «❌ Отмена» на месте")
+ok("до команды «Применить»/«Отмена» скрыты и недоступны с клавиатуры (inert)")
+assert "Применить" in act.group(1) and "Отмена" in act.group(1)
+ok("подписи «✅ Применить» и «❌ Отмена» на месте")
 
 # --- превращение анимированное ---------------------------------------------------
 assert re.search(r"\.chs \.act button\{[^}]*transition:[^}]*flex-grow", html)
-assert re.search(r"\.chs \.act\.cf \.mic\{[^}]*opacity:0", html) and re.search(r"\.chs \.act\.cf \.ok,\.chs \.act\.cf \.no\{[^}]*opacity:1", html)
+assert re.search(r"\.chs \.act\.cf \.mic\{[^}]*opacity:1", html) and re.search(r"\.chs \.act\.cf \.ok,\.chs \.act\.cf \.no\{[^}]*opacity:1", html)
 ok("переход микрофон → две кнопки: плавное изменение ширины и прозрачности (класс .cf)")
+assert re.search(r"\.chs \.act\.cf \.mic\{[^}]*flex:1 1 100%", html) and re.search(r"\.chs \.act\.cf \.mic\{[^}]*order:3", html)
+ok("под «Применить»/«Отмена» кнопка микрофона остаётся — отдельной строкой внизу")
 assert "prefers-reduced-motion:reduce" in html and re.search(r"reduce\)\{[^\n]*\.chs \.act button\{transition:none", html)
 ok("при «уменьшить анимацию» превращение мгновенное")
 cb = re.search(r"function chrBtns\(confirm\)\{(.*?)\n(?=function chrHeard)", html, re.S).group(1)
 assert 'classList.toggle("cf"' in cb and "inert" in cb
 ok("chrBtns переключает .cf и inert (кнопки меняются местами в обе стороны)")
+assert '["micb",confirm]' not in cb and "micLabel" in cb
+ok("в состоянии подтверждения микрофон не гасится — им можно поправить распознанное")
+ml = re.search(r"function micLabel\(rec\)\{(.*?)\n(?=function micUi)", html, re.S).group(1)
+assert "Поправить распознанное" in ml and "Сказать, что сделать" in ml and "Голосовая команда" in ml
+ok("подпись микрофона меняется по состоянию: команда → поправка → задача фрагмента")
 
 # --- расшифровка над кнопками ------------------------------------------------------
 z = re.search(r'<div class="zone">(.*?)</div>\s*<div class="act"', body, re.S)
@@ -57,10 +65,10 @@ ok("после ответа сервера расшифровка (heard) выв
 assert re.search(r"async function voiceToggle\(\)\{.{0,200}?chrHeard\(\"\"\)", html, re.S)
 ok("при новой записи старая расшифровка очищается")
 
-# --- «Выполнить»: виджет сворачивается, на странице играет анимация действия ----------------
+# --- «Применить»: виджет сворачивается, на странице играет анимация действия ----------------
 vc_ = re.search(r"async function voiceConfirm\(\)\{(.*?)\n(?=/\* «Выполнить»)", html, re.S).group(1)
 assert "voice_confirm" in vc_ and "voiceDone(r)" in vc_ and "voiceFold" not in vc_.split("voiceDone")[0]
-ok("после ответа сервера «Выполнить» передаёт результат в voiceDone (окно не закрывается раньше времени)")
+ok("после ответа сервера «Применить» передаёт результат в voiceDone (окно не закрывается раньше времени)")
 assert re.search(r"if\(!\(r&&r\.ok\)\)\{chrSay\(", vc_)
 ok("при ошибке окно остаётся открытым и показывает причину")
 vf = re.search(r"async function voiceFold\(\)\{(.*?)\n(?=function voiceWeek)", html, re.S).group(1)

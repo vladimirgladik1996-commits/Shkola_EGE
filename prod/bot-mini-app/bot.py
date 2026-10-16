@@ -1267,8 +1267,8 @@ async def ai_voice(m: Message):
         return
     async with thinking(m, True):              # и распознавание, и ответ — оба долгие
         data, mime = await tg_audio(m)
-        text = await whisper.transcribe(data, mime)
-        res = await assist.handle_chat(m.from_user.id, text) if text else None
+        text = await whisper.transcribe(data, mime, prompt=stt_prompt())
+        res = await assist.handle_chat(m.from_user.id, text, voice=True) if text else None
     if res is None:
         await say(m, "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом.")
         return
@@ -1753,6 +1753,16 @@ def voice_audio(j):
     except binascii.Error:
         raise ValueError
 
+def stt_prompt():
+    """Подсказка Whisper перед распознаванием: имена учеников — чтобы речь с именами не искажалась.
+    Пустая строка, если учеников нет или база недоступна — распознавание работает и без подсказки."""
+    try:
+        names = [r["name"] for r in q("select name from students where coalesce(deleted,0)=0 order by name limit 60")]
+    except Exception:
+        return ""
+    return ("Занятия репетитора. Ученики: " + "; ".join(names) + ".")[:500] if names else ""
+
+
 def voice_snapshot():
     """Снимок кабинета для ассистента: дата, ученики с балансом, ближайшие занятия, оплаты за неделю.
     Обрезается по размеру — большой снимок ест токены и замедляет ответ."""
@@ -1793,11 +1803,11 @@ async def voice_handle(uid, ctx, audio, mime, text):
         if not whisper.enabled():
             return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Голос не распознаётся: "
                     "на сервере не задан WHISPER_API_KEY. Напишите текстом."}
-        heard = await whisper.transcribe(audio, mime) or ""
+        heard = await whisper.transcribe(audio, mime, prompt=stt_prompt()) or ""
         if not heard:
             return {"stage": "stub", "reply": "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом."}
         text = heard
-    res = await assist.handle_page(uid, text, ctx)
+    res = await assist.handle_page(uid, text, ctx, voice=bool(heard))
     if heard:
         res = {**res, "heard": heard}   # расшифровка идёт отдельным полем: мини-апп показывает её над кнопками
     return res
@@ -1853,7 +1863,7 @@ async def api_stt(request):
         raise ValueError
     if not whisper.enabled():
         return web.json_response({"ok": True, "text": "", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
-    heard = " ".join((await whisper.transcribe(audio, mime) or "").split())
+    heard = " ".join((await whisper.transcribe(audio, mime, prompt=stt_prompt()) or "").split())
     log.info("stt: audio=%sB mime=%s chars=%s", len(audio), mime, len(heard))
     return web.json_response({"ok": True, "text": heard[:4000]})
 
@@ -1957,7 +1967,7 @@ async def api_fragment(request):
     if not text:
         if not whisper.enabled():
             return web.json_response({"ok": True, "stage": "stub", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
-        heard = " ".join((await whisper.transcribe(audio, mime) or "").split())
+        heard = " ".join((await whisper.transcribe(audio, mime, prompt=stt_prompt()) or "").split())
         if not heard:
             return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись — нажмите кнопку и скажите ещё раз."})
         text = heard[:500]

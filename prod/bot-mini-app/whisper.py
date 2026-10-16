@@ -11,7 +11,7 @@
 Принимает ogg/opus (голосовые Telegram), webm/opus и mp4 (запись в мини-аппе), mp3, wav, m4a.
 Любая ошибка — это None и запись в лог, а не исключение наверх: бот отвечает вежливой заглушкой.
 """
-import json, logging, os
+import json, logging, os, re
 
 import aiohttp
 
@@ -39,14 +39,17 @@ def _fname(mime):
     return "voice." + _EXT.get((mime or "").split(";")[0].strip().lower(), "webm")
 
 
-async def transcribe(audio, mime="audio/webm"):
-    """Текст записи (str) или None — нет ключа / сервис недоступен / не разобрал ответ."""
+async def transcribe(audio, mime="audio/webm", prompt=""):
+    """Текст записи (str) или None — нет ключа / сервис недоступен / не разобрал ответ.
+    prompt — необязательная подсказка (имена, термины): поднимает качество распознавания этих слов."""
     if not API_KEY or not audio:
         return None
     form = aiohttp.FormData()
     form.add_field("model", MODEL)
     if LANG:
         form.add_field("language", LANG)
+    if prompt:
+        form.add_field("prompt", re.sub(r"\s+", " ", str(prompt))[:500])
     form.add_field("file", audio, filename=_fname(mime), content_type=mime or "audio/webm")
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as s:

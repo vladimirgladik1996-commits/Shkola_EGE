@@ -2,11 +2,15 @@
 что именно будет сделано, и ТОЛЬКО после подтверждения выполняет действие в кабинете.
 
 Поток: сообщение → разбор (Kimi, дешёвая модель, строгий JSON) →
-  • задача про кабинет → собрать параметры (спросить недостающие) → подтверждение → исполнение;
+  • задача про кабинет → собрать параметры (спросить недостающие и переспросить неуверенно
+    распознанное) → подтверждение → исполнение;
   • не про кабинет (сочинение, объяснение, вопрос) → спросить «быстро или глубоко» →
     быстрый ответ дешёвой моделью или долгий разбор kimi-k3 (reasoning_effort=max).
 
-Голос сначала превращается в текст (Whisper, см. whisper.py), дальше путь общий.
+Голос сначала превращается в текст (Whisper, см. whisper.py), дальше путь общий. Текст из
+распознавания помечается в промте как вероятный: имена подбираются к базе учеников
+(сокращения и уменьшительно-ласкательные формы); новое имя записывается как продиктовано
+(краткое остаётся кратким), переспрашиваются только странные имена — похожие на ошибку аудио.
 
 Несколько железных правил:
   • исполняются ТОЛЬКО явно подтверждённые действия и ТОЛЬКО из белого списка
@@ -95,8 +99,144 @@ def norm_bool(x):
     return x if isinstance(x, bool) else None
 
 
+# ---------- имена: голос почти всегда их искажает («Ваня» вместо «Ивана», «Иванов Ив» вместо «Иван Петров») ----------
+DIM2FULL = {
+    # мужские: сокращённая / уменьшительно-ласкательная форма → полное каноническое имя
+    "саша": "александр", "шура": "александр", "шурик": "александр",
+    "сережа": "сергей", "серый": "сергей",
+    "ваня": "иван", "ванька": "иван",
+    "петя": "петр", "петька": "петр",
+    "миша": "михаил", "мишаня": "михаил",
+    "коля": "николай", "колька": "николай",
+    "вова": "владимир", "володя": "владимир", "вовка": "владимир",
+    "дима": "дмитрий", "димка": "дмитрий", "митя": "дмитрий",
+    "костя": "константин", "костик": "константин",
+    "алеша": "алексей", "леша": "алексей", "лешка": "алексей",
+    "гриша": "григорий", "гришка": "григорий",
+    "федя": "федор", "федька": "федор",
+    "женя": "евгений", "женечка": "евгений",
+    "боря": "борис", "борька": "борис",
+    "витя": "виктор", "витек": "виктор",
+    "толя": "анатолий", "толик": "анатолий",
+    "рома": "роман", "ромка": "роман",
+    "стас": "станислав", "стасик": "станислав",
+    "андрюша": "андрей", "андрюха": "андрей",
+    "макс": "максим", "максимка": "максим",
+    "ярик": "ярослав",
+    "тима": "тимофей", "тимоша": "тимофей",
+    "даня": "даниил", "данила": "даниил", "данька": "даниил",
+    "филя": "филипп", "фил": "филипп",
+    "вадик": "вадим", "вадя": "вадим",
+    "валера": "валерий", "валерка": "валерий",
+    "гена": "геннадий", "генка": "геннадий",
+    "лева": "лев",
+    "артемка": "артем", "артемчик": "артем",
+    "игорек": "игорь",
+    "антоха": "антон",
+    "русланчик": "руслан",
+    "антон": "антон", "артем": "артем", "александр": "александр", "сергей": "сергей",
+    "иван": "иван", "петр": "петр", "михаил": "михаил", "николай": "николай",
+    "владимир": "владимир", "дмитрий": "дмитрий", "константин": "константин", "алексей": "алексей",
+    "григорий": "григорий", "федор": "федор", "евгений": "евгений", "борис": "борис",
+    "виктор": "виктор", "анатолий": "анатолий", "роман": "роман", "станислав": "станислав",
+    "андрей": "андрей", "максим": "максим", "ярослав": "ярослав", "тимофей": "тимофей",
+    "даниил": "даниил", "филипп": "филипп", "вадим": "вадим", "валерий": "валерий",
+    "геннадий": "геннадий", "игорь": "игорь", "руслан": "руслан",
+    # женские
+    "катя": "екатерина", "катюша": "екатерина", "катерина": "екатерина",
+    "маша": "мария", "машка": "мария", "маня": "мария",
+    "света": "светлана", "светка": "светлана", "светик": "светлана",
+    "оля": "ольга", "олька": "ольга",
+    "лена": "елена", "ленка": "елена", "леночка": "елена",
+    "наташа": "наталья", "наташка": "наталья", "натали": "наталья",
+    "таня": "татьяна", "танюша": "татьяна",
+    "аня": "анна", "анка": "анна", "анюта": "анна", "анечка": "анна", "анна": "анна",
+    "даша": "дарья", "дашка": "дарья",
+    "юля": "юлия", "юлька": "юлия",
+    "ира": "ирина", "ирка": "ирина",
+    "галя": "галина", "галка": "галина",
+    "люда": "людмила", "люся": "людмила", "людочка": "людмила",
+    "рая": "раиса",
+    "вика": "виктория", "викуля": "виктория",
+    "лиза": "елизавета", "лизавета": "елизавета",
+    "соня": "софья",
+    "ксюша": "ксения", "ксюха": "ксения",
+    "настя": "анастасия", "настюша": "анастасия",
+    "рита": "маргарита", "ритка": "маргарита",
+    "тоня": "антонина",
+    "ксана": "оксана",
+    "екатерина": "екатерина", "мария": "мария", "светлана": "светлана", "ольга": "ольга",
+    "елена": "елена", "наталья": "наталья", "татьяна": "татьяна", "анна": "анна",
+    "дарья": "дарья", "юлия": "юлия", "ирина": "ирина", "галина": "галина",
+    "людмила": "людмила", "раиса": "раиса", "виктория": "виктория", "елизавета": "елизавета",
+    "софья": "софья", "ксения": "ксения", "анастасия": "анастасия", "маргарита": "маргарита",
+    "антонина": "антонина", "алла": "алла", "нина": "нина", "вера": "вера", "полина": "полина",
+    "марина": "марина", "кристина": "кристина", "арина": "арина", "оксана": "оксана",
+    "жанна": "жанна", "диана": "диана", "алиса": "алиса", "валерия": "валерия",
+}
+
+
+def _tok(s):
+    return re.sub(r"[^0-9a-zа-я]+", " ", (s or "").lower().replace("ё", "е")).split()
+
+
+def _forms(tokens):
+    """Варианты написания: как услышано и с развернутыми именами («ваня» → «иван»)."""
+    out = [" ".join(tokens)]
+    exp = [DIM2FULL.get(t, t) for t in tokens]
+    if exp != tokens:
+        out.append(" ".join(exp))
+    return out
+
+
+def _sim(a, b):
+    """Сходство двух написаний имени 0..1: полные строки, имена по отдельности, сокращения и вложения."""
+    from difflib import SequenceMatcher
+    if not a or not b:
+        return 0.0
+    s = SequenceMatcher(None, a, b).ratio()
+    ta, tb = a.split(), b.split()
+    if ta and tb:
+        s = max(s, SequenceMatcher(None, ta[0], tb[0]).ratio())
+        if ta[0] == tb[0]:
+            s = max(s, 0.8)                                   # имя совпало, фамилия распознана криво
+        if min(len(ta[0]), len(tb[0])) >= 4 and (ta[0].startswith(tb[0]) or tb[0].startswith(ta[0])):
+            s = max(s, 0.75)                                  # сокращение: «александ» / «александр»
+    if min(len(a), len(b)) >= 4 and (a in b or b in a):
+        s = max(s, 0.9)                                       # «анна» внутри «анна иванова»
+    return s
+
+
+def name_match(heard, names):
+    """((оценка, имя), (оценка, имя)) — лучшее и второе похожее имя из базы для распознанного голосом."""
+    hv = _forms(_tok(heard))
+    best = second = (0.0, None)
+    for nm in names:
+        s = max(_sim(h, n) for h in hv for n in _forms(_tok(nm)))
+        if s > best[0]:
+            best, second = (s, nm), best
+        elif s > second[0]:
+            second = (s, nm)
+    return best, second
+
+
+def canon_name(raw):
+    """Имя нового ученика записывается РОВНО как продиктовано: краткое остаётся кратким (Ваня — Ваня,
+    Света — Света). Меняются только регистр и лишние пробелы. Странные имена, похожие на ошибку
+    распознавания аудио, поправляет и переспрашивает модель (check) — код ничего не переписывает сам."""
+    parts = [p for p in re.split(r"\s+", (raw or "").strip()) if p]
+    if not parts:
+        return None
+    def fix(p):
+        if "." in p:                                          # инициалы «А.С.» не трогаем
+            return p
+        return "-".join(w[:1].upper() + w[1:].lower() for w in p.split("-"))
+    return " ".join(fix(p) for p in parts)[: bot.MAX_NAME]
+
+
 def find_student(val):
-    """id или имя → строка students. AssistError, если не найден или имя неоднозначно."""
+    """id или имя → dict ученика. AssistError, если не найден или имя неоднозначно.
+    Голос искажает имена — кроме точного совпадения подбирается самое похожее имя базы."""
     if isinstance(val, dict):                     # модель могла вернуть уже разобранный объект
         val = val.get("id") if val.get("id") is not None else val.get("name")
     rows = bot.q("select id, name, grade, subject, price, coalesce(deleted,0) deleted from students")
@@ -104,20 +244,25 @@ def find_student(val):
         sid = int(val)
         for r in rows:
             if r["id"] == sid:
-                return r
-        raise AssistError(f"Ученика с номером {sid} нет. Уточните имя.")
+                return dict(r)
+        raise AssistError(f"Ученика с номером {sid} нет. Назовите имя.")
     name = (val or "").strip().lower()
     if not name:
         raise AssistError("Не понял, о каком ученике речь. Назовите имя.")
     exact = [r for r in rows if r["name"].strip().lower() == name]
     if len(exact) == 1:
-        return exact[0]
+        return dict(exact[0])
     soft = [r for r in rows if name in r["name"].strip().lower() or r["name"].strip().lower() in name]
     if len(soft) == 1:
-        return soft[0]
+        return dict(soft[0])
     if len(soft) > 1:
-        raise AssistError("Нашёл несколько похожих: " + ", ".join(r["name"] for r in soft[:5]) + ". Уточните.")
-    raise AssistError(f"Ученика «{val}» не нашёл. Проверьте имя или добавьте ученика.")
+        raise AssistError("Нашёл несколько похожих: " + ", ".join(r["name"] for r in soft[:5]) + ". Назовите имя точнее.")
+    best, second = name_match(val, [r["name"] for r in rows])
+    if best[1] and (best[0] >= 0.72 or (best[0] >= 0.6 and best[0] - second[0] >= 0.15)):
+        for r in rows:
+            if r["name"] == best[1]:
+                return dict(r)
+    raise AssistError(f"Ученика «{val}» не нашёл. Назовите имя ещё раз — или скажите «добавить нового ученика».")
 
 
 ASK = {"student": "Как зовут ученика?", "name": "Как зовут нового ученика?", "grade": "Какой класс?",
@@ -143,12 +288,13 @@ def prepare(params, action):
         if not p["new_day"]: need.append("new_day")
     if action in ("add_lesson", "add_payment", "add_student", "move_lesson"):
         if action == "add_student":
-            p["name"] = norm_text(params.get("name"), bot.MAX_NAME)
+            p["name"] = canon_name(norm_text(params.get("name"), bot.MAX_NAME))
             if not p["name"]: need.append("name")
             p["grade"] = norm_text(params.get("grade"), bot.MAX_GRADE)
+            if not p["grade"]: need.append("grade")
             p["subject"] = norm_text(params.get("subject"), bot.MAX_SUBJECT)
             p["price"] = norm_int(params.get("price"), 0, bot.MAX_MONEY)
-            if params.get("price") is not None and p["price"] is None: need.append("price")
+            if p["price"] is None: need.append("price")
         else:
             val = params.get("student") or params.get("student_id") or params.get("name")
             if val in (None, ""):
@@ -235,36 +381,63 @@ def execute(action, p, info=None):
 # ---------- разбор задачи моделью ----------
 SCHEMA = (
     '{"kind":"app"|"chat","action":"add_student"|"add_lesson"|"move_lesson"|"cancel_lesson"|"add_payment"|"none",'
-    '"params":{...},"question":"уточняющий вопрос или пустая строка"}')
+    '"params":{...},"question":"уточняющий вопрос или пустая строка",'
+    '"check":["вопрос про неуверенно распознанное"]}')
 
 PROMPT = (
     "Ты разбираешь задачу пользователя кабинета репетитора. Ответ — СТРОГО один JSON (без markdown и пояснений):\n"
     + SCHEMA + "\n"
     "params по действиям:\n"
-    "add_student: {name, grade, subject, price};\n"
+    "add_student: {name, grade, subject, price} — name полное каноническое имя, grade класс, "
+    "price цена за занятие (0 — если цены нет);\n"
     "add_lesson: {student, day, time, dur, regular};\n"
     "move_lesson: {day, time, new_day, new_time, dur} — где day/time это текущее занятие;\n"
     "cancel_lesson: {day, time};\n"
     "add_payment: {student, amount}.\n"
-    "Правила: сегодня {today}; даты — строго YYYY-MM-DD, время — строго HH:MM, суммы и цены — целые числа рублей, "
-    "имена учеников — как в списке кабинета. Неизвестные поля опусти. "
-    "Если данных не хватает — kind=\"app\", action по намерению, а в question задай короткий уточняющий вопрос. "
-    "Если задача НЕ про кабинет (сочинение, объяснение, разбор, общий вопрос) — kind=\"chat\", action=\"none\".\n\n"
+    "check — 0–2 коротких вопроса-переспроса про то, что распознано неуверенно (имя ученика, дата, время, "
+    "сумма, класс, цена): например «Цена 3000 за занятие, верно?» или «Ученик — Иван Петров?». Пустой список — "
+    "если всё распознано уверенно. Не переспрашивай то, что уже спрашивалось (смотри УЖЕ СПРОШЕНО).\n"
+    "Правила: сегодня {today}; даты — строго YYYY-MM-DD, время — строго HH:MM, суммы и цены — целые числа рублей. "
+    "Неизвестные поля опусти. Если данных не хватает — kind=\"app\", action по намерению, а в question задай короткий "
+    "уточняющий вопрос. Если задача НЕ про кабинет (сочинение, объяснение, разбор, общий вопрос) — kind=\"chat\", "
+    "action=\"none\".\n\n"
     "КАБИНЕТ (снимок данных):\n")
 
+NAME_RULES = (
+    "\nПРАВИЛА ПО ИМЕНАМ (текст мог прийти из распознавания голоса — имена искажаются чаще всего):\n"
+    "• Ученик для add_lesson / add_payment / move_lesson / cancel_lesson — ТОЛЬКО из списка УЧЕНИКИ выше: подбери "
+    "максимально похожее имя, учитывая сокращения (Саша → Александр) и уменьшительно-ласкательные формы "
+    "(Серёжа → Сергей, Катя → Екатерина), склонения («Ивану» → Иван Петров), пропуски и перестановки букв от "
+    "распознавания. Нового ученика не выдумывай: имя нужного ученика — одно из имён базы или его сокращённая / "
+    "испорченная распознаванием форма одного из них.\n"
+    "• Для add_student записывай имя РОВНО как продиктовано: краткое остаётся кратким (Ваня → Ваня, "
+    "Света → Света), уменьшительно-ласкательные формы НЕ разворачивай в полные. Исправляй и переспрашивай "
+    "через check ТОЛЬКО странные имена, похожие на ошибку распознавания аудио: если имя не похоже ни на одно "
+    "российское имя — подбери ближайшее распространённое российское имя, предложи его в params.name и "
+    "переспроси («Имя Марина, верно?»).\n"
+    "• Во всём, что распознано неуверенно (имя, дата, время, сумма, класс, цена) — переспроси через check; "
+    "не подставляй сомнительные значения молча.")
 
-async def classify(text, *, images=None, docs=None, prev=None, ctx=None, allow=None):
-    """dict {kind, action, params, question} | None. Никогда не бросает исключений."""
-    parts = [PROMPT + bot.voice_snapshot()]
+STT_NOTE = (
+    "\nВНИМАНИЕ: текст распознан голосом нейросетью (Whisper). Возможны ошибки и искажения — особенно в именах, "
+    "числах и датах. Это вероятная, а не точная запись речи пользователя.")
+
+
+async def classify(text, *, images=None, docs=None, prev=None, ctx=None, allow=None, voice=False):
+    """dict {kind, action, params, question, check} | None. Никогда не бросает исключений."""
+    parts = [PROMPT + bot.voice_snapshot() + NAME_RULES]
+    if voice:
+        parts.append(STT_NOTE)
     if ctx:
         parts.append("\nПОЛЬЗОВАТЕЛЬ НА СТРАНИЦЕ: " + ctx + ".")
     if allow:
         parts.append("На этой странице доступны действия: " + ", ".join(allow) + ". Другие действия не предлагай.")
     if prev:
         try: dump = json.dumps(prev, ensure_ascii=False)
-        except ValueError: dump = ""
+        except Exception: dump = ""
         if dump:
-            parts.append("\nПРЕДЫДУЩЕЕ ПОНИМАНИЕ ЗАДАЧИ (дополни его новыми данными, не теряй старые): " + dump)
+            parts.append("\nПРЕДЫДУЩЕЕ ПОНИМАНИЕ ЗАДАЧИ (дополни его новыми данными, не теряй старые; если пользователь "
+                         "что-то поправляет — замени это значение; УЖЕ СПРОШЕНО — не повторяй): " + dump)
     parts.append("\nЗАДАЧА:\n" + text)
     if docs:
         parts.append("\nФАЙЛЫ К ЗАДАЧЕ:\n" + docs[:6000])
@@ -276,7 +449,14 @@ async def classify(text, *, images=None, docs=None, prev=None, ctx=None, allow=N
     kind = j.get("kind") if j.get("kind") in ("app", "chat") else "chat"
     action = j.get("action") if j.get("action") in ACTIONS else "none"
     params = j.get("params") if isinstance(j.get("params"), dict) else {}
-    return {"kind": kind, "action": action, "params": params, "question": norm_text(j.get("question"), 300) or ""}
+    raw_check = j.get("check") if isinstance(j.get("check"), list) else []
+    checks = []
+    for c in raw_check[:3]:
+        c = norm_text(c, 200) if isinstance(c, str) else None
+        if c and c not in checks:
+            checks.append(c)
+    return {"kind": kind, "action": action, "params": params,
+            "question": norm_text(j.get("question"), 300) or "", "check": checks}
 
 
 def _json_safe(v):
@@ -304,6 +484,24 @@ def question_for(need, action, asked):
         if q not in asked:
             return q
     return None
+
+
+def next_check(task, asked):
+    """Следующий переспрос неуверенно распознанного (из check модели) — уже спрошенное не повторяем."""
+    if len(asked) >= 6:
+        return None                                  # диалог затянулся — выходим на подтверждение
+    for c in task.get("check") or []:
+        if c and c not in asked:
+            return c
+    return None
+
+
+def _task_state(action, params, asked):
+    """Состояние диалога: что понято и что уже спрошено (параметры — только JSON-безопасные)."""
+    st = {"action": action, "params": _json_safe(params)}
+    if asked:
+        st["asked"] = list(asked)[-10:]
+    return st
 
 
 # ---------- ответы на общие вопросы (не про кабинет) ----------
@@ -468,15 +666,19 @@ def _live(uid):
     return p
 
 
-async def handle_chat(uid, text, *, images=None, docs=None):
+ANSWER_HINT = "\n\nОтветьте голосовым сообщением или текстом — я продолжу и соберу остальное."
+FIX_HINT = "Если что-то распознано неверно — просто отправьте голосовое с поправкой."
+
+
+async def handle_chat(uid, text, *, images=None, docs=None, voice=False):
     """Текст/голос из Telegram → {"reply": str, "buttons": [(текст, callback_data)]|None}."""
     if not kimi.enabled():
         return {"reply": "Ассистент не подключён: на сервере не задан KIMI_API_KEY.", "buttons": None}
     p = _live(uid)
     if p and p.get("phase") == "confirm" and text.strip().lower() in ("да", "ок", "подтверждаю", "верно", "ага"):
         return await handle_reply(uid, "ai:ok")
-    prev = p.get("task") if p and p.get("phase") == "clarify" else None
-    task = await classify(text, images=images, docs=docs, prev=prev)
+    prev = p.get("task") if p and p.get("phase") in ("clarify", "confirm") else None
+    task = await classify(text, images=images, docs=docs, prev=prev, voice=voice)
     if task is None:
         return {"reply": "Не получилось разобрать задачу — попробуйте сказать иначе.", "buttons": None}
     if task["kind"] == "chat":
@@ -487,7 +689,7 @@ async def handle_chat(uid, text, *, images=None, docs=None):
 
 
 def _app_flow(uid, task, prev, text, images=None, docs=None):
-    """Задача про кабинет: добрать параметры или выйти на подтверждение."""
+    """Задача про кабинет: добрать параметры и переспросить неуверенно распознанное → подтверждение."""
     action = task["action"]
     if action == "none":
         return {"reply": "Не понял, что нужно сделать. Сформулируйте задачу ещё раз.", "buttons": None}
@@ -496,22 +698,28 @@ def _app_flow(uid, task, prev, text, images=None, docs=None):
         params, need = prepare(task["params"], action)
     except AssistError as e:
         asked.append(str(e))
-        _keep(uid, phase="clarify", task={"action": action, "params": task["params"], "asked": asked},
+        _keep(uid, phase="clarify", task=_task_state(action, task["params"], asked),
               text=text, images=images, docs=docs)
-        return {"reply": str(e), "buttons": [("❌ Отмена", "ai:cancel")]}
+        return {"reply": str(e) + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
     if need:
         q = question_for(need, action, asked) or "Не хватает данных (" + ", ".join(need) + "). Уточните, пожалуйста."
         asked.append(q)
-        _keep(uid, phase="clarify", task={"action": action, "params": merge_params(task["params"], params), "asked": asked},
+        _keep(uid, phase="clarify", task=_task_state(action, merge_params(task["params"], params), asked),
               text=text, images=images, docs=docs)
-        return {"reply": q, "buttons": [("❌ Отмена", "ai:cancel")]}
+        return {"reply": q + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
+    chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
+    if chk:
+        asked.append(chk)
+        _keep(uid, phase="clarify", task=_task_state(action, merge_params(task["params"], params), asked),
+              text=text, images=images, docs=docs)
+        return {"reply": chk + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
     try:
         what = confirm_text(action, params)
     except AssistError as e:
         return {"reply": str(e), "buttons": None}
-    _keep(uid, phase="confirm", task={"action": action, "params": params}, text=text, images=images, docs=docs)
-    return {"reply": "Проверьте, правильно ли я понял задачу:\n" + what + "\n\nВыполнить?",
-            "buttons": [("✅ Выполнить", "ai:ok"), ("❌ Отмена", "ai:cancel")]}
+    _keep(uid, phase="confirm", task=_task_state(action, params, asked), text=text, images=images, docs=docs)
+    return {"reply": "Проверьте, правильно ли я понял задачу:\n" + what + "\n\nПрименить? " + FIX_HINT,
+            "buttons": [("✅ Применить", "ai:ok"), ("❌ Отмена", "ai:cancel")]}
 
 
 async def handle_reply(uid, data):
@@ -544,7 +752,7 @@ PAGE_ALLOW = {"c": ("add_lesson", "move_lesson", "cancel_lesson"),
               "p": ("add_payment",), "s": ("add_student",)}
 
 
-async def handle_page(uid, text, ctx, *, images=None, docs=None):
+async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
     """Запрос из мини-аппа → {"reply", "stage": answer|clarify|confirm|stub, "confirm": текст|None}."""
     where = ctx.get("tab_name", "кабинет") + (f" · {ctx['screen']}" if ctx.get("screen") else "")
     if not text:
@@ -553,8 +761,8 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None):
         return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Ассистент не подключён: нет KIMI_API_KEY.", "confirm": None}
     allow = PAGE_ALLOW.get(ctx.get("tab"), ())
     p = _live(uid)
-    prev = p.get("task") if p and p.get("phase") == "page" else None
-    task = classify(text, images=images, docs=docs, prev=prev, ctx=where, allow=allow)
+    prev = p.get("task") if p and p.get("phase") in ("page", "page_confirm") else None
+    task = classify(text, images=images, docs=docs, prev=prev, ctx=where, allow=allow, voice=voice)
     task = await task
     if task is None:
         return {"stage": "answer", "reply": "Не получилось разобрать команду — попробуйте сказать иначе.", "confirm": None}
@@ -568,19 +776,25 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None):
         params, need = prepare(task["params"], action)
     except AssistError as e:
         asked.append(str(e))
-        _keep(uid, phase="page", task={"action": action, "params": task["params"], "asked": asked})
+        _keep(uid, phase="page", task=_task_state(action, task["params"], asked))
         return {"stage": "clarify", "reply": str(e), "confirm": None}
     if need:
         q = question_for(need, action, asked) or "Не хватает данных (" + ", ".join(need) + "). Уточните, пожалуйста."
         asked.append(q)
-        _keep(uid, phase="page", task={"action": action, "params": merge_params(task["params"], params), "asked": asked})
+        _keep(uid, phase="page", task=_task_state(action, merge_params(task["params"], params), asked))
         return {"stage": "clarify", "reply": q, "confirm": None}
+    chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
+    if chk:
+        asked.append(chk)
+        _keep(uid, phase="page", task=_task_state(action, merge_params(task["params"], params), asked))
+        return {"stage": "clarify", "reply": chk, "confirm": None}
     try:
         what = confirm_text(action, params)
     except AssistError as e:
         return {"stage": "clarify", "reply": str(e), "confirm": None}
-    _keep(uid, phase="page_confirm", task={"action": action, "params": params})
-    return {"stage": "confirm", "reply": "Проверьте: " + what + ".", "confirm": what}
+    _keep(uid, phase="page_confirm", task=_task_state(action, params, asked))
+    return {"stage": "confirm", "reply": "Проверьте: " + what + ".\nЕсли распознано неверно — поправьте голосом: кнопка «Поправить распознанное» внизу.",
+            "confirm": what}
 
 
 async def confirm_page(uid):

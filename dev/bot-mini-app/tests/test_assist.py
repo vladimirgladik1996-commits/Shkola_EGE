@@ -79,13 +79,13 @@ async def main():
 
         jtask(kind="app", action="add_lesson", params={"student": "Анна Иванова", "day": DAY1, "time": "12:00"})
         r = await assist.handle_chat(101, "сегодня в 12:00")
-        assert "Выполнить" in str(r["buttons"]) and "Анна Иванова" in r["reply"] and "12:00" in r["reply"]
+        assert "Применить" in str(r["buttons"]) and "Анна Иванова" in r["reply"] and "12:00" in r["reply"]
         assert lessons(DAY1, "12:00") == [], "до подтверждения занятие не создаётся"
         ok("параметры собраны → показано, что именно будет сделано (ещё без изменений)")
 
         r = await assist.handle_reply(101, "ai:ok")
         assert "Занятие добавлено" in r["reply"] and lessons(DAY1, "12:00") == [(ANNA, DAY1, "12:00")]
-        ok("после «Выполнить» занятие записано в базу")
+        ok("после «Применить» занятие записано в базу")
 
         # --- 2. оплата: сначала отмена, потом подтверждение -----------------
         jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 1500})
@@ -160,13 +160,60 @@ async def main():
             j = await r.json()
             assert j["stage"] == "confirm" and "добавь занятие" in j["heard"] and "🎤" not in j["reply"]
             assert CALLS[-1][1] and CALLS[-2][0] == "stt"   # сначала STT, потом разбор
+            stt_form = CALLS[-2][2]
+            assert "prompt" in stt_form and "Анна" in str(stt_form["prompt"]), "Whisper нужна подсказка с именами"
+            ok("в Whisper уходит подсказка с именами учеников — имена распознаются точнее")
+            body = json.dumps(CALLS[-1][2], ensure_ascii=False)
+            assert "распознан голосом" in body and "уменьшительно-ласкательные" in body and "УЧЕНИКИ" in body
+            ok("разборщику сказано, что текст из распознавания, и как подбирать имена по базе")
             r = await post("/api/voice_confirm", {})
             j = await r.json()
             assert j["ok"] and j["action"] == "add_lesson" and j["info"]["day"] == DAY1 and j["info"]["time"] == "18:00" and j["info"]["sid"]
             assert lessons(DAY1, "18:00") != []
             ok("голос из мини-аппа: Whisper → разбор → подтверждение → занятие записано")
 
-        # --- 7. без ключей всё деградирует вежливо -------------------------
+        # --- 7. имя из голоса → ближайшее имя базы, включая уменьшительные формы ---
+        jtask(kind="app", action="add_payment", params={"student": "Анечка", "amount": 700})
+        r = await assist.handle_chat(106, "Анечка внесла 700")
+        assert "Анна Иванова" in r["reply"] and "700" in r["reply"]
+        jtask(kind="app", action="add_payment", params={"student": "Борис Смирнов", "amount": 700})
+        r = await assist.handle_chat(106, "Борис Смирнов внес 700")
+        assert "Борис Смирнов" in r["reply"]
+        ok("голосовое «Анечка» и кривое «Борис Смирнов» подобраны к именам базы (как в модели, так и кодом)")
+
+        # --- 8. новый ученик: имя приводится к канону, класс и цена переспрашиваются ---
+        jtask(kind="app", action="add_student", params={"name": "Ваня Петров"})
+        r = await assist.handle_chat(107, "добавь ученика Ваня Петров")
+        assert "класс" in r["reply"].lower() and "Применить" not in str(r["buttons"])
+        jtask(kind="app", action="add_student", params={"name": "Ваня Петров", "grade": "9"})
+        r = await assist.handle_chat(107, "девятый")
+        assert "цена" in r["reply"].lower()
+        jtask(kind="app", action="add_student", params={"name": "Ваня Петров", "grade": "9", "price": 1200})
+        r = await assist.handle_chat(107, "тысяча двести")
+        assert "Ваня Петров" in r["reply"] and "Применить" in str(r["buttons"])   # краткое имя не разворачивается
+        ok("новый ученик: имя как продиктовано (Ваня — Ваня), класс и цена переспрашиваются, подтверждение — в конце")
+        await assist.handle_reply(107, "ai:cancel")
+
+        # --- 9. неуверенно распознанное переспрашивается (check) до подтверждения ---
+        pay_before = payments()
+        jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 3000},
+              check=["Сумма 3000, верно?"])
+        r = await assist.handle_chat(108, "запиши оплату Анне")
+        assert "3000" in r["reply"] and "Применить" not in str(r["buttons"]) and payments() == pay_before
+        jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 3000})
+        r = await assist.handle_chat(108, "да, три тысячи")
+        assert "Применить" in str(r["buttons"]) and "3 000" in r["reply"] and payments() == pay_before
+        ok("модель переспрашивает неуверенное, кнопки «Применить»/«Отмена» — только когда всё уверенно")
+
+        # --- 10. поправка голосом после подтверждения пересобирает задачу ---
+        jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 2500})
+        r = await assist.handle_chat(108, "нет, две тысячи пятьсот")
+        assert "2 500" in r["reply"] and "Применить" in str(r["buttons"]) and payments() == pay_before
+        await assist.handle_reply(108, "ai:cancel")
+        assert payments() == pay_before
+        ok("поправка после подтверждения обновляет версию, ничего не применяя без кнопки")
+
+        # --- 11. без ключей всё деградирует вежливо -------------------------
         kimi.API_KEY = ""
         r = await assist.handle_chat(105, "что у нас по расписанию?")
         assert "KIMI_API_KEY" in r["reply"]
