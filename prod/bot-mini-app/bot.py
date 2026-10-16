@@ -1841,6 +1841,22 @@ async def api_voice_cancel(request):
     res = assist.cancel_page(user_id(request))
     return web.json_response({"ok": True, **res})
 
+@guarded
+async def api_stt(request):
+    """Голосовой ввод в чате с ИИ: звук → текст (Whisper). Только расшифровка, без разбора команды —
+    текст вставляется в поле ввода чата и отправляется пользователем как обычное сообщение."""
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    audio, mime = voice_audio(j)
+    if audio is None:
+        raise ValueError
+    if not whisper.enabled():
+        return web.json_response({"ok": True, "text": "", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
+    heard = " ".join((await whisper.transcribe(audio, mime) or "").split())
+    log.info("stt: audio=%sB mime=%s chars=%s", len(audio), mime, len(heard))
+    return web.json_response({"ok": True, "text": heard[:4000]})
+
 # ---------- «Спросить у Вишенки» по выделенному фрагменту материала ----------
 # Мини-апп присылает фрагмент + голосовую (или готовую текстовую) задачу. Голос расшифровывается сразу
 # (Whisper), мини-апп получает «принято», а модель отвечает в фоне — результат приходит в чат с ботом.
@@ -2096,6 +2112,7 @@ def make_app():
     app.router.add_post("/api/payment/update", api_payment_update)
     app.router.add_post("/api/payment/delete", api_payment_delete)
     app.router.add_post("/api/voice", api_voice)
+    app.router.add_post("/api/stt", api_stt)
     app.router.add_post("/api/chat", api_chat)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
