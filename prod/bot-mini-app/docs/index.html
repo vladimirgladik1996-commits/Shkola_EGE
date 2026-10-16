@@ -571,6 +571,38 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-menu button.on svg{color:var(--acc)}
 @keyframes aicp{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 50%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
 @media (prefers-reduced-motion:reduce){.aim,.aim.dots i,.aic-menu,.aic-ib.rec{animation:none!important}}
+/* ===== Патч: карточки пополнения и долга; строки ленты оплат всегда одной высоты ===== */
+.feed{box-sizing:border-box;height:62px;min-height:62px}
+.feed .info b,.feed .info small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed>b{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pcd-ok{display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;padding:6px 13px 6px 8px;border-radius:99px;background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn);font-weight:800;font-size:13px}
+.pcd-ok svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.pcd-top{display:flex;align-items:center;gap:12px;padding-right:44px;margin-bottom:14px}
+.pcd-top>div{min-width:0}
+.pcd-top .av{width:48px;height:48px;font-size:17px}
+.pcd-top h3{margin:0;padding:0;font-size:19px;line-height:1.2;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.pcd-top p{margin:2px 0 0;font-size:13px;color:var(--hint)}
+.pcd-hero{--kc:var(--grn);position:relative;overflow:hidden;border-radius:20px;padding:15px 16px 13px 21px;background:linear-gradient(135deg,color-mix(in srgb,var(--kc) 15%,var(--card)),var(--card) 72%);box-shadow:0 0 0 1px color-mix(in srgb,var(--kc) 30%,var(--ln))}
+.pcd-hero.pcd-dn{--kc:var(--red)}
+.pcd-hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--kc)}
+.pcd-lab{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;color:var(--hint)}
+.pcd-bdg{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:color-mix(in srgb,var(--kc) 16%,var(--card));color:var(--kc)}
+.pcd-bdg svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pcd-amt{display:block;margin-top:2px;font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-.4px;color:var(--kc);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pcd-date{display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:11px;border-top:1px dashed color-mix(in srgb,var(--kc) 32%,var(--ln));font-size:14px}
+.pcd-date svg{flex:none;width:18px;height:18px;fill:none;stroke:var(--hint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pcd-date span{color:var(--hint)}
+.pcd-date b{margin-left:auto;text-align:right}
+.pcd-h2{margin:18px 2px 8px}
+.pcd-list{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);overflow:hidden}
+.pcd-li{display:flex;align-items:flex-start;gap:12px;padding:12px 14px}
+.pcd-li+.pcd-li{border-top:1px solid var(--ln)}
+.pcd-li .info b{font-size:14.5px}
+.pcd-li .info small{display:block}
+.pcd-li>b{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums;padding-top:7px}
+.pcd-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:color-mix(in srgb,var(--acc) 11%,var(--card));color:var(--acc)}
+.pcd-ic.pcd-g{background:color-mix(in srgb,var(--grn) 15%,var(--card));color:var(--grn)}
+.pcd-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -980,40 +1012,40 @@ function allocate(sid){
     for(let i=0;i<ls.length&&left>0;i++){if(rem[i]<=0)continue;const t=Math.min(left,rem[i]);rem[i]-=t;left-=t;list.push({l:ls[i],take:t,covered:ls[i].price-rem[i]})}
     res[p.id]={list,left}});
   return res}
+/* Карточки оплат (пополнение и долг) — одна структура:
+   ученик (аватар, имя, класс) → главный блок (сумма + дата) → детали. Баланса ученика здесь нет. */
+const PCI={
+  pay:'<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 15h2"/>',
+  debt:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  ok:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+  fwd:'<path d="M5 12h14M13 6l6 6-6 6"/>'};
+const pcSvg=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${PCI[k]}</svg>`;
+const pcTop=s=>{const gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
+  return `<div class="pcd-top">${av(s)}<div><h3>${esc(s.name)}</h3><p>${esc(gr)}</p></div></div>`};
+/* kind: "pcd-up" — пополнение (зелёный), "pcd-dn" — долг (красный) */
+const pcHero=(kind,label,amt,dateLabel,date)=>`<div class="pcd-hero ${kind}"><div class="pcd-lab"><span>${label}</span><i class="pcd-bdg">${pcSvg(kind=="pcd-dn"?"debt":"pay")}</i></div><b class="pcd-amt">${amt}</b><div class="pcd-date">${pcSvg("cal")}<span>${dateLabel}</span><b>${date}</b></div></div>`;
 function payCard(id,isNew){
-  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at),gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
-  const row=(info,amt,cls="")=>`<div class="row" style="cursor:default;align-items:flex-start"><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
+  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at);
+  const li=(ic,tone,info,amt,cls="")=>`<div class="pcd-li"><span class="pcd-ic ${tone}">${pcSvg(ic)}</span><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
   /* одним списком: дата и время урока, чем он закрыт, и сколько именно списано с ЭТОЙ оплаты */
-  const items=a.list.map(x=>{const full=x.covered>=x.l.price,k=x.l.day<pd?"Закрыт долг":x.l.day==pd?"Занятие сегодня":"Предоплата";
-    return row(`<b>${dmy2(x.l.day)}, ${x.l.time}</b><small style="display:block">${k}${full?"":` · оплачено ${money(x.covered)} из ${money(x.l.price)}`}</small>`,"−"+money(x.take))}).join("");
-  const left=a.left>0?row(`<b>Остаток без занятия</b><small style="display:block">Пока нет занятий, на которые его можно списать</small>`,"+"+money(a.left),"pos"):"";
-  const body=items+left||'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
-  open(`${isNew?'<p class="sub" style="margin:0 0 10px;color:var(--grn);font-weight:700">✅ Пополнение прошло успешно</p>':""}<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${esc(s.name)}</h3><p class="sub" style="margin:0">${esc(gr)}</p></div></div>
-  <div class="stat" style="margin:14px 0 4px"><small>Сумма пополнения</small><b class="pos" style="font-size:24px">+${money(p.amt)}</b></div>
-  <div class="stat" style="margin:4px 0"><small>Дата пополнения</small><b>${when(p.at)}</b></div>
-  <h2 style="margin-top:14px">На что распределилась сумма</h2>${body}
+  const items=a.list.map(x=>{const full=x.covered>=x.l.price,past=x.l.day<pd,today=x.l.day==pd,k=past?"Закрыт долг":today?"Занятие сегодня":"Предоплата";
+    return li(past?"ok":today?"cal":"fwd",past?"pcd-g":"",`<b>${dmy2(x.l.day)}, ${x.l.time}</b><small>${k}${full?"":` · оплачено ${money(x.covered)} из ${money(x.l.price)}`}</small>`,"−"+money(x.take))}).join("");
+  const left=a.left>0?li("pay","pcd-g",`<b>Остаток без занятия</b><small>Пока нет занятий, на которые его можно списать</small>`,"+"+money(a.left),"pos"):"";
+  const body=items+left;
+  open(`${isNew?`<p class="pcd-ok">${pcSvg("ok")}Пополнение прошло успешно</p>`:""}${pcTop(s)}${pcHero("pcd-up","Сумма пополнения","+"+money(p.amt),"Дата пополнения",when(p.at))}
+  <h2 class="pcd-h2">На что распределилась сумма</h2>${body?`<div class="pcd-list">${body}</div>`:'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>'}
   <div class="btns">${isNew?'<button class="btn pri" onclick="close_()">Готово</button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div>`)}
 function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-label="Назад" onclick="payCard(${id})">‹</button><h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
 function payDel(id){tg.showConfirm("Удалить платёж? Баланс пересчитается.",async ok=>{if(ok&&await api("/api/payment/delete",{id})){close_();load()}})}
 
 /* Карточка долга из ленты оплат — та же структура, что у карточки пополнения:
-   ученик (аватар, имя, класс) → сумма → дата → из чего сложился долг. Баланса ученика здесь нет. */
+   ученик (аватар, имя, класс) → сумма долга → дата занятия. Баланса ученика и разбора долга здесь нет. */
 function debtCard(lid){
   const e=debtEntries().find(x=>x.lid==lid);if(!e){close_();return}
-  const s=S.find(x=>x.id==e.sid),l=L.find(x=>x.id==lid),al=allocate(e.sid),gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
-  const row=(info,amt,cls="")=>`<div class="row" style="cursor:default;align-items:flex-start"><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
-  /* какие оплаты частично закрыли это занятие (по тому же распределению, что и в карточке пополнения) */
-  const cov=P.filter(p=>p.sid==s.id).sort((a,b)=>a.at-b.at||a.id-b.id).map(p=>({p,x:((al[p.id]||{}).list||[]).find(z=>z.l.id==lid)})).filter(c=>c.x);
-  const earlier=Math.max(0,l.price-e.amt-cov.reduce((t,c)=>t+c.x.take,0));   // оплаты старше загруженных 200
-  const items=row(`<b>Занятие · ${dmy2(l.day)}, ${l.time}</b><small style="display:block">Стоимость занятия</small>`,money(l.price))
-    +cov.map(c=>row(`<b>Оплата · ${when(c.p.at)}</b><small style="display:block">Покрыла часть занятия</small>`,"+"+money(c.x.take),"pos")).join("")
-    +(earlier>0?row(`<b>Более ранние оплаты</b><small style="display:block">Покрыли часть занятия</small>`,"+"+money(earlier),"pos"):"")
-    +row(`<b>Долг</b><small style="display:block">${cov.length||earlier>0?"Не покрыто оплатами":"Оплат по этому занятию не было"}</small>`,money(e.amt),"neg");
-  open(`<div style="display:flex;align-items:center;gap:12px;padding-right:44px">${av(s)}<div><h3 style="padding:0">${esc(s.name)}</h3><p class="sub" style="margin:0">${esc(gr)}</p></div></div>
-  <div class="stat" style="margin:14px 0 4px"><small>Сумма долга</small><b class="neg" style="font-size:24px">${money(e.amt)}</b></div>
-  <div class="stat" style="margin:4px 0"><small>Дата занятия</small><b>${when(e.at)}</b></div>
-  <h2 style="margin-top:14px">Из чего сложился долг</h2>${items}
+  const s=S.find(x=>x.id==e.sid);
+  open(`${pcTop(s)}${pcHero("pcd-dn","Сумма долга",money(e.amt),"Дата занятия",when(e.at))}
   <div class="btns"><button class="btn pri" onclick="payNew(${s.id})">Внести оплату</button><button class="btn" onclick="card(${s.id})">Карточка ученика</button></div>`)}
 
 /* ---------- Оплаты ---------- */
@@ -1039,7 +1071,7 @@ function payFeedList(){
   const SPK=[0,60,120,180,240,300].map(a=>`<i class="spk" style="--a:${a}deg"></i>`).join("");
   return sm+f.map(e=>{const s=S.find(x=>x.id==e.sid);
     return e.k=="pay"?`<div class="feed${e.id==fresh?" fresh":""}" onclick="payCard(${e.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b>${e.id==fresh?SPK:""}</div>`
-      :`<div class="feed" onclick="debtCard(${e.lid})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг за занятие · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
+      :`<div class="feed" onclick="debtCard(${e.lid})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
 function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);
   const b=$("#pstb");if(b){b.className="stb"+(pst!="all"?" on":"");b.innerHTML=stbHtml()}const so=$("#psrt");if(so)so.classList.toggle("on",psort!="new");const tf=$("#ptf");if(tf)tf.classList.toggle("on",pty!="all")}
 const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
