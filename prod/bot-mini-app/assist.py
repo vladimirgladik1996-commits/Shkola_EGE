@@ -387,10 +387,37 @@ def chat_history(raw):
     return out
 
 
-async def chat_reply(history, deep=False):
-    """Ответ в многоходовом чате мини-аппа (str) или None, если модель недоступна."""
+CHAT_FORMATS = ("text", "docx", "pdf", "image")
+CHAT_DOC_TAIL = (" Оформи ответ как готовый документ: первая строка — заголовок; названия разделов — строки, начинающиеся с «# »; "
+                 "списки — строки, начинающиеся с «- » или «1. ». Другой разметки не используй.")
+CHAT_IMG_TAIL = (' Ответ нужен для инфографики. Верни строго JSON без пояснений: {"title": "заголовок", "subtitle": "одна строка", '
+                 '"items": [{"h": "короткий заголовок пункта", "t": "1–2 предложения"}]} — от 3 до 8 пунктов.')
+
+
+def chat_format(raw):
+    """Формат ответа из запроса: text | docx | pdf | image (по умолчанию text). ValueError — если что-то иное."""
+    if raw is None:
+        return "text"
+    if raw not in CHAT_FORMATS:
+        raise ValueError
+    return raw
+
+
+async def chat_reply(history, deep=False, images=None, docs=None, fmt="text"):
+    """Ответ в многоходовом чате мини-аппа или None, если модель недоступна.
+    text/docx/pdf → str; image → dict (JSON инфографики). images/docs — вложения к ПОСЛЕДНЕЙ реплике пользователя."""
     tail = (" Дай подробный, обстоятельный разбор: рассуждение, детали, готовый результат." if deep else " Ответь коротко и по существу.")
-    return await kimi.ask([{"role": "system", "content": CHAT_SYS_APP + tail}] + history, deep=bool(deep))
+    if fmt in ("docx", "pdf"):
+        tail += CHAT_DOC_TAIL
+    elif fmt == "image":
+        tail += CHAT_IMG_TAIL
+    hist = list(history)
+    if docs:
+        hist[-1] = {**hist[-1], "content": hist[-1]["content"] + "\n\nМатериалы:\n" + docs[:20000]}
+    msgs = [{"role": "system", "content": CHAT_SYS_APP + tail}] + hist
+    if fmt == "image":
+        return await kimi.ask_json(msgs, deep=bool(deep), images=images or None)
+    return await kimi.ask(msgs, deep=bool(deep), images=images or None)
 
 
 # ---------- общий конвейер для Telegram-бота ----------

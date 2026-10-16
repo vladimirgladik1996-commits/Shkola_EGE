@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl
 
 from aiohttp import web
-import assist, auth, kimi, whisper
+import assist, auth, chatfiles, kimi, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -1959,7 +1959,9 @@ async def api_fragment(request):
     return web.json_response(res)
 @guarded
 async def api_chat(request):
-    """Чат с ИИ в мини-аппе: клиент присылает последние реплики, сервер ничего не хранит."""
+    """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
+    format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
+    (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели)."""
     j = await request.json()
     if not isinstance(j, dict):
         raise ValueError
@@ -1967,12 +1969,42 @@ async def api_chat(request):
     deep = j.get("deep", False)
     if not isinstance(deep, bool):
         raise ValueError
+    fmt = assist.chat_format(j.get("format"))
+    images, docs, names = chatfiles.read_files(j.get("files"))
     uid = user_id(request)
     if not kimi.enabled():
         return web.json_response({"ok": True, "reply": None, "enabled": False})
-    reply = await assist.chat_reply(hist, deep)
-    log.info("chat: tg_id=%s msgs=%s deep=%s ok=%s", uid, len(hist), deep, reply is not None)
-    return web.json_response({"ok": reply is not None, "reply": reply, "enabled": True})
+    res = await assist.chat_reply(hist, deep, images=images, docs=docs, fmt=fmt)
+    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=%s", uid, len(hist), deep, fmt, len(names), res is not None)
+    if res is None:
+        return web.json_response({"ok": False, "reply": None, "enabled": True})
+    if fmt == "text":
+        return web.json_response({"ok": True, "reply": res, "enabled": True})
+    try:
+        data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, res)
+    except Exception as e:                       # модель ответила не тем форматом — просто «не отвечает»
+        log.warning("chat file: не собрался (%s): %r", fmt, e)
+        return web.json_response({"ok": False, "reply": None, "enabled": True})
+    tg_bot, sent = request.app.get("bot"), False
+    if isinstance(uid, int) and tg_bot is not None:
+        try:
+            f = BufferedInputFile(data, filename=name)
+            if fmt == "image":
+                await tg_bot.send_photo(uid, f, caption=title[:200])
+            else:
+                await tg_bot.send_document(uid, f, caption=title[:200])
+            sent = True
+        except TelegramAPIError as e:
+            log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
+    if not sent and fmt != "image":              # документ без доставки бесполезен; картинку показываем прямо в чате
+        return web.json_response({"ok": False, "reply": None, "enabled": True, "why": "send"})
+    file = {"name": name, "kind": fmt, "sent": sent}
+    if fmt == "image":
+        file["img"] = chatfiles.data_url(data)
+        reply = "Готово: инфографика."
+    else:
+        reply = "Готово: документ сформирован."
+    return web.json_response({"ok": True, "reply": reply, "enabled": True, "file": file})
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
@@ -2009,7 +2041,7 @@ async def api_apk(_request):
 
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
-    app = web.Application(client_max_size=2 * 1024 * 1024, middlewares=[cors_mw])
+    app = web.Application(client_max_size=12 * 1024 * 1024, middlewares=[cors_mw])   # 12 МБ: вложения чата с ИИ (до 8 МБ в base64)
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/apk", api_apk)
     app.router.add_get("/apk/kabinet-repetitora.apk", api_apk)

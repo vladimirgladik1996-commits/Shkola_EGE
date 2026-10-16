@@ -550,25 +550,28 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-e p{color:var(--hint);margin:4px 0 14px}
 #aic-c{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #aic-c .aic-row{position:relative;max-width:560px;margin:0 auto}
-.aic-box{display:flex;gap:2px;align-items:flex-end;padding:5px;border-radius:26px;background:var(--card);box-shadow:0 0 0 1px var(--ln)}
+.aic-box{display:flex;flex-wrap:wrap;gap:3px;align-items:flex-end;padding:5px;border-radius:26px;background:var(--card);box-shadow:0 0 0 1px var(--ln)}
 .aic-box:focus-within{box-shadow:0 0 0 2px var(--acc)}
-#aic-c textarea{flex:1;min-width:0;resize:none;max-height:132px;min-height:36px;padding:8px 6px;border:0;outline:0;background:transparent;color:var(--tx);font:inherit;line-height:1.3}
-.aic-ib{flex:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--hint);font-size:18px;line-height:1;transition:background .15s,color .15s}
+#aic-c textarea{flex:1;min-width:0;resize:none;max-height:132px;min-height:36px;padding:8px 4px;border:0;outline:0;background:transparent;color:var(--tx);font:inherit;line-height:1.3}
+.aic-ib{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--hint);transition:background .15s,color .15s}
 .aic-ib svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.aic-ib.deep{color:var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.aic-ib.deep,.aic-ib.has,.aic-ib.fmt{color:var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)}
 .aic-ib.rec{color:#fff;background:var(--red);animation:aicp 1.3s infinite}
 .aic-ib.rec svg{fill:currentColor}
 #aic-s{flex:none;width:36px;height:36px;border-radius:50%;background:var(--acc);color:var(--on);display:flex;align-items:center;justify-content:center;transition:transform .12s,opacity .15s}
 #aic-s svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 #aic-s:active{transform:scale(.92)}#aic-s[disabled]{opacity:.4}
-.aic-menu{position:absolute;left:0;bottom:calc(100% + 8px);min-width:284px;padding:6px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 8px 28px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:2px;animation:aimin .16s cubic-bezier(.22,1,.36,1)}
+.aic-menu{position:absolute;z-index:5;left:0;bottom:calc(100% + 8px);width:min(300px,100%);padding:8px;border-radius:20px;background:var(--bg);box-shadow:0 0 0 1px var(--ln),0 8px 28px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:6px;animation:aimin .16s cubic-bezier(.22,1,.36,1)}
 .aic-menu[hidden]{display:none}
-.aic-menu button{display:flex;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:12px;color:var(--tx)}
-.aic-menu button svg{flex:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.aic-menu button{display:flex;gap:12px;align-items:center;text-align:left;width:100%;padding:8px 14px 8px 8px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln);color:var(--tx);transition:transform .15s,filter .2s}
+.aic-menu button:active{transform:scale(.97);filter:brightness(.95)}
+.aic-menu .aic-mi{flex:0 0 40px;height:40px;border-radius:50%;background:var(--yel);color:var(--yon);display:grid;place-items:center;font-style:normal}
+.aic-menu .aic-mi svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .aic-menu button b{display:block;font-size:14px}
 .aic-menu button small{display:block;font-size:12px;font-weight:500;color:var(--hint)}
-.aic-menu button.on{background:color-mix(in srgb,var(--acc) 14%,transparent)}
-.aic-menu button.on svg{color:var(--acc)}
+.aic-menu button.on{box-shadow:0 0 0 2px var(--acc)}
+.aic-hid{display:none!important}   /* общий input{…} приложения перебивает атрибут hidden — без этого поля выбора файла видны как белые карточки */
+#aic-c textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--hint);opacity:.85}
 @keyframes aicp{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 50%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
 @media (prefers-reduced-motion:reduce){.aim,.aim.dots i,.aic-menu,.aic-ib.rec{animation:none!important}}
 /* ===== Патч: карточки пополнения и долга; строки ленты оплат всегда одной высоты ===== */
@@ -603,6 +606,22 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pcd-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:color-mix(in srgb,var(--acc) 11%,var(--card));color:var(--acc)}
 .pcd-ic.pcd-g{background:color-mix(in srgb,var(--grn) 15%,var(--card));color:var(--grn)}
 .pcd-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.aic-menu .aic-cap{padding:6px 10px 4px;font-size:12px;font-weight:700;color:var(--hint)}
+.aic-menu[hidden]{display:none}
+.aic-menu::after{content:"";position:absolute;bottom:-6px;left:var(--ax,28px);width:12px;height:12px;background:var(--bg);transform:translateX(-50%) rotate(45deg);box-shadow:1px 1px 0 var(--ln)}   /* хвостик к иконке */
+.aic-ib[aria-expanded="true"]{color:var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)}
+.aic-att{flex:1 0 100%;display:flex;gap:8px;overflow-x:auto;padding:4px 4px 8px}.aic-att:empty{display:none}
+.aic-chip{position:relative;flex:none;height:56px;min-width:56px;max-width:170px;border-radius:12px;background:color-mix(in srgb,var(--hint) 16%,transparent);display:flex;align-items:center;gap:6px;padding:0 28px 0 10px;font-size:12.5px;font-weight:600;overflow:hidden}
+.aic-chip img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.aic-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aic-chip svg,.aif svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.aic-chip .x{position:absolute;top:0;right:0;width:28px;height:28px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px;color:#fff}
+.aic-chip .x i{width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);font-style:normal;font-size:14px;line-height:20px;text-align:center}
+.aim .aia{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;white-space:normal}
+.aim .aia:last-child{margin-bottom:0}
+.aim .aia img{display:block;max-width:100%;max-height:220px;border-radius:12px}
+.aif{display:inline-flex;gap:6px;align-items:center;max-width:100%;padding:4px 9px;border-radius:10px;background:color-mix(in srgb,currentColor 14%,transparent);font-size:13px;font-weight:600}
+.aif span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -1670,41 +1689,90 @@ addEventListener("message",e=>{if(!matIsOpen||e.source!==$("#mvf").contentWindow
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose()});
 
 /* ---------- Чат с ИИ (раздел «ch») ---------- */
-let CH=[],chDeep=false,chBusy=false,chRec=null;
-try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40)}catch(e){}
-const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err).slice(-40))}catch(e){}};
+let CH=[],chDeep=false,chFmt=0,chAtt=[],chBusy=false,chRec=null;
+const CH_MAX=5,CH_BYTES=8*1024*1024,CH_EXT=["pdf","docx","txt","md","csv"],CH_FMT=["text","docx","pdf","image"];
+try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40).map(m=>({r:m.r,t:m.t,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k})):undefined}))}catch(e){}
+const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k}));return c}))}catch(e){}};   // в память телефона — только текст и имена файлов
 const CH_SVG=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
-const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>')};
+const CH_DOC=l=>CH_SVG('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'+(l?`<text x="12" y="17" font-size="6" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700" font-family="sans-serif">${l}</text>`:""));
+const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>'),
+  clip:CH_SVG('<path d="M20 11.5l-8 8a5 5 0 01-7-7l8.5-8.5a3.3 3.3 0 014.7 4.7L9.5 17.2a1.7 1.7 0 01-2.4-2.4L15 7"/>'),
+  img:CH_SVG('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>'),
+  cam:CH_SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),file:CH_DOC(""),
+  txt:CH_SVG('<path d="M4 6h16M4 11h16M4 16h10"/>')};
+const CH_FM=[{n:"Текст",s:"Ответ прямо в чате",i:CH_IC.txt},{n:"Word-документ",s:"Файл .docx",i:CH_DOC("DOC")},{n:"PDF-документ",s:"Файл .pdf",i:CH_DOC("PDF")},{n:"Картинка / инфографика",s:"Изображение с ответом",i:CH_IC.img}];
 const CH_SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function chat(){
   return `<div class="aic"><div class="aic-h">
   <button type="button" class="aic-clr" id="aic-x" aria-label="Очистить чат" onclick="chClear()" ${CH.length?"":"disabled"}><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div>
   <div id="aic-l" aria-live="polite">${chList()}</div></div>
   <div id="aic-c"><div class="aic-row">
-  <div class="aic-menu" id="aic-m" role="menu" aria-label="Режим ответа" hidden>
-    <button type="button" role="menuitemradio" class="${chDeep?"":"on"}" aria-checked="${!chDeep}" onclick="chMode(false)"><span><b>⚡ Быстрый ответ на простой вопрос</b></span></button>
-    <button type="button" role="menuitemradio" class="${chDeep?"on":""}" aria-checked="${chDeep}" onclick="chMode(true)"><span><b>🧠 Долгий ответ на сложный вопрос</b></span></button></div>
-  <div class="aic-box">
-    <button type="button" id="aic-md" class="aic-ib${chDeep?" deep":""}" aria-haspopup="menu" aria-expanded="false" aria-label="${chDeep?"Режим: долгий ответ":"Режим: быстрый ответ"}" onclick="chMenu()">${chDeep?"🧠":"⚡"}</button>
+  <div class="aic-menu" id="aic-m" data-btn="aic-md" role="menu" hidden><div class="aic-cap">Выберите режим работы ИИ</div>
+    <button type="button" role="menuitemradio" class="${chDeep?"":"on"}" aria-checked="${!chDeep}" onclick="chMode(false)"><i class="aic-mi">${CH_IC.bolt}</i><span><b>Быстрый ответ</b><small>На простой вопрос</small></span></button>
+    <button type="button" role="menuitemradio" class="${chDeep?"on":""}" aria-checked="${chDeep}" onclick="chMode(true)"><i class="aic-mi">${CH_IC.spark}</i><span><b>Долгий ответ</b><small>На сложный вопрос</small></span></button></div>
+  <div class="aic-menu" id="aic-f" data-btn="aic-fb" role="menu" hidden><div class="aic-cap">Выберите формат ответа</div>${CH_FM.map((f,k)=>`<button type="button" role="menuitemradio" class="${k==chFmt?"on":""}" aria-checked="${k==chFmt}" onclick="chFmtSet(${k})"><i class="aic-mi">${f.i}</i><span><b>${f.n}</b><small>${f.s}</small></span></button>`).join("")}</div>
+  <div class="aic-menu" id="aic-a" data-btn="aic-ab" role="menu" hidden><div class="aic-cap">Прикрепите материал к задаче</div>
+    <button type="button" role="menuitem" onclick="chPick('aic-ph')"><i class="aic-mi">${CH_IC.img}</i><span><b>Фото из галереи</b></span></button>
+    <button type="button" role="menuitem" onclick="chPick('aic-cam')"><i class="aic-mi">${CH_IC.cam}</i><span><b>Снять камерой</b></span></button>
+    <button type="button" role="menuitem" onclick="chPick('aic-fi')"><i class="aic-mi">${CH_IC.file}</i><span><b>Файл</b><small>PDF, Word, TXT</small></span></button></div>
+  <div class="aic-box"><div class="aic-att" id="aic-att">${chAttHtml()}</div>
+    <button type="button" id="aic-md" class="aic-ib${chDeep?" deep":""}" aria-haspopup="menu" aria-expanded="false" aria-label="${chDeep?"Режим: долгий ответ":"Режим: быстрый ответ"}" onclick="chMenu('aic-m')">${chDeep?CH_IC.spark:CH_IC.bolt}</button>
+    <button type="button" id="aic-fb" class="aic-ib${chFmt?" fmt":""}" aria-haspopup="menu" aria-expanded="false" aria-label="Формат ответа: ${CH_FM[chFmt].n}" onclick="chMenu('aic-f')">${CH_FM[chFmt].i}</button>
+    <button type="button" id="aic-ab" class="aic-ib${chAtt.length?" has":""}" aria-haspopup="menu" aria-expanded="false" aria-label="Прикрепить" onclick="chMenu('aic-a')">${CH_IC.clip}</button>
     <textarea id="aic-in" rows="1" maxlength="4000" placeholder="Спросите что угодно…" enterkeyhint="send" oninput="chGrow(this)" onkeydown="chKey(event)"></textarea>
     <button type="button" id="aic-mic" class="aic-ib" aria-label="Записать голосом" onclick="chMic()">${CH_IC.mic}</button>
-    <button type="button" id="aic-s" aria-label="Отправить" onclick="chSend()"><svg viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button></div></div></div>`}
+    <button type="button" id="aic-s" aria-label="Отправить" onclick="chSend()"><svg viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button></div></div>
+  <input type="file" class="aic-hid" id="aic-ph" accept="image/*" multiple hidden onchange="chPicked(this)">
+  <input type="file" class="aic-hid" id="aic-cam" accept="image/*" capture="environment" hidden onchange="chPicked(this)">
+  <input type="file" class="aic-hid" id="aic-fi" accept=".pdf,.docx,.txt,.md,.csv" multiple hidden onchange="chPicked(this)"></div>`}
+const chAtts=a=>a&&a.length?`<div class="aia">${a.map(x=>x.img&&/^data:image\//.test(x.img)?`<img src="${x.img}" alt="">`:`<span class="aif">${x.k=="img"?CH_IC.img:CH_IC.file}<span>${esc(x.n)}</span></span>`).join("")}</div>`:"";
+function chAttHtml(){return chAtt.map((a,i)=>`<div class="aic-chip">${a.img?`<img src="${a.img}" alt="">`:`${CH_IC.file}<span>${esc(a.n)}</span>`}<button type="button" class="x" aria-label="Убрать вложение" onclick="chDel(${i})"><i>×</i></button></div>`).join("")}
 function chList(){
   if(!CH.length&&!chBusy)return `<div class="aic-e"><div class="e0i">💬</div><b>Чат с ИИ</b><p>Помощник по урокам, сочинениям и разбору заданий.</p></div>`;
-  const last=CH.length-1;
-  return CH.map((m,i)=>m.r=="u"?`<div class="aim u">${esc(m.t)}</div>`
+  return CH.map((m,i)=>m.r=="u"?`<div class="aim u">${chAtts(m.a)}${esc(m.t)}</div>`
     :m.err?`<div class="aim e">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">↻ Повторить</button></div></div>`
-    :`<div class="aim a">${esc(m.t)}<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div></div>`).join("")
-    +(chBusy?`<div class="aim a dots" aria-label="ИИ отвечает"><i></i><i></i><i></i>${chDeep?"<small>думаю глубже…</small>":""}</div>`:"")}
+    :`<div class="aim a">${chAtts(m.a)}${esc(m.t)}${m.a&&m.a.length?"":`<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div>`}</div>`).join("")
+    +(chBusy?`<div class="aim a dots" aria-label="ИИ печатает"><i></i><i></i><i></i>${chDeep?"<small>думаю глубже…</small>":chFmt?"<small>готовлю файл…</small>":""}</div>`:"")}
 function chUpd(toEnd){const l=$("#aic-l");if(!l)return;l.innerHTML=chList();
   const x=$("#aic-x");if(x)x.disabled=!CH.length;const b=$("#aic-s");if(b)b.disabled=chBusy;
   if(toEnd)scrollTo(0,document.documentElement.scrollHeight)}
-function chMenu(open){const m=$("#aic-m"),b=$("#aic-md");if(!m||!b)return;const o=open===undefined?m.hidden:open;m.hidden=!o;b.setAttribute("aria-expanded",String(o))}
-function chMode(d){chDeep=!!d;chModeUi();chMenu(false)}
-function chModeUi(){const b=$("#aic-md");if(b){b.innerHTML=chDeep?"🧠":"⚡";b.classList.toggle("deep",chDeep);b.setAttribute("aria-label",chDeep?"Режим: долгий ответ":"Режим: быстрый ответ")}
+function chMenu(id){const ms=[...document.querySelectorAll(".aic-menu")],t=id?ms.find(m=>m.id==id):null,was=t&&!t.hidden;
+  ms.forEach(m=>m.hidden=true);document.querySelectorAll(".aic-ib[aria-haspopup]").forEach(b=>b.setAttribute("aria-expanded","false"));
+  if(!t||was)return;const btn=$("#"+t.dataset.btn),row=$(".aic-row");if(!btn||!row)return;
+  t.hidden=false;const r=row.getBoundingClientRect(),b=btn.getBoundingClientRect(),w=t.offsetWidth,l=Math.max(0,Math.min(b.left-r.left,r.width-w));
+  t.style.left=l+"px";t.style.bottom=(r.height-(b.top-r.top)+10)+"px";      // меню сидит прямо над своей кнопкой (даже если над ней ряд вложений)
+  t.style.setProperty("--ax",Math.max(24,Math.min(b.left-r.left+b.width/2-l,w-24))+"px");btn.setAttribute("aria-expanded","true")}
+function chMode(d){chDeep=!!d;chModeUi();chMenu()}
+function chModeUi(){const b=$("#aic-md");if(b){b.innerHTML=chDeep?CH_IC.spark:CH_IC.bolt;b.classList.toggle("deep",chDeep);b.setAttribute("aria-label",chDeep?"Режим: долгий ответ":"Режим: быстрый ответ")}
   document.querySelectorAll("#aic-m button").forEach((x,i)=>{x.classList.toggle("on",!!i==chDeep);x.setAttribute("aria-checked",String(!!i==chDeep))})}
-document.addEventListener("click",e=>{const m=$("#aic-m");if(m&&!m.hidden&&!e.target.closest("#aic-m,#aic-md"))m.hidden=true});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")chMenu(false)});
+function chFmtSet(k){chFmt=k;chFmtUi();chMenu()}
+function chFmtUi(){const b=$("#aic-fb");if(b){b.innerHTML=CH_FM[chFmt].i;b.classList.toggle("fmt",!!chFmt);b.setAttribute("aria-label","Формат ответа: "+CH_FM[chFmt].n)}
+  document.querySelectorAll("#aic-f button").forEach((x,i)=>{x.classList.toggle("on",i==chFmt);x.setAttribute("aria-checked",String(i==chFmt))})}
+document.addEventListener("click",e=>{if(!e.target.closest(".aic-menu,.aic-ib"))chMenu()});
+document.addEventListener("keydown",e=>{if(e.key=="Escape")chMenu()});
+/* вложения: фото → JPEG ≤1600 px (в canvas), документы → base64; сервер сам достаёт текст из PDF / DOCX / TXT */
+function chAttUi(){const a=$("#aic-att");if(a)a.innerHTML=chAttHtml();const b=$("#aic-ab");if(b)b.classList.toggle("has",!!chAtt.length)}
+function chPick(id){chMenu();const i=$("#"+id);if(i)i.click()}
+function chDel(i){chAtt.splice(i,1);chAttUi()}
+const chBytes=a=>a.reduce((s,x)=>s+Math.floor((x.d||"").length*.75),0);
+function chJpeg(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{try{const k=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+    const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);const d=c.toDataURL("image/jpeg",.85);URL.revokeObjectURL(u);ok(d)}catch(e){URL.revokeObjectURL(u);no(e)}};
+  im.onerror=()=>{URL.revokeObjectURL(u);no(new Error("img"))};im.src=u})}
+const chB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]||"");r.onerror=()=>no(r.error);r.readAsDataURL(f)});
+async function chPicked(inp){
+  const fs=[...inp.files];inp.value="";
+  for(const f of fs){
+    if(chAtt.length>=CH_MAX){toast("Не больше "+CH_MAX+" вложений");break}
+    if(f.size>CH_BYTES){toast("Файл больше 8 МБ");continue}
+    try{
+      if(f.type.startsWith("image/")){const d=await chJpeg(f);chAtt.push({n:f.name||"photo.jpg",k:"img",img:d,d:d.split(",")[1],mime:"image/jpeg"})}
+      else{const ext=(f.name.split(".").pop()||"").toLowerCase();
+        if(!CH_EXT.includes(ext)){toast("Этот тип файла не читается: нужен PDF, Word (.docx) или TXT");continue}
+        chAtt.push({n:f.name,k:"doc",d:await chB64(f),mime:f.type||"application/octet-stream"})}
+    }catch(e){toast("Не получилось прочитать файл")}
+    chAttUi()}
+  if(chBytes(chAtt)>CH_BYTES){chAtt=[];chAttUi();toast("Вложения больше 8 МБ в сумме — прикрепите меньше")}}
 function chMicUi(){const b=$("#aic-mic");if(!b)return;b.classList.toggle("rec",!!chRec);b.setAttribute("aria-label",chRec?"Остановить запись":"Записать голосом");b.innerHTML=chRec?CH_IC.stop:CH_IC.mic}
 function chStop(){if(!chRec)return;const r=chRec;chRec=null;r.onresult=r.onerror=r.onend=null;try{r.abort()}catch(e){}chMicUi()}
 function chMic(){
@@ -1726,19 +1794,29 @@ function chCopy(i){const t=(CH[i]||{}).t||"";
   try{navigator.clipboard.writeText(t).then(ok,fb)}catch(e){fb()}}
 function chRetry(){if(chBusy)return;if(CH.length&&CH[CH.length-1].err)CH.pop();chAsk()}
 function chSend(){
-  if(chBusy)return;const el=$("#aic-in");if(!el)return;const t=el.value.trim();if(!t)return;chStop();chMenu(false);
-  CH.push({r:"u",t});el.value="";chGrow(el);chAsk()}
+  if(chBusy)return;const el=$("#aic-in");if(!el)return;const t=el.value.trim();if(!t&&!chAtt.length)return;
+  if(chBytes(chAtt)>CH_BYTES){toast("Вложения больше 8 МБ в сумме — прикрепите меньше");return}
+  chStop();chMenu();
+  CH.forEach(m=>(m.a||[]).forEach(x=>{delete x.d}));            // сырые данные нужны только последней реплике
+  CH.push({r:"u",t,a:chAtt.length?chAtt:undefined});chAtt=[];chAttUi();el.value="";chGrow(el);chAsk()}
 async function chAsk(){
   chBusy=true;chSave();chUpd(true);
-  const msgs=CH.filter(m=>!m.err).slice(-20).map(m=>({role:m.r=="u"?"user":"assistant",text:m.t})),deep=chDeep;
-  let reply=null,why="Не получилось получить ответ. Проверьте связь и повторите.";
-  try{const d=await api("/api/chat",{messages:msgs,deep});
-    if(d&&typeof d.reply=="string"&&d.reply)reply=d.reply;
+  const ok=CH.filter(m=>!m.err),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
+  const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
+    if(a.length&&m.r=="u"){if(m===last)t=t||"Разбери вложенные материалы.";else t+=" [вложения: "+a.map(x=>x.n).join(", ")+"]"}
+    return {role:m.r=="u"?"user":"assistant",text:t.slice(0,4000)}});
+  const files=((last&&last.a)||[]).filter(x=>x.d).map(x=>({name:x.n,mime:x.mime||"",data:x.d}));
+  let reply=null,file=null,why="Не получилось получить ответ. Проверьте связь и повторите.";
+  try{const d=await api("/api/chat",{messages:msgs,deep,format:fmt,files});
+    if(d&&typeof d.reply=="string"&&d.reply){reply=d.reply;
+      if(d.file&&typeof d.file.name=="string")file={n:d.file.name,k:"out",img:typeof d.file.img=="string"&&/^data:image\/png;base64,/.test(d.file.img)?d.file.img:undefined}}
     else if(d&&d.enabled===false)why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY.";
+    else if(d&&d.why=="send")why="Не получилось отправить файл в диалог с ботом. Повторите попытку.";
     else if(d)why="ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}catch(e){}
   chBusy=false;
-  if(tab!="ch"){if(reply)CH.push({r:"a",t:reply});chSave();return}   // ушли из раздела — ответ сохраняем, интерфейс не трогаем
-  CH.push(reply?{r:"a",t:reply}:{r:"a",t:why,err:1});chSave();chUpd(true)}
+  const msg=reply?{r:"a",t:reply,a:file?[file]:undefined}:{r:"a",t:why,err:1};
+  CH.push(msg);chSave();
+  if(tab=="ch")chUpd(true)}   // ушли из раздела — ответ сохранён, интерфейс не трогаем
 
 /* ---------- меню-гамбургер ---------- */
 const ORDER=["c","p","s","ch","mt","kn"],NAMES={c:"Расписание",p:"Оплаты",s:"Ученики",ch:"Чат с ИИ",mt:"Материалы",kn:"Канал"};
