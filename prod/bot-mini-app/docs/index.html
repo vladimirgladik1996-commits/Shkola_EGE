@@ -620,6 +620,9 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aim .aia{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;white-space:normal}
 .aim .aia:last-child{margin-bottom:0}
 .aim .aia img{display:block;max-width:100%;max-height:220px;border-radius:12px}
+.live .aist{font-size:13.5px;font-weight:700;color:var(--acc)}
+.live .aith{margin-top:6px;max-height:132px;overflow:hidden;font-size:12.5px;line-height:1.5;color:var(--hint);font-style:italic;white-space:pre-wrap;-webkit-mask-image:linear-gradient(180deg,#000 72%,transparent);mask-image:linear-gradient(180deg,#000 72%,transparent)}
+.live .aitx{margin-top:6px;white-space:pre-wrap}
 .aif{display:inline-flex;gap:6px;align-items:center;max-width:100%;padding:4px 9px;border-radius:10px;background:color-mix(in srgb,currentColor 14%,transparent);font-size:13px;font-weight:600}
 .aif span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
@@ -777,6 +780,17 @@ async function api(p,b){const h={"X-Init":tg.initData,"Content-Type":"applicatio
     toast(j.error==="no_student"?"Ученик не найден — возможно, он удалён. Обновите раздел «Ученики»"
       :j.error==="busy"?"Время занято или пересекается с другим занятием"
       :"Не получилось, попробуйте ещё раз");return null}return r.json()}
+async function apiStream(p,b,onEvent){const h={"X-Init":tg.initData,"Content-Type":"application/json"};
+  /* Стрим NDJSON от /api/chat: события (status/think/text/done/fail) отдаются в onEvent по мере прихода */
+  if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
+  const r=await fetch(API_BASE+p,{method:"POST",headers:h,body:JSON.stringify(b),cache:"no-store"});
+  if(r.status==401||r.status==403){lockScreen(r.status);return}
+  const lines=txt=>{for(const line of txt.split("\n")){if(line.trim()){try{onEvent(JSON.parse(line))}catch(e){}}}};
+  if(!r.body||!r.body.getReader){lines(await r.text().catch(()=>""));return}   /* старый WebView — без стриминга, но честно */
+  const rd=r.body.getReader(),dec=new TextDecoder();let buf="";
+  for(;;){const {value,done}=await rd.read();if(done)break;
+    buf+=dec.decode(value,{stream:true});let i;while((i=buf.indexOf("\n"))>=0){lines(buf.slice(0,i));buf=buf.slice(i+1)}}
+  lines(buf)}
 function ingest(d){
   if(d.env==="dev"&&!document.getElementById("devbadge")){document.title+=" · DEV";
     const b=document.createElement("div");b.id="devbadge";b.textContent="DEV";
@@ -1728,11 +1742,15 @@ function chat(){
 const chAtts=a=>a&&a.length?`<div class="aia">${a.map(x=>x.img&&/^data:image\//.test(x.img)?`<img src="${x.img}" alt="">`:`<span class="aif">${x.k=="img"?CH_IC.img:CH_IC.file}<span>${esc(x.n)}</span></span>`).join("")}</div>`:"";
 function chAttHtml(){return chAtt.map((a,i)=>`<div class="aic-chip">${a.img?`<img src="${a.img}" alt="">`:`${CH_IC.file}<span>${esc(a.n)}</span>`}<button type="button" class="x" aria-label="Убрать вложение" onclick="chDel(${i})"><i>×</i></button></div>`).join("")}
 function chList(){
-  if(!CH.length&&!chBusy)return `<div class="aic-e"><div class="e0i">💬</div><b>Чат с ИИ</b><p>Помощник по урокам, сочинениям и разбору заданий.</p></div>`;
+  if(!CH.length&&!chBusy)return `<div class="aic-e"><div class="e0i">💬</div><b>Чат с Вишенкой</b><p>Помощник по урокам, сочинениям и разбору заданий.</p></div>`;
   return CH.map((m,i)=>m.r=="u"?`<div class="aim u">${chAtts(m.a)}${esc(m.t)}</div>`
     :m.err?`<div class="aim e">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">↻ Повторить</button></div></div>`
+    :m.live?`<div class="aim a live">${chLive(m)}</div>`
     :`<div class="aim a">${chAtts(m.a)}${esc(m.t)}${m.a&&m.a.length?"":`<div class="aimb"><button type="button" onclick="chCopy(${i})">Копировать</button></div>`}</div>`).join("")
-    +(chBusy?`<div class="aim a dots" aria-label="ИИ печатает"><i></i><i></i><i></i>${chDeep?"<small>думаю глубже…</small>":chFmt?"<small>готовлю файл…</small>":""}</div>`:"")}
+    +(chBusy?`<div class="aim a dots" aria-label="Вишенка отвечает"><i></i><i></i><i></i><small>Вишенка на связи…</small></div>`:"")}
+const CH_ST={read:"читает материалы…",think:"думает…",write:"пишет ответ…",file:"оформляет файл…"};
+function chLive(m){return `<div class="aist">💜 Вишенка ${CH_ST[m.st]||"думает…"}</div>`
+  +(m.th?`<div class="aith">${esc(m.th)}</div>`:"")+(m.t?`<div class="aitx">${esc(m.t)}</div>`:"")}
 function chUpd(toEnd){const l=$("#aic-l");if(!l)return;l.innerHTML=chList();
   const x=$("#aic-x");if(x)x.disabled=!CH.length;const b=$("#aic-s");if(b)b.disabled=chBusy;
   if(toEnd)scrollTo(0,document.documentElement.scrollHeight)}
@@ -1801,18 +1819,26 @@ function chSend(){
   CH.push({r:"u",t,a:chAtt.length?chAtt:undefined});chAtt=[];chAttUi();el.value="";chGrow(el);chAsk()}
 async function chAsk(){
   chBusy=true;chSave();chUpd(true);
-  const ok=CH.filter(m=>!m.err),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
+  const ok=CH.filter(m=>!m.err&&!m.live),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
   const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
     if(a.length&&m.r=="u"){if(m===last)t=t||"Разбери вложенные материалы.";else t+=" [вложения: "+a.map(x=>x.n).join(", ")+"]"}
     return {role:m.r=="u"?"user":"assistant",text:t.slice(0,4000)}});
   const files=((last&&last.a)||[]).filter(x=>x.d).map(x=>({name:x.n,mime:x.mime||"",data:x.d}));
+  const live={r:"a",t:"",th:"",st:"",live:1};CH.push(live);chUpd(true);   // живой ответ Вишенки: думает/пишет на виду
   let reply=null,file=null,why="Не получилось получить ответ. Проверьте связь и повторите.";
-  try{const d=await api("/api/chat",{messages:msgs,deep,format:fmt,files});
-    if(d&&typeof d.reply=="string"&&d.reply){reply=d.reply;
-      if(d.file&&typeof d.file.name=="string")file={n:d.file.name,k:"out",img:typeof d.file.img=="string"&&/^data:image\/png;base64,/.test(d.file.img)?d.file.img:undefined}}
-    else if(d&&d.enabled===false)why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY.";
-    else if(d&&d.why=="send")why="Не получилось отправить файл в диалог с ботом. Повторите попытку.";
-    else if(d)why="ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}catch(e){}
+  try{await apiStream("/api/chat",{messages:msgs,deep,format:fmt,files},ev=>{
+    if(!ev||typeof ev!="object")return;
+    if(ev.t=="status"&&typeof ev.v=="string")live.st=ev.v;
+    else if(ev.t=="think"&&typeof ev.v=="string")live.th+=ev.v;
+    else if(ev.t=="text"&&typeof ev.v=="string")live.t+=ev.v;
+    else if(ev.t=="off"){reply=null;why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
+    else if(ev.t=="fail"){reply=null;why=ev.why=="send"?"Не получилось отправить файл в диалог с ботом. Попробуйте ещё раз."
+      :ev.why=="build"?"Не получилось оформить файл. Попробуйте ещё раз."
+      :"ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}
+    else if(ev.t=="done"){reply=typeof ev.reply=="string"&&ev.reply?ev.reply:reply;
+      if(ev.file&&typeof ev.file.name=="string")file={n:ev.file.name,k:"out",img:typeof ev.file.img=="string"&&/^data:image\/png;base64,/.test(ev.file.img)?ev.file.img:undefined}}
+    if(tab=="ch")chUpd(true)})}catch(e){}
+  if(CH[CH.length-1]===live)CH.pop();       // живой ответ заменяем итоговым сообщением
   chBusy=false;
   const msg=reply?{r:"a",t:reply,a:file?[file]:undefined}:{r:"a",t:why,err:1};
   CH.push(msg);chSave();

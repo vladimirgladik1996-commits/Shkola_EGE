@@ -45,6 +45,7 @@ def _flt(name, default, lo, hi):
 
 MAX_TOKENS = _int("KIMI_MAX_TOKENS", 800, 64, 8192)
 MAX_TOKENS_DEEP = _int("KIMI_MAX_TOKENS_DEEP", 4000, 64, 16384)
+THINK_EXTRA = _int("KIMI_THINK_EXTRA", 3000, 0, 16384)      # запас max_tokens на reasoning при включённом мышлении
 TIMEOUT = _flt("KIMI_TIMEOUT", 60, 3, 600)
 TIMEOUT_DEEP = _flt("KIMI_TIMEOUT_DEEP", 300, 3, 900)
 
@@ -54,13 +55,14 @@ def enabled():
     return bool(API_KEY)
 
 
-def build_payload(messages, model=None, deep=False, json_mode=False, images=None):
+def build_payload(messages, model=None, deep=False, json_mode=False, images=None, thinking=False):
     """Тело запроса /chat/completions.
 
     • temperature/top_p не передаём: у K2.x и K3 они фиксированы, API отвечает ошибкой
       на любые другие значения.
-    • thinking — параметр только семейства K2.x; по умолчанию выключен (быстрые ответы).
-    • reasoning_effort — только kimi-k3 («глубокое изучение»).
+    • thinking — параметр только семейства K2.x; по умолчанию выключен (быстрые ответы),
+      thinking=True включает размышление (reasoning_content) — оно стримится в ask_stream.
+    • reasoning_effort — только kimi-k3 («глубокое изучение»); K3 думает всегда.
     • json_mode — ответ строго в JSON (response_format json_object): используется для разбора задач.
     • images — список base64/jpeg|png|webp: подмешиваются в последнее сообщение (vision)."""
     m = (model or (DEEP_MODEL if deep else MODEL)).strip()
@@ -71,9 +73,10 @@ def build_payload(messages, model=None, deep=False, json_mode=False, images=None
             parts.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + i}})
         content = parts
     msgs = list(messages[:-1]) + [{**messages[-1], "content": content}]
-    p = {"model": m, "messages": msgs, "max_tokens": MAX_TOKENS_DEEP if deep else MAX_TOKENS}
+    p = {"model": m, "messages": msgs,
+         "max_tokens": (MAX_TOKENS_DEEP if deep else MAX_TOKENS) + (THINK_EXTRA if thinking else 0)}
     if m.startswith("kimi-k2.6"):
-        p["thinking"] = {"type": "disabled"}
+        p["thinking"] = {"type": "enabled" if thinking else "disabled"}
     if deep and m.startswith("kimi-k3"):
         p["reasoning_effort"] = EFFORT
     if json_mode:
@@ -104,6 +107,50 @@ async def ask(messages, model=None, deep=False, json_mode=False, images=None):
     except Exception as e:                      # сеть, таймаут, кривой JSON — всё мимо бота
         log.warning("kimi: запрос не прошёл: %r", e)
         return None
+
+
+async def ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=True):
+    """Стриминг ответа модели: async-генератор пар (тип, дельта).
+
+    Типы: «think» — кусочек размышления (reasoning_content), «text» — кусочек ответа,
+    «err» — сбой («off» — нет ключа, «http» — API отказал, «net» — сеть/таймаут); после err генератор завершается.
+    Мысль идёт отдельными дельтами — её показывают «от имени Вишенки» («Вишенка думает…»).
+    Пустой или прерванный стрим — ответ просто короче, вверх не падает."""
+    if not API_KEY:
+        yield "err", "off"
+        return
+    body = build_payload(messages, model=model, deep=deep, json_mode=json_mode, images=images, thinking=thinking)
+    body["stream"] = True
+    timeout = TIMEOUT_DEEP if deep else TIMEOUT
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
+            async with s.post(BASE + "/chat/completions", json=body,
+                              headers={"Authorization": "Bearer" + " " + API_KEY}) as r:
+                if r.status != 200:
+                    raw = await r.text()
+                    log.warning("kimi: HTTP %s: %s", r.status, raw[:300])
+                    yield "err", "http"
+                    return
+                async for line in r.content:
+                    s_line = line.decode("utf-8", "replace").strip()
+                    if not s_line.startswith("data:"):
+                        continue
+                    data = s_line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        j = json.loads(data)
+                    except ValueError:
+                        continue
+                    d = ((j.get("choices") or [{}])[0].get("delta") or {})
+                    th, tx = d.get("reasoning_content"), d.get("content")
+                    if th:
+                        yield "think", th
+                    if tx:
+                        yield "text", tx
+    except Exception as e:                      # сеть, таймаут, кривой SSE — всё мимо бота
+        log.warning("kimi: стрим не прошёл: %r", e)
+        yield "err", "net"
 
 
 async def ask_json(messages, **kw):

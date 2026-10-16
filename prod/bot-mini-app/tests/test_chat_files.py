@@ -14,14 +14,19 @@ d = cf.docx_bytes(title, blocks)
 assert zipfile.ZipFile(io.BytesIO(d)).testzip() is None and "Теория" in cf.docx_text(d); ok("Word-файл собирается и читается обратно")
 p = cf.pdf_bytes(title, blocks)
 assert p[:5] == b"%PDF-" and "Теория" in cf.pdf_text(p); ok("PDF собирается с русским текстом")
-png = cf.infographic_png(*cf.parse_infographic({"title": "Тема", "items": [{"h": "Раз", "t": "текст " * 40}, {"h": "Два", "t": "ещё"}]}))
-assert png[:8] == b"\x89PNG\r\n\x1a\n"; ok("инфографика рисуется в PNG")
-for bad in ({}, {"items": []}, {"items": [{}]}, [], None):
-    try: cf.parse_infographic(bad); raise SystemExit("не отклонено")
+HTML = ("<html><head><title>Тема</title><style>body{background-color:#FBF7E9;color:#0E2250}"
+        "h1{font-size:24pt}div{background-color:#FFFFFF;border:1pt solid #E9E1C8;padding:10pt}</style></head>"
+        "<body><h1>Тема недели</h1><div>Раз — и длинный текст карточки, чтобы проверить переносы строк и русский шрифт.</div>"
+        "<div>Два</div></body></html>")
+png = cf.html_png(HTML)
+assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000; ok("HTML-инфографика конвертируется в PNG")
+assert cf._html_title(HTML) == "Тема" and cf._html_title("<html><body><h2>Без title</h2></body></html>") == "Без title"; ok("заголовок инфографики берётся из <title> или первого заголовка")
+for badh in ("", "не html вообще", None, 5, "<html><body>   </body></html>"):
+    try: cf.html_png(badh); raise SystemExit("не отклонено")
     except ValueError: pass
-ok("пустая инфографика отклоняется")
+ok("пустая или не-HTML инфографика отклоняется")
 
-for fmt, res, ext in (("docx", "# Т\nтекст", ".docx"), ("pdf", "# Т\nтекст", ".pdf"), ("image", {"title": "Т", "items": [{"h": "а", "t": "б"}]}, ".png")):
+for fmt, res, ext in (("docx", "# Т\nтекст", ".docx"), ("pdf", "# Т\nтекст", ".pdf"), ("image", "<html><head><title>Т</title></head><body><p>Русский текст ответа</p></body></html>", ".png")):
     data, name, t = cf.build(fmt, res)
     assert data and name.endswith(ext) and t == "Т"
 ok("build() отдаёт байты, имя файла и заголовок для всех форматов")

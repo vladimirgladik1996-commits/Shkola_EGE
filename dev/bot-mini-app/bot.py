@@ -1961,7 +1961,11 @@ async def api_fragment(request):
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
     format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
-    (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели)."""
+    (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
+    Ответ — NDJSON-стрим событий (по одному JSON в строке):
+      {"t":"status","v":"read|think|write|file"} — что сейчас делает Вишенка (читает/думает/пишет/оформляет),
+      {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
+      {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён."""
     j = await request.json()
     if not isinstance(j, dict):
         raise ValueError
@@ -1972,19 +1976,43 @@ async def api_chat(request):
     fmt = assist.chat_format(j.get("format"))
     images, docs, names = chatfiles.read_files(j.get("files"))
     uid = user_id(request)
+    resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
+                                                   "Cache-Control": "no-store"})
+    await resp.prepare(request)
+
+    async def send(ev):
+        await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+
     if not kimi.enabled():
-        return web.json_response({"ok": True, "reply": None, "enabled": False})
-    res = await assist.chat_reply(hist, deep, images=images, docs=docs, fmt=fmt)
-    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=%s", uid, len(hist), deep, fmt, len(names), res is not None)
-    if res is None:
-        return web.json_response({"ok": False, "reply": None, "enabled": True})
+        await send({"t": "off"})
+        await resp.write_eof()
+        return resp
+    reply = ""
+    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt):
+        if kind in ("status", "think", "text"):
+            if kind == "text":
+                reply += v
+            await send({"t": kind, "v": v})
+        elif kind == "err":
+            log.warning("chat: tg_id=%s стрим оборвался (%s)", uid, v)
+            await send({"t": "fail", "why": "net"})
+            await resp.write_eof()
+            return resp
+        else:                                   # done
+            reply = v
+    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=True", uid, len(hist), deep, fmt, len(names))
     if fmt == "text":
-        return web.json_response({"ok": True, "reply": res, "enabled": True})
+        await send({"t": "done", "reply": reply, "enabled": True})
+        await resp.write_eof()
+        return resp
+    await send({"t": "status", "v": "file"})
     try:
-        data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, res)
+        data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, reply)
     except Exception as e:                       # модель ответила не тем форматом — просто «не отвечает»
         log.warning("chat file: не собрался (%s): %r", fmt, e)
-        return web.json_response({"ok": False, "reply": None, "enabled": True})
+        await send({"t": "fail", "why": "build"})
+        await resp.write_eof()
+        return resp
     tg_bot, sent = request.app.get("bot"), False
     if isinstance(uid, int) and tg_bot is not None:
         try:
@@ -1997,14 +2025,18 @@ async def api_chat(request):
         except TelegramAPIError as e:
             log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
     if not sent and fmt != "image":              # документ без доставки бесполезен; картинку показываем прямо в чате
-        return web.json_response({"ok": False, "reply": None, "enabled": True, "why": "send"})
+        await send({"t": "fail", "why": "send"})
+        await resp.write_eof()
+        return resp
     file = {"name": name, "kind": fmt, "sent": sent}
     if fmt == "image":
         file["img"] = chatfiles.data_url(data)
         reply = "Готово: инфографика."
     else:
         reply = "Готово: документ сформирован."
-    return web.json_response({"ok": True, "reply": reply, "enabled": True, "file": file})
+    await send({"t": "done", "reply": reply, "enabled": True, "file": file})
+    await resp.write_eof()
+    return resp
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,

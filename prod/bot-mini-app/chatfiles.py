@@ -1,8 +1,9 @@
 """Файлы для «Чата с ИИ»: чтение вложений мини-аппа и сборка ответа в Word / PDF / картинку.
 
-Только stdlib + reportlab (Pillow ставится вместе с ним) + pypdf — новых зависимостей нет.
-Ничего не знает про aiohttp/aiogram, поэтому проверяется отдельным тестом (tests/test_chat_files.py).
-Любая ошибка разбора вложения — ValueError (бот ответит 400), а не падение.
+Зависимости: stdlib + reportlab (Pillow ставится вместе с ним) + pypdf + xhtml2pdf (HTML → PDF для
+инфографики) + pypdfium2 (PDF → PNG). Ничего не знает про aiohttp/aiogram, поэтому проверяется
+отдельным тестом (tests/test_chat_files.py). Любая ошибка разбора вложения — ValueError
+(бот ответит 400), а не падение.
 """
 import base64, binascii, io, json, logging, os, re, zipfile
 from xml.etree import ElementTree as ET
@@ -231,92 +232,81 @@ def pdf_bytes(title, blocks):
     return out.getvalue()
 
 
-# ---------- картинка / инфографика ----------
-def parse_infographic(obj):
-    """JSON модели → (заголовок, подзаголовок, [(заголовок пункта, текст)]). ValueError, если пунктов нет."""
-    if not isinstance(obj, dict) or not isinstance(obj.get("items"), list):
+# ---------- картинка / инфографика: HTML модели → PDF → PNG ----------
+_HTML_FONT_CSS = """@font-face { font-family: DV; src: url('%(bold)s'); font-weight: bold; }
+@font-face { font-family: DV; src: url('%(reg)s'); }
+html, body, div, p, span, h1, h2, h3, h4, table, tr, td, th, li, ul, ol, b, i, strong, em, small { font-family: DV; }"""
+
+
+def _html_title(html):
+    """Заголовок инфографики из HTML: <title> или первый h1/h2. «Инфографика» — если ничего нет."""
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S) or re.search(r"<h[12][^>]*>(.*?)</h[12]>", html, re.I | re.S)
+    t = re.sub(r"<[^>]+>", " ", m.group(1)) if m else ""
+    return _clean(t)[:90] or "Инфографика"
+
+
+def _html_for_pdf(html):
+    """HTML модели готовится к рендеру: убираем font-family (модель могла прописать шрифт без
+    кириллицы) и вшиваем @font-face с DejaVu из fonts/ — иначе русский текст выйдет пустыми рамками."""
+    html = re.sub(r"font-family\s*:[^;\"'}]+;?", "", html, flags=re.I)
+    css = _HTML_FONT_CSS % {"reg": os.path.join(FONTS, "DejaVuSans.ttf"), "bold": os.path.join(FONTS, "DejaVuSans-Bold.ttf")}
+    if "</head" in html.lower():
+        i = html.lower().rfind("</head")
+        return html[:i] + "<style>" + css + "</style>" + html[i:]
+    return "<style>" + css + "</style>" + html
+
+
+def html_png(html):
+    """HTML-инфографика модели → PNG 1080 px по ширине: HTML → PDF (xhtml2pdf) → рендер страниц
+    (pypdfium2). Страницы склеиваются вертикально — высокая инфографика не обрезается.
+    ValueError — HTML не собрался или вышел без единого тёмного пикселя (пустая картинка)."""
+    if not isinstance(html, str) or "<html" not in html.lower():
         raise ValueError
-    items = []
-    for it in obj["items"][:8]:
-        if isinstance(it, dict):
-            h, t = _clean(str(it.get("h", ""))), _clean(str(it.get("t", "")))
-            if h or t:
-                items.append((h[:70], t[:240]))
-    if not items:
+    try:
+        from xhtml2pdf import pisa
+        import pypdfium2 as pdfium
+        pdf = io.BytesIO()
+        st = pisa.CreatePDF(io.StringIO(_html_for_pdf(html)), dest=pdf)
+        if st.err or not pdf.getvalue():
+            raise ValueError
+        doc = pdfium.PdfDocument(pdf.getvalue())
+        imgs = []
+        for page in doc:
+            w, _h = page.get_size()
+            if not w:
+                continue
+            imgs.append(page.render(scale=1080 / w).to_pil().convert("RGB"))
+    except ValueError:
+        raise
+    except Exception as e:
+        log.warning("html_png: не отрендерилось: %r", e)
         raise ValueError
-    title = _clean(str(obj.get("title") or "Инфографика"))[:90] or "Инфографика"
-    return title, _clean(str(obj.get("subtitle") or ""))[:140], items
-
-
-def infographic_png(title, subtitle, items):
-    """Карточка в цветах приложения: кремовый фон, тёмно-синий текст, жёлтый акцент."""
-    from PIL import Image, ImageDraw, ImageFont
-    W, PAD = 1080, 56
-    f = lambda n, s: ImageFont.truetype(os.path.join(FONTS, n), s)
-    ft, fs, fh, fb, fn = f("DejaVuSans-Bold.ttf", 52), f("DejaVuSans.ttf", 28), f("DejaVuSans-Bold.ttf", 34), f("DejaVuSans.ttf", 30), f("DejaVuSans-Bold.ttf", 30)
-    BG, TX, HINT, CARD, YEL, NAVY, LN = "#FBF7E9", "#0E2250", "#66719A", "#FFFFFF", "#FFC93C", "#0F2E6E", "#E9E1C8"
-    probe = ImageDraw.Draw(Image.new("RGB", (W, 10)))
-
-    def wrap(text, font, width):
-        lines, cur = [], ""
-        for word in text.split():
-            t = (cur + " " + word).strip()
-            if probe.textlength(t, font=font) <= width or not cur:
-                cur = t
-            else:
-                lines.append(cur)
-                cur = word
-        if cur:
-            lines.append(cur)
-        return lines or [""]
-
-    tl = wrap(title, ft, W - 2 * PAD)
-    sl = wrap(subtitle, fs, W - 2 * PAD) if subtitle else []
-    inner = W - 2 * PAD - 2 * 28 - 76                       # ширина текста внутри карточки
-    cards = []
-    for h, t in items:
-        hl, bl = (wrap(h, fh, inner) if h else []), (wrap(t, fb, inner) if t else [])
-        cards.append((hl, bl, 28 * 2 + len(hl) * 44 + len(bl) * 40 + (8 if hl and bl else 0)))
-    H = PAD + len(tl) * 64 + len(sl) * 38 + 36 + sum(c[2] + 20 for c in cards) + 70
-    im = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(im)
-    y = PAD
-    d.rounded_rectangle((PAD, y - 18, PAD + 90, y - 10), 4, fill=YEL)
-    for l in tl:
-        d.text((PAD, y), l, font=ft, fill=TX)
-        y += 64
-    for l in sl:
-        d.text((PAD, y + 4), l, font=fs, fill=HINT)
-        y += 38
-    y += 36
-    for i, (hl, bl, ch) in enumerate(cards, 1):
-        d.rounded_rectangle((PAD, y, W - PAD, y + ch), 26, fill=CARD, outline=LN, width=2)
-        cx, cy = PAD + 28 + 24, y + 28 + 24
-        d.ellipse((cx - 24, cy - 24, cx + 24, cy + 24), fill=YEL)
-        d.text((cx, cy), str(i), font=fn, fill=TX, anchor="mm")
-        ty = y + 28
-        for l in hl:
-            d.text((PAD + 28 + 76, ty), l, font=fh, fill=NAVY)
-            ty += 44
-        if hl and bl:
-            ty += 8
-        for l in bl:
-            d.text((PAD + 28 + 76, ty), l, font=fb, fill=TX)
-            ty += 40
-        y += ch + 20
-    d.text((W // 2, H - 36), "Надежда · Кабинет репетитора", font=fs, fill=HINT, anchor="mm")
+    if not imgs:
+        raise ValueError
+    if len(imgs) == 1:
+        im = imgs[0]
+    else:
+        from PIL import Image
+        im = Image.new("RGB", (1080, sum(i.height for i in imgs)), "white")
+        y = 0
+        for i in imgs:
+            im.paste(i, (0, y))
+            y += i.height
+    if im.convert("L").getextrema()[0] > 240:   # нет тёмных пикселей — текст не отрисовался
+        raise ValueError
     out = io.BytesIO()
     im.save(out, "PNG", optimize=True)
     return out.getvalue()
 
 
+
 # ---------- общий вход для api_chat ----------
 def build(fmt, res):
     """(формат, ответ модели) → (байты, имя файла, заголовок). ValueError — ответ модели не годится для файла.
-    res: str для docx/pdf, dict (JSON инфографики) для image."""
+    res: str — для docx/pdf оформленный текст, для image — HTML-инфографика."""
     if fmt == "image":
-        title, sub, items = parse_infographic(res)
-        return infographic_png(title, sub, items), file_stem(title) + ".png", title
+        title = _html_title(res) if isinstance(res, str) else ""
+        return html_png(res), file_stem(title or "Инфографика") + ".png", title or "Инфографика"
     title, blocks = parse_doc(res)
     if fmt == "docx":
         return docx_bytes(title, blocks), file_stem(title) + ".docx", title
