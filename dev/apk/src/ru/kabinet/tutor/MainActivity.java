@@ -5,12 +5,15 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.MatrixCursor;
 import android.media.AudioManager;
 import android.media.AudioRecordingConfiguration;
 import android.media.MediaRecorder;
@@ -19,6 +22,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
+import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -42,6 +48,7 @@ import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,10 +60,13 @@ import java.util.concurrent.TimeUnit;
 public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
-    private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
+    private ValueCallback<Uri[]> fileCb;            // выбор файла / снимка (см. onShowFileChooser)
+    private File camFile;                           // куда камера пишет снимок (см. launchCamera)
+    private Uri camUri;
     private float lpX, lpY;                         // точка последнего касания — для elementFromPoint при долгом тапе
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
+    private static final int CAMERA_REQ = 1003;
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
     private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
     private File micFile;
@@ -162,9 +172,10 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        // alert / confirm / prompt из страницы + выбор файла из галереи:
+        // alert / confirm / prompt из страницы + выбор файла (галерея) и съёмка камерой:
         // без onShowFileChooser WebView молча игнорирует <input type="file">
-        // («Фото ученика → Выбрать из галереи» ничего не открывало).
+        // («Фото ученика → Выбрать из галереи» ничего не открывало),
+        // а без ветки на capture камера открывалась «галереей» вместо съёмки («Снять камерой» в чате ИИ).
         web.setWebChromeClient(new WebChromeClient() {
             /** Голосовой помощник: страница просит микрофон (getUserMedia). Без этого обработчика WebView
              *  молча отклоняет запрос. Разрешаем только звук и только нашему серверу, после системного запроса. */
@@ -202,6 +213,9 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCb != null) fileCb.onReceiveValue(null);   // прошлый выбор не завершился
                 fileCb = cb;
+                // capture="environment" у <input> — страница просит снять фото/видео КАМЕРОЙ,
+                // а не выбирать из галереи («Снять камерой» → «Прикрепите материал к задаче» в чате ИИ)
+                if (params != null && params.isCaptureEnabled() && launchCamera(params)) return true;
                 Intent i;
                 try {
                     i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
@@ -209,12 +223,15 @@ public class MainActivity extends Activity {
                     i = new Intent(Intent.ACTION_GET_CONTENT);
                 }
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("image/*");
+                if (i.getType() == null || i.getType().isEmpty()) i.setType("*/*");   // не навязываем image/*: «Файл» в чате — PDF, Word, TXT
+                if (params != null && params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);   // несколько файлов за раз (вложения чата)
+                }
                 try {
                     startActivityForResult(i, FILE_CHOOSER_REQ);
                 } catch (Exception e) {
                     fileCb = null;
-                    Toast.makeText(MainActivity.this, "Не получилось открыть галерею", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "Не получилось открыть выбор файла", Toast.LENGTH_LONG).show();
                     return false;
                 }
                 return true;
@@ -297,8 +314,37 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * «Снять камерой»: системное приложение камеры пишет снимок в content:// URI
+     * (см. CamFileProvider — file:// запрещён с Android 7, а без EXTRA_OUTPUT камера
+     * возвращает только маленькую превьюшку) и страница получает файл в свой <input>.
+     * Разрешения CAMERA не требуется: снимок делает стороннее приложение камеры.
+     * false — камеры нет/упала: откатываемся на обычный выбор файла.
+     */
+    private boolean launchCamera(WebChromeClient.FileChooserParams params) {
+        try {
+            String[] types = params == null ? null : params.getAcceptTypes();
+            boolean video = types != null && types.length > 0 && types[0] != null && types[0].startsWith("video");
+            Intent i = new Intent(video ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+            File dir = getCacheDir();
+            if (dir == null) return false;
+            camFile = new File(dir, "cam-" + System.currentTimeMillis() + (video ? ".mp4" : ".jpg"));
+            camUri = CamFileProvider.uriFor(this, camFile);
+            i.putExtra(MediaStore.EXTRA_OUTPUT, camUri);
+            i.setClipData(ClipData.newRawUri("", camUri));   // доступ камеры к файлу на всех версиях Android
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(i, CAMERA_REQ);
+            return true;
+        } catch (Exception e) {
+            camFile = null;
+            camUri = null;
+            return false;
+        }
+    }
+
+    /**
      * JS-мост для страницы (вызывается как Android.*):
-     *  - sharePdf(url, name) — «Поделиться PDF»: скачивание + системный chooser;
+     *  - sharePdf(url, name) — «Поделиться PDF» недели: скачивание + системный chooser;
+     *  - shareFile(url, name, mime) — «Скачать/Переслать» файла из чата ИИ в любом формате;
      *  - micStatus() — состояние микрофона: granted / denied / prompt — виджет решает,
      *    звать ли getUserMedia или сразу вести пользователя в настройки;
      *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
@@ -309,7 +355,18 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void sharePdf(final String url, final String name) {
             runOnUiThread(new Runnable() {
-                public void run() { startShare(url, name, 0); }
+                public void run() { startShare(url, name, "application/pdf", 0); }
+            });
+        }
+
+        /** Файл из «Чата с ИИ» (docx/pdf/png): скачать в «Загрузки» и открыть системное окно пересылки
+         *  (Telegram и другие контакты) — для файлов в любом формате. */
+        @JavascriptInterface
+        public void shareFile(final String url, final String name, final String mime) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    startShare(url, name, (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime, 0);
+                }
             });
         }
 
@@ -501,12 +558,12 @@ public class MainActivity extends Activity {
     }
 
     /** Запуск загрузки + ожидание её окончания. Только в UI-потоке. attempt — номер повтора при занятом имени файла. */
-    private void startShare(final String url, final String name, final int attempt) {
+    private void startShare(final String url, final String name, final String mime, final int attempt) {
         try {
             final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             final String fn = numberedName(safePdfName(name), attempt);
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-            req.setMimeType("application/pdf");
+            req.setMimeType(mime);
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+: в публичные «Загрузки» можно писать через DownloadManager без разрешений
@@ -543,7 +600,7 @@ public class MainActivity extends Activity {
                     if (status != DownloadManager.STATUS_SUCCESSFUL) {
                         if (status == DownloadManager.STATUS_FAILED
                                 && reason == DownloadManager.ERROR_FILE_ALREADY_EXISTS && attempt < 3) {
-                            startShare(url, name, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
+                            startShare(url, name, mime, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
                             return;
                         }
                         toastLong("Не получилось скачать файл — попробуйте ещё раз");
@@ -556,7 +613,7 @@ public class MainActivity extends Activity {
                     }
                     try {
                         Intent s = new Intent(Intent.ACTION_SEND);
-                        s.setType("application/pdf");
+                        s.setType(mime);
                         s.putExtra(Intent.EXTRA_STREAM, u);
                         s.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(Intent.createChooser(s, "Переслать файл"));
@@ -626,12 +683,38 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Результат выбора фото из галереи → обратно в страницу (<input type="file">). */
+    /** Результат выбора файла из галереи (в том числе нескольких) или съёмки камерой → обратно в страницу (<input type="file">). */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_CHOOSER_REQ && fileCb != null) {
-            fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+        if (fileCb == null) return;
+        if (requestCode == CAMERA_REQ) {
+            Uri[] out = null;
+            if (resultCode == RESULT_OK) {
+                if (camUri != null && camFile != null && camFile.length() > 0) out = new Uri[]{camUri};
+                else if (data != null && data.getData() != null) out = new Uri[]{data.getData()};
+            }
+            fileCb.onReceiveValue(out);
+            fileCb = null;
+            camFile = null;
+            camUri = null;
+            return;
+        }
+        if (requestCode == FILE_CHOOSER_REQ) {
+            Uri[] out = null;
+            if (resultCode == RESULT_OK && data != null) {
+                ArrayList<Uri> uris = new ArrayList<>();
+                if (data.getClipData() != null) {          // выбрано несколько файлов (EXTRA_ALLOW_MULTIPLE)
+                    for (int k = 0; k < data.getClipData().getItemCount(); k++) {
+                        Uri u = data.getClipData().getItemAt(k).getUri();
+                        if (u != null) uris.add(u);
+                    }
+                } else if (data.getData() != null) {
+                    uris.add(data.getData());
+                }
+                if (!uris.isEmpty()) out = uris.toArray(new Uri[0]);
+            }
+            fileCb.onReceiveValue(out);
             fileCb = null;
         }
     }
@@ -643,5 +726,76 @@ public class MainActivity extends Activity {
             return true;
         }
         return super.onKeyDown(keyCode, event);
+    }
+}
+
+/**
+ * Минимальный провайдер файлов для камеры: отдаёт файл из cacheDir по content://-ссылке
+ * (см. launchCamera). Нужен, чтобы «Снять камерой» в чате ИИ работало на всех Android:
+ * file://-ссылки запрещены с Android 7, а без EXTRA_OUTPUT камера возвращает лишь превьюшку.
+ * Провайдер ничего не отдаёт наружу: только файлы из своего cacheDir по одному имени
+ * (без путей), запись/чтение — по временной гранте Intent'а камеры.
+ */
+class CamFileProvider extends android.content.ContentProvider {
+    static Uri uriFor(Context c, File f) {
+        return new Uri.Builder().scheme("content").authority(c.getPackageName() + ".camfiles")
+                .appendPath(f.getName()).build();
+    }
+
+    @Override
+    public boolean onCreate() {
+        return true;
+    }
+
+    private File fileFor(Uri uri) {
+        String name = uri == null ? null : uri.getLastPathSegment();
+        Context c = getContext();
+        if (c == null || name == null || name.isEmpty()
+                || name.contains("/") || name.contains("\\") || name.contains("..")) return null;
+        return new File(c.getCacheDir(), name);
+    }
+
+    @Override
+    public String getType(Uri uri) {
+        String n = uri == null ? null : uri.getLastPathSegment();
+        if (n == null) return "application/octet-stream";
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+        if (n.endsWith(".png")) return "image/png";
+        if (n.endsWith(".mp4")) return "video/mp4";
+        if (n.endsWith(".3gp")) return "video/3gpp";
+        return "application/octet-stream";
+    }
+
+    /** Имя и размер файла: некоторые приложения камеры спрашивают их перед записью. */
+    @Override
+    public Cursor query(Uri uri, String[] proj, String sel, String[] args, String sort) {
+        File f = fileFor(uri);
+        MatrixCursor c = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
+        c.addRow(new Object[]{f == null ? "" : f.getName(), (f != null && f.exists()) ? f.length() : 0});
+        return c;
+    }
+
+    @Override
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+        File f = fileFor(uri);
+        if (f == null) throw new FileNotFoundException("нет такого файла");
+        int m = (mode != null && mode.indexOf('w') >= 0)
+                ? ParcelFileDescriptor.MODE_READ_WRITE : ParcelFileDescriptor.MODE_READ_ONLY;
+        return ParcelFileDescriptor.open(f, m);
+    }
+
+    @Override
+    public Uri insert(Uri uri, ContentValues values) {
+        return null;
+    }
+
+    @Override
+    public int delete(Uri uri, String sel, String[] args) {
+        return 0;
+    }
+
+    @Override
+    public int update(Uri uri, ContentValues values, String sel, String[] args) {
+        return 0;
     }
 }

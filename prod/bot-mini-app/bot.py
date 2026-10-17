@@ -1,10 +1,10 @@
-import asyncio, collections, hashlib, hmac, io, json, logging, os, re, sqlite3, time
+import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
 from datetime import date, timedelta
 from contextlib import asynccontextmanager, suppress
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, kimi, whisper
+import assist, auth, chatfiles, kimi, matlib, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -1343,15 +1343,53 @@ def check_pdf_token(raw, start):
     want = hmac.new(TOKEN.encode(), f"pdf:{uid}:{start}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
     return uid if hmac.compare_digest(sig, want) else None
 
-def _pdf_link_uid(request):
-    """Действующая подписная ссылка на ЭТОТ PDF → tg_id; иначе None."""
-    if request.path != "/api/week.pdf":
-        return None
+FILE_TTL = 7 * 24 * 3600   # подписная ссылка на файл чата живёт неделю: хватает, чтобы скачать и переслать
+CHAT_FILES = {}            # fid -> {data, name, mime, uid, ts}: готовые файлы «Чата с ИИ» (docx/pdf/png)
+
+def file_token(uid, fid):
+    """Подписанная ссылка на файл чата: чип в чате кликабельный, файл можно скачать прямо из чата
+    или переслать — загрузчики идут по URL без заголовков входа, пропуск живёт в ?tok=."""
+    exp = int(time.time()) + FILE_TTL
+    sig = hmac.new(TOKEN.encode(), f"file:{uid}:{fid}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{exp}.{uid}.{sig}"
+
+def check_file_token(raw, fid):
+    """tg_id — ссылка на файл валидна; иначе None. Подпись сверяется за постоянное время."""
     try:
-        start = monday(request.query.get("start", "")).isoformat()
-    except (ValueError, TypeError):
+        exp_s, uid_s, sig = raw.split(".", 2)
+        exp, uid = int(exp_s), int(uid_s)
+    except (ValueError, AttributeError):
         return None
-    return check_pdf_token(request.query.get("tok", ""), start)
+    now = time.time()
+    if not (now <= exp <= now + FILE_TTL) or not (0 <= uid <= 2_000_000_000):
+        return None
+    want = hmac.new(TOKEN.encode(), f"file:{uid}:{fid}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return uid if hmac.compare_digest(sig, want) else None
+
+def chat_file_keep(fid, data, name, mime, uid):
+    """Готовый файл чата кладётся в память под подписной ссылкой (см. api_chatfile): файл в чате
+    скачивается прямо из чата, а то, что бот прислал в диалог, — пересылается как обычный документ."""
+    now = time.time()
+    for k in [k for k, v in CHAT_FILES.items() if v["ts"] + FILE_TTL < now]:
+        CHAT_FILES.pop(k, None)
+    while len(CHAT_FILES) >= 30:
+        CHAT_FILES.pop(next(iter(CHAT_FILES)), None)
+    CHAT_FILES[fid] = {"data": data, "name": name, "mime": mime, "uid": uid, "ts": now}
+
+def _pdf_link_uid(request):
+    """Действующая подписная ссылка на PDF недели или файл «Чата с ИИ» → tg_id; иначе None.
+    Нативные загрузчики (Telegram.WebApp.downloadFile, DownloadManager в APK) идут по URL без
+    заголовков X-Init/X-Session — у таких ручек свой пропуск в ?tok= (см. pdf_token/file_token)."""
+    if request.path == "/api/week.pdf":
+        try:
+            start = monday(request.query.get("start", "")).isoformat()
+        except (ValueError, TypeError):
+            return None
+        return check_pdf_token(request.query.get("tok", ""), start)
+    m = re.fullmatch(r"/api/chatfile/([A-Za-z0-9_\-]{8,64})", request.path)
+    if m:
+        return check_file_token(request.query.get("tok", ""), m.group(1))
+    return None
 
 def authorized(request):
     """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой.
@@ -1737,6 +1775,16 @@ def voice_context(raw):
         if g is not None:
             if not isinstance(g, str) or len(g) > MAX_GRADE: raise ValueError
             ctx["filter"] = g
+    if tab == "mt":                          # открытый вариант материала: виджет знает, с какой страницей работаем
+        m = raw.get("mat")
+        if m is not None:
+            if not isinstance(m, dict): raise ValueError
+            if m.get("cat") not in MATERIALS: raise ValueError
+            n = _int_id(m.get("n"))
+            if not 1 <= n <= MAT_VARIANTS: raise ValueError
+            part = m.get("part") or "other"
+            if part not in FRAG_PARTS: raise ValueError
+            ctx["mat"] = {"cat": m["cat"], "n": n, "part": part}
     return ctx
 
 def voice_audio(j):
@@ -1986,8 +2034,13 @@ async def api_fragment(request):
 @guarded
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
-    format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
-    (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
+    Запрос сначала проверяется по разделу «Материалы» (matlib): если в каталогах есть нужный вариант,
+    в запрос модели подставляются его исходный текст, задания (тест) и текущее сочинение/эссе — и только
+    если в материалах ничего нет, модель отвечает по общим знаниям (см. assist.CHAT_SYS_APP).
+    format=docx|pdf|image — ответ собирается в файл: он присылается ботом в диалог с пользователем
+    (его можно переслать контактам) и КРОМЕ того отдаётся подписной ссылкой прямо из чата (file.url):
+    файл скачивается из чата в любом формате (в WebView Telegram нет сохранения без ссылки —
+    так же сделан «Поделиться PDF» недели).
     Ответ — NDJSON-стрим событий (по одному JSON в строке):
       {"t":"status","v":"read|think|write|file"} — что сейчас делает Вишенка (читает/думает/пишет/оформляет),
       {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
@@ -2001,6 +2054,7 @@ async def api_chat(request):
         raise ValueError
     fmt = assist.chat_format(j.get("format"))
     images, docs, names = chatfiles.read_files(j.get("files"))
+    mat_ctx, _mat_hits = matlib.context(" ".join(m["content"] for m in hist if m["role"] == "user")[-1200:])
     uid = user_id(request)
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
@@ -2014,7 +2068,7 @@ async def api_chat(request):
         await resp.write_eof()
         return resp
     reply = ""
-    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt):
+    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt, mat=mat_ctx):
         if kind in ("status", "think", "text"):
             if kind == "text":
                 reply += v
@@ -2050,19 +2104,43 @@ async def api_chat(request):
             sent = True
         except TelegramAPIError as e:
             log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
-    if not sent and fmt != "image":              # документ без доставки бесполезен; картинку показываем прямо в чате
-        await send({"t": "fail", "why": "send"})
-        await resp.write_eof()
-        return resp
-    file = {"name": name, "kind": fmt, "sent": sent}
+    # файл всегда доступен по подписной ссылке прямо из чата (скачивание/пересылка в любом формате);
+    # доставка ботом в диалог — второй путь (из диалога документ пересылается контактам как обычный файл)
+    fid = secrets.token_urlsafe(9)
+    mime = ("image/png" if fmt == "image" else
+            "application/pdf" if fmt == "pdf" else
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    chat_file_keep(fid, data, name, mime, uid)
+    file = {"name": name, "kind": fmt, "sent": sent, "mime": mime,
+            "url": f"/api/chatfile/{fid}?tok={file_token(uid, fid)}"}
     if fmt == "image":
         file["img"] = chatfiles.data_url(data)
         reply = "Готово: инфографика."
     else:
         reply = "Готово: документ сформирован."
+    if not sent:
+        reply += " Файл можно скачать прямо из чата."
     await send({"t": "done", "reply": reply, "enabled": True, "file": file})
     await resp.write_eof()
     return resp
+
+@guarded
+async def api_chatfile(request):
+    """Файл из «Чата с ИИ» (docx/pdf/png) по подписной ссылке из чата: чип файла кликабельный,
+    файл скачивается прямо из чата (DownloadManager в APK / браузер в Telegram) и дальше пересылается."""
+    rec = CHAT_FILES.get(request.match_info["fid"])
+    if not rec or rec["ts"] + FILE_TTL < time.time():
+        return web.Response(status=404)
+    if user_id(request) != rec["uid"]:
+        return web.Response(status=403)
+    name = rec["name"].replace('"', "").replace("\n", " ").replace("\r", " ")
+    try:
+        name.encode("ascii")
+        disp = 'attachment; filename="%s"' % name
+    except UnicodeEncodeError:
+        disp = "attachment; filename*=UTF-8''" + quote(name)
+    return web.Response(body=rec["data"], content_type=rec["mime"],
+                        headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=3600"})
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
@@ -2124,6 +2202,7 @@ def make_app():
     app.router.add_post("/api/voice", api_voice)
     app.router.add_post("/api/stt", api_stt)
     app.router.add_post("/api/chat", api_chat)
+    app.router.add_get("/api/chatfile/{fid}", api_chatfile)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)

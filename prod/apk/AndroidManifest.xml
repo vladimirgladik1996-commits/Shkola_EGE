@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- микрофон нужен только голосовому помощнику: устройства без него не отсеиваем -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- съёмка камерой из чата ИИ («Снять камерой»): разрешения CAMERA не нужно —
+         снимок делает системное приложение камеры и пишет его в наш content:// URI -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="Надежда"
         android:icon="@mipmap/ic_launcher"
@@ -20,5 +23,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- файлы для съёмки камерой (см. launchCamera / CamFileProvider) -->
+        <provider
+            android:name="ru.kabinet.tutor.CamFileProvider"
+            android:authorities="ru.kabinet.tutor.camfiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
