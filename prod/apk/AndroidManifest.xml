@@ -11,6 +11,9 @@
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
         <intent><action android:name="android.intent.action.GET_CONTENT" /></intent>
     </queries>
+    <!-- съёмка камерой из чата ИИ («Снять камерой»): разрешения CAMERA не нужно —
+         снимок делает системное приложение камеры и пишет его в наш content:// URI -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="Надежда"
         android:icon="@mipmap/ic_launcher"

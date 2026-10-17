@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     private float lpX, lpY;                         // точка последнего касания — для elementFromPoint при долгом тапе
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
+    private static final int CAMERA_REQ = 1003;          // «Снять камерой»: снимок возвращается отдельно от выбора файла
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
     private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
     private File micFile;
@@ -205,30 +206,15 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCb != null) fileCb.onReceiveValue(null);   // прошлый выбор не завершился
                 fileCb = cb;
+                // capture="environment" у <input> — страница просит снять фото/видео КАМЕРОЙ, а не выбирать
+                // из галереи («Снять камерой» → «Прикрепите материал к задаче» в чате ИИ)
+                if (params != null && params.isCaptureEnabled() && launchCamera(params)) return true;
                 try {
-                    if (params != null && params.isCaptureEnabled()) {   // «Снять камерой»: снимок сразу в наш файл
-                        // ВАЖНО: resolveActivity() на Android 11+ без <queries> в манифесте всегда возвращает null
-                        // (package visibility): раньше из-за такой «проверки» камера молча не открывалась, и тихо
-                        // уходили в галерею. Проверяем делом — startActivityForResult сам бросит исключение.
-                        try {
-                            File dir = new File(getCacheDir(), "captures");
-                            if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("captures");
-                            captureFile = new File(dir, "cap-" + System.currentTimeMillis() + ".jpg");
-                            Uri out = CaptureProvider.uriFor(MainActivity.this, captureFile);
-                            Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                            cam.putExtra(MediaStore.EXTRA_OUTPUT, out);
-                            cam.setClipData(ClipData.newRawUri("", out));   // grant-флаги доходят до камеры и на старых API
-                            cam.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                            startActivityForResult(cam, FILE_CHOOSER_REQ);
-                            return true;
-                        } catch (Exception e) {
-                            // камеры нет или она недоступна — сообщаем ГРОМКО и уходим в выбор картинки
-                            captureFile = null;
-                            Toast.makeText(MainActivity.this, "Камера недоступна — открываю выбор картинки", Toast.LENGTH_LONG).show();
-                        }
-                    }
                     Intent i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
                     i.addCategory(Intent.CATEGORY_OPENABLE);
+                    if (params != null && params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);   // несколько файлов за раз (вложения чата)
+                    }
                     fixChooserTypes(i, params);
                     startActivityForResult(i, FILE_CHOOSER_REQ);
                 } catch (Exception e) {
@@ -319,6 +305,7 @@ public class MainActivity extends Activity {
     /**
      * JS-мост для страницы (вызывается как Android.*):
      *  - sharePdf(url, name) — «Поделиться PDF»: скачивание + системный chooser;
+     *  - shareFile(url, name, mime) — «Скачать/Переслать» файла из чата ИИ в любом формате (docx/pdf/png);
      *  - micStatus() — состояние микрофона: granted / denied / prompt — виджет решает,
      *    звать ли getUserMedia или сразу вести пользователя в настройки;
      *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
@@ -329,7 +316,18 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void sharePdf(final String url, final String name) {
             runOnUiThread(new Runnable() {
-                public void run() { startShare(url, name, 0); }
+                public void run() { startShare(url, name, "application/pdf", 0); }
+            });
+        }
+
+        /** Файл из «Чата с ИИ» (docx/pdf/png): скачать в «Загрузки» и открыть системное окно пересылки
+         *  (Telegram и другие контакты) — для файлов в любом формате, mime не зашит в код. */
+        @JavascriptInterface
+        public void shareFile(final String url, final String name, final String mime) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    startShare(url, name, (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime, 0);
+                }
             });
         }
 
@@ -521,12 +519,12 @@ public class MainActivity extends Activity {
     }
 
     /** Запуск загрузки + ожидание её окончания. Только в UI-потоке. attempt — номер повтора при занятом имени файла. */
-    private void startShare(final String url, final String name, final int attempt) {
+    private void startShare(final String url, final String name, final String mime, final int attempt) {
         try {
             final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             final String fn = numberedName(safePdfName(name), attempt);
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-            req.setMimeType("application/pdf");
+            req.setMimeType(mime);
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+: в публичные «Загрузки» можно писать через DownloadManager без разрешений
@@ -563,7 +561,7 @@ public class MainActivity extends Activity {
                     if (status != DownloadManager.STATUS_SUCCESSFUL) {
                         if (status == DownloadManager.STATUS_FAILED
                                 && reason == DownloadManager.ERROR_FILE_ALREADY_EXISTS && attempt < 3) {
-                            startShare(url, name, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
+                            startShare(url, name, mime, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
                             return;
                         }
                         toastLong("Не получилось скачать файл — попробуйте ещё раз");
@@ -576,7 +574,7 @@ public class MainActivity extends Activity {
                     }
                     try {
                         Intent s = new Intent(Intent.ACTION_SEND);
-                        s.setType("application/pdf");
+                        s.setType(mime);
                         s.putExtra(Intent.EXTRA_STREAM, u);
                         s.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(Intent.createChooser(s, "Переслать файл"));
@@ -651,7 +649,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_CHOOSER_REQ && fileCb != null) {
+        if ((requestCode == FILE_CHOOSER_REQ || requestCode == CAMERA_REQ) && fileCb != null) {
             ValueCallback<Uri[]> cb = fileCb;
             fileCb = null;
             Uri[] res = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
@@ -662,6 +660,38 @@ public class MainActivity extends Activity {
                 else cap.delete();                     // снимок отменили — пустой файл не оставляем
             }
             cb.onReceiveValue(res);
+        }
+    }
+
+    /**
+     * «Снять камерой»: системное приложение камеры пишет снимок в content:// URI
+     * (см. CaptureProvider — file:// запрещён с Android 7, а без EXTRA_OUTPUT камера
+     * возвращает только маленькую превьюшку), и страница получает файл в свой <input>.
+     * Разрешения CAMERA не требуется: снимок делает стороннее приложение камеры.
+     * ВАЖНО: resolveActivity() на Android 11+ без <queries> в манифесте всегда возвращает null
+     * (package visibility): раньше из-за такой «проверки» камера молча не открывалась, и тихо
+     * уходили в галерею. Проверяем делом — startActivityForResult сам бросит исключение.
+     * false — камеры нет/упала: откатываемся на обычный выбор файла.
+     */
+    private boolean launchCamera(WebChromeClient.FileChooserParams params) {
+        try {
+            String[] types = params == null ? null : params.getAcceptTypes();
+            boolean video = types != null && types.length > 0 && types[0] != null && types[0].startsWith("video");
+            File dir = new File(getCacheDir(), "captures");
+            if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("captures");
+            captureFile = new File(dir, "cap-" + System.currentTimeMillis() + (video ? ".mp4" : ".jpg"));
+            Uri out = CaptureProvider.uriFor(MainActivity.this, captureFile);
+            Intent cam = new Intent(video ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+            cam.putExtra(MediaStore.EXTRA_OUTPUT, out);
+            cam.setClipData(ClipData.newRawUri("", out));   // grant-флаги доходят до камеры и на старых API
+            cam.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(cam, CAMERA_REQ);
+            return true;
+        } catch (Exception e) {
+            // камеры нет или она недоступна — сообщаем ГРОМКО и уходим в выбор картинки
+            captureFile = null;
+            Toast.makeText(MainActivity.this, "Камера недоступна — открываю выбор картинки", Toast.LENGTH_LONG).show();
+            return false;
         }
     }
 

@@ -1,10 +1,10 @@
 import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
 from datetime import date, timedelta
 from contextlib import asynccontextmanager, suppress
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, kimi, whisper
+import assist, auth, chatfiles, kimi, matlib, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -1739,6 +1739,16 @@ def voice_context(raw):
         if g is not None:
             if not isinstance(g, str) or len(g) > MAX_GRADE: raise ValueError
             ctx["filter"] = g
+    if tab == "mt":                          # открытый вариант материала: виджет знает, с какой страницей работаем
+        m = raw.get("mat")
+        if m is not None:
+            if not isinstance(m, dict): raise ValueError
+            if m.get("cat") not in MATERIALS: raise ValueError
+            n = _int_id(m.get("n"))
+            if not 1 <= n <= MAT_VARIANTS: raise ValueError
+            part = m.get("part") or "other"
+            if part not in FRAG_PARTS: raise ValueError
+            ctx["mat"] = {"cat": m["cat"], "n": n, "part": part}
     return ctx
 
 def voice_audio(j):
@@ -2035,13 +2045,14 @@ def _chat_file_uid(request):
     return check_chat_file_token(request.query.get("tok", ""), request.match_info.get("tok", ""))
 
 
-def chat_file_put(uid, data, name):
-    """Кладёт готовый файл в память и возвращает подписанную ссылку для карточки в чате (см. api_chat_file)."""
+def chat_file_put(uid, data, name, mime=None):
+    """Кладёт готовый файл в память и возвращает подписанную ссылку для карточки в чате (см. api_chat_file).
+    mime — тип файла (docx/pdf/png): без него пересылка из чата уходит как application/octet-stream."""
     now = time.time()
-    for t in [t for t, r in CHAT_FILES.items() if now - r[3] > CHAT_FILE_TTL]:
+    for t in [t for t, r in CHAT_FILES.items() if now - r[4] > CHAT_FILE_TTL]:
         CHAT_FILES.pop(t, None)
     tok = secrets.token_urlsafe(12)
-    CHAT_FILES[tok] = [uid, data, name, now]
+    CHAT_FILES[tok] = [uid, data, name, mime, now]
     return f"/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"
 
 
@@ -2054,24 +2065,36 @@ async def api_chat_file(request):
     rec = CHAT_FILES.get(tok)
     if not rec:
         return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
-    uid, data, name, ts = rec
+    uid, data, name, mime, ts = rec
     mine = user_id(request)
     if mine is not None and mine != uid:
         return web.Response(status=403, text="Нет доступа к этому файлу")
     if time.time() - ts > CHAT_FILE_TTL:
         CHAT_FILES.pop(tok, None)
         return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
-    return web.Response(body=data, headers={"Content-Type": "application/octet-stream",
-                                            "Content-Disposition": 'attachment; filename="%s"' % re.sub(r'["\\\r\n]', "'", name)})
+    # имя файла по-русски: в Content-Disposition оно уезжает по RFC 5987 (filename*=UTF-8''),
+    # иначе не-ASCII имя ломает заголовок, и загрузчик получает мусор вместо имени
+    name = name.replace('"', "").replace("\n", " ").replace("\r", " ")
+    try:
+        name.encode("ascii")
+        disp = 'attachment; filename="%s"' % name
+    except UnicodeEncodeError:
+        disp = "attachment; filename*=UTF-8''" + quote(name)
+    return web.Response(body=data, content_type=mime or "application/octet-stream",
+                        headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=3600"})
 
 
 @guarded
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
+    Запрос сначала проверяется по разделу «Материалы» (matlib): если в каталогах есть нужный вариант,
+    в запрос модели подставляются его исходный текст, задания (тест) и текущее сочинение/эссе — и только
+    если в материалах ничего нет, модель отвечает по общим знаниям (см. assist.CHAT_SYS_APP).
     format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
     (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
     Готовый ответ приходит ОДНОВРЕМЕННО и в чат приложения, и в чат с ботом (файл — тоже в чат с ботом),
-    а в чате появляется карточка файла со ссылкой на скачивание.
+    а в чате появляется карточка файла со ссылкой на скачивание (file.url — подписная ссылка: файл
+    скачивается из чата в любом формате и пересылается контактам).
     PDF собирается из HTML, который рисует Кими; картинка — из HTML-инфографики. Перед отдачей Кими
     проверяет готовый файл по картинкам страниц (assist.check_render): не поехала ли вёрстка и
     соответствует ли запросу; нашлись огрехи — один заход на починку HTML (assist.fix_html).
@@ -2097,6 +2120,7 @@ async def api_chat(request):
         if isinstance(f, dict) and isinstance(f.get("mime"), str) and f["mime"].startswith("image/"):
             attach[f["name"]] = "data:%s;base64,%s" % (f["mime"], f["data"])
             img_names.append(f["name"])
+    mat_ctx, _mat_hits = matlib.context(" ".join(m["content"] for m in hist if m["role"] == "user")[-1200:])
     task = hist[-1]["content"]                   # сама задача — для проверки готового файла моделью
     uid = user_id(request)
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
@@ -2111,7 +2135,8 @@ async def api_chat(request):
         await resp.write_eof()
         return resp
     reply = ""
-    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt, img_names=img_names or None):
+    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt,
+                                            img_names=img_names or None, mat=mat_ctx):
         if kind in ("status", "think", "text"):
             if kind == "text":
                 reply += v
@@ -2171,7 +2196,12 @@ async def api_chat(request):
         await send({"t": "fail", "why": "build"})
         await resp.write_eof()
         return resp
-    furl = chat_file_put(uid, data, name)        # тот же файл — карточкой в чате с ИИ…
+    # mime едет вместе с карточкой файла: чип кликабельный, пересылка (APK: shareFile) идёт
+    # с верным типом — docx/pdf/png, а не только PDF (см. index.html: chFileTap)
+    mime = ("image/png" if fmt == "image" else
+            "application/pdf" if fmt == "pdf" else
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    furl = chat_file_put(uid, data, name, mime)   # тот же файл — карточкой в чате с ИИ…
     tg_bot, sent = request.app.get("bot"), False
     if type(uid) is int and uid > 0 and tg_bot is not None:
         try:
@@ -2187,7 +2217,7 @@ async def api_chat(request):
         await send({"t": "fail", "why": "send"})
         await resp.write_eof()
         return resp
-    file = {"name": name, "kind": fmt, "sent": sent}
+    file = {"name": name, "kind": fmt, "sent": sent, "mime": mime}
     if furl:
         file["url"] = furl
     if fmt == "image":
@@ -2201,6 +2231,7 @@ async def api_chat(request):
         await send({"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом
     await resp.write_eof()
     return resp
+
 
 # ---------- CORS (нужно только если мини-апп на другом домене, напр. GitHub Pages) ----------
 # Включается переменной ALLOW_ORIGIN — список разрешённых источников через запятую,
