@@ -245,6 +245,11 @@ def _html_title(html):
     return _clean(t)[:90] or "Инфографика"
 
 
+def image_title(html):
+    """Заголовок инфографики — публичное имя для bot.py (шаг «Вишенка рисует инфографику»)."""
+    return _html_title(html)
+
+
 def _html_for_pdf(html):
     """HTML модели готовится к рендеру: убираем font-family (модель могла прописать шрифт без
     кириллицы) и вшиваем @font-face с DejaVu из fonts/ — иначе русский текст выйдет пустыми рамками."""
@@ -256,30 +261,40 @@ def _html_for_pdf(html):
     return "<style>" + css + "</style>" + html
 
 
-def html_png(html):
-    """HTML-инфографика модели → PNG 1080 px по ширине: HTML → PDF (xhtml2pdf) → рендер страниц
-    (pypdfium2). Страницы склеиваются вертикально — высокая инфографика не обрезается.
-    ValueError — HTML не собрался или вышел без единого тёмного пикселя (пустая картинка)."""
+def html_pdf(html):
+    """HTML-инфографика модели → PDF (xhtml2pdf) — первый шаг конвейера картинки.
+    ValueError — не строка, не HTML или PDF не собрался."""
     if not isinstance(html, str) or "<html" not in html.lower():
         raise ValueError
     try:
         from xhtml2pdf import pisa
-        import pypdfium2 as pdfium
         pdf = io.BytesIO()
         st = pisa.CreatePDF(io.StringIO(_html_for_pdf(html)), dest=pdf)
         if st.err or not pdf.getvalue():
             raise ValueError
-        doc = pdfium.PdfDocument(pdf.getvalue())
+        return pdf.getvalue()
+    except ValueError:
+        raise
+    except Exception as e:
+        log.warning("html_pdf: не собрался: %r", e)
+        raise ValueError
+
+
+def pdf_png(pdf):
+    """Страницы PDF → одна PNG-картинка 1080 px по ширине (pypdfium2) — второй шаг конвейера.
+    Страницы склеиваются вертикально — высокая инфографика не обрезается.
+    ValueError — PDF не отрендерился или вышел без единого тёмного пикселя (пустая картинка)."""
+    try:
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(pdf)
         imgs = []
         for page in doc:
             w, _h = page.get_size()
             if not w:
                 continue
             imgs.append(page.render(scale=1080 / w).to_pil().convert("RGB"))
-    except ValueError:
-        raise
     except Exception as e:
-        log.warning("html_png: не отрендерилось: %r", e)
+        log.warning("pdf_png: не отрендерилось: %r", e)
         raise ValueError
     if not imgs:
         raise ValueError
@@ -298,6 +313,10 @@ def html_png(html):
     im.save(out, "PNG", optimize=True)
     return out.getvalue()
 
+
+def html_png(html):
+    """HTML-инфографика модели → PNG 1080 px по ширине за один вызов (два шага: html_pdf → pdf_png)."""
+    return pdf_png(html_pdf(html))
 
 
 # ---------- общий вход для api_chat ----------

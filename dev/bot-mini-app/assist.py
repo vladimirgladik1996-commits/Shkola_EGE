@@ -45,6 +45,8 @@ TIME_FMT = re.compile(r"^(\d{1,2})(?::?(\d{2}))?$")
 
 def norm_day(x, today=None):
     """'2026-10-14' | '14.10' | '14.10.2026' | '20261014' → 'YYYY-MM-DD'; ближайшая будущая дата. Иначе None."""
+    if isinstance(x, int) and not isinstance(x, bool):
+        x = str(x)                       # модель могла вернуть дату числом (20261014)
     if not isinstance(x, str):
         return None
     s = x.strip()
@@ -70,6 +72,8 @@ def norm_day(x, today=None):
 
 def norm_time(x):
     """'12' | '12:00' | '12.00' | '9:05' → 'HH:MM'. Иначе None."""
+    if isinstance(x, float) and x.is_integer():
+        x = int(x)                       # модель могла вернуть время числом (15.0)
     if not isinstance(x, str) and not isinstance(x, int):
         return None
     m = TIME_FMT.fullmatch(str(x).strip())
@@ -80,18 +84,30 @@ def norm_time(x):
 
 
 def norm_int(x, lo, hi):
+    """Целое (цена, сумма, минуты). Модель отвечает и числом (3000, 3000.0), и текстом
+    («3000 руб», «3 000», «60 мин») — принимаем и то, и другое. Иначе None."""
     if isinstance(x, bool):
         return None
     if isinstance(x, int):
         n = x
-    elif isinstance(x, str) and re.fullmatch(r"\d[\d\s]*", x.strip()):
-        n = int(x.replace(" ", ""))
+    elif isinstance(x, float):
+        n = int(x) if x.is_integer() else None
+    elif isinstance(x, str):
+        m = re.fullmatch(r"(\d[\d\s]*)(?:[.,]0+)?(?:\s*(?:руб(?:лей|ля)?|р|мин(?:ут[а-я]*)?|₽)\.?)?",
+                         x.strip(), re.I)
+        n = int(m.group(1).replace(" ", "")) if m else None
     else:
-        return None
-    return n if lo <= n <= hi else None
+        n = None
+    return n if n is not None and lo <= n <= hi else None
 
 
 def norm_text(x, limit):
+    """Текстовое поле (имя, класс, предмет). Числа тоже принимаются: модель отвечает
+    классом числом (grade: 5) — это «5», а не потеря параметра."""
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, (int, float)):
+        x = str(int(x)) if float(x).is_integer() else None
     return x.strip()[:limit] if isinstance(x, str) and x.strip() else None
 
 
@@ -478,12 +494,14 @@ def merge_params(prev, new):
 
 
 def question_for(need, action, asked):
-    """Вопрос пользователю по недостающим полям — один вопрос за раз, без повторов."""
-    for f in need:
-        q = ASK.get(f, "Уточните, пожалуйста.")
+    """Вопрос пользователю по недостающим полям — один вопрос за раз. Сначала спрашиваем то, что
+    ещё не звучало; если все вопросы уже спрашивались, а данные так и не пришли, — переспрашиваем
+    первое недостающее. Лучше повторить вопрос, чем зациклиться на «не хватает данных»."""
+    qs = [(f, ASK.get(f, "Уточните, пожалуйста.")) for f in need]
+    for f, q in qs:
         if q not in asked:
             return q
-    return None
+    return qs[0][1] if qs else None
 
 
 def next_check(task, asked):
@@ -689,28 +707,32 @@ async def handle_chat(uid, text, *, images=None, docs=None, voice=False):
 
 
 def _app_flow(uid, task, prev, text, images=None, docs=None):
-    """Задача про кабинет: добрать параметры и переспросить неуверенно распознанное → подтверждение."""
+    """Задача про кабинет: добрать параметры и переспросить неуверенно распознанное → подтверждение.
+    Названные параметры НАКАПЛИВАЮТСЯ в состоянии диалога: контекст держит сервер, а не модель —
+    модель может не повторить ранее сказанное (на «3000» вернуть только цену), и уже полученные
+    ответы не должны теряться."""
     action = task["action"]
     if action == "none":
         return {"reply": "Не понял, что нужно сделать. Сформулируйте задачу ещё раз.", "buttons": None}
     asked = list((prev or {}).get("asked", []))
+    raw = merge_params((prev or {}).get("params"), task["params"])   # новое поверх старого, пустое не затирает
     try:
-        params, need = prepare(task["params"], action)
+        params, need = prepare(raw, action)
     except AssistError as e:
         asked.append(str(e))
-        _keep(uid, phase="clarify", task=_task_state(action, task["params"], asked),
+        _keep(uid, phase="clarify", task=_task_state(action, raw, asked),
               text=text, images=images, docs=docs)
         return {"reply": str(e) + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
     if need:
         q = question_for(need, action, asked) or "Не хватает данных (" + ", ".join(need) + "). Уточните, пожалуйста."
         asked.append(q)
-        _keep(uid, phase="clarify", task=_task_state(action, merge_params(task["params"], params), asked),
+        _keep(uid, phase="clarify", task=_task_state(action, merge_params(raw, params), asked),
               text=text, images=images, docs=docs)
         return {"reply": q + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
     chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
     if chk:
         asked.append(chk)
-        _keep(uid, phase="clarify", task=_task_state(action, merge_params(task["params"], params), asked),
+        _keep(uid, phase="clarify", task=_task_state(action, merge_params(raw, params), asked),
               text=text, images=images, docs=docs)
         return {"reply": chk + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
     try:
@@ -772,21 +794,22 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
         return {"stage": "answer", "reply": ans or "Не получилось ответить.", "confirm": None}
     action = task["action"]
     asked = list((prev or {}).get("asked", []))
+    raw = merge_params((prev or {}).get("params"), task["params"])   # новое поверх старого, пустое не затирает
     try:
-        params, need = prepare(task["params"], action)
+        params, need = prepare(raw, action)
     except AssistError as e:
         asked.append(str(e))
-        _keep(uid, phase="page", task=_task_state(action, task["params"], asked))
+        _keep(uid, phase="page", task=_task_state(action, raw, asked))
         return {"stage": "clarify", "reply": str(e), "confirm": None}
     if need:
         q = question_for(need, action, asked) or "Не хватает данных (" + ", ".join(need) + "). Уточните, пожалуйста."
         asked.append(q)
-        _keep(uid, phase="page", task=_task_state(action, merge_params(task["params"], params), asked))
+        _keep(uid, phase="page", task=_task_state(action, merge_params(raw, params), asked))
         return {"stage": "clarify", "reply": q, "confirm": None}
     chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
     if chk:
         asked.append(chk)
-        _keep(uid, phase="page", task=_task_state(action, merge_params(task["params"], params), asked))
+        _keep(uid, phase="page", task=_task_state(action, merge_params(raw, params), asked))
         return {"stage": "clarify", "reply": chk, "confirm": None}
     try:
         what = confirm_text(action, params)

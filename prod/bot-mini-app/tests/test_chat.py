@@ -1,5 +1,5 @@
 """Чат с ИИ в мини-аппе: проверка истории, маршрута /api/chat и ответов модели (сеть подменена)."""
-import asyncio, os, sys
+import asyncio, os, sqlite3, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ.update(BOT_TOKEN="123456:TESTTOKEN", AUTH_LOGIN="Admin", PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID", "KIMI_API_KEY"): os.environ.pop(k, None)
@@ -76,6 +76,66 @@ assert 'tab=="ch"?chat()' in html and 'apiStream("/api/chat"' in html and "funct
 assert "CH_HINTS" not in html and 'class="aic-s"' not in html; ok("чипсов быстрых запросов нет")
 assert 'id="aic-md"' in html and 'id="aic-mic"' in html and 'id="aic-m"' in html; ok("режим ответа и микрофон встроены в поле ввода")
 assert all(x in html for x in ('id="aic-fb"', 'id="aic-ab"', 'id="aic-att"', 'format:fmt', 'files')); ok("формат ответа и вложения встроены в поле ввода")
-assert all(x in html for x in ("function chLive(", "Чат с Вишенкой", 'class="aist"', 'class="aith"', 'class="aitx"', "читает материалы…")); ok("мышление и статусы показываются от имени Вишенки")
+assert all(x in html for x in ("function chStep(", "Чат с Вишенкой", 'class="aist"', 'class="aith"', 'class="aitx"', "💜 Вишенка")); ok("шаги мышления и работы показываются от имени Вишенки")
+assert all(x in html for x in ('class="aim a st', "function chStepNew(", "function chThink(", "CH_STEP_MAX")); ok("шаги и мысли идут отдельными сообщениями в диалоге (новое под старым)")
+assert all(x in html for x in ("конвертирует HTML в PDF", "читает материалы", "думает", "пишет ответ", "chReadLabel(")); ok("любая операция видна как сообщение Вишенки (думает / читает / конвертирует …)")
+assert 'ev.t=="tg"' in html and "Ответ также отправлен в Telegram" in html; ok("фронт помечает ответ, доставленный и в Telegram")
 assert 'Application(client_max_size=12 * 1024 * 1024' in open(os.path.join(ROOT, "bot.py"), encoding="utf-8").read(); ok("лимит тела запроса вмещает вложения")
+
+# --- готовый ответ уходит и в чат приложения, и в Telegram (+ шаги работы видны в стриме) ---
+import time, hashlib, hmac, json as _json
+from urllib.parse import urlencode
+from aiohttp.test_utils import TestClient, TestServer
+import auth
+mem = sqlite3.connect(":memory:", check_same_thread=False); bot.db.backup(mem); mem.row_factory = sqlite3.Row
+bot.db = mem; auth.init(mem)
+mem.execute("insert into auth_pins values('gladik_n', 42)")
+mem.execute("insert into auth_sessions(tg_id,exp,fp) values(42,?,?)", (time.time() + 99999, auth._fp())); mem.commit()
+def init(uid, un):
+    d = {"auth_date": str(int(time.time())), "user": _json.dumps({"id": uid, "username": un})}
+    chk = "\n".join(f"{k}={v}" for k, v in sorted(d.items()))
+    d["hash"] = hmac.new(hmac.new(b"WebAppData", b"123456:TESTTOKEN", hashlib.sha256).digest(), chk.encode(), hashlib.sha256).hexdigest()
+    return urlencode(d)
+H = {"X-Init": init(42, "Gladik_N")}
+class FakeBot:
+    def __init__(self): self.msgs, self.photos, self.docs = [], [], []
+    async def send_message(self, chat_id, text, **kw): self.msgs.append((chat_id, text))
+    async def send_photo(self, chat_id, photo, caption=None, **kw): self.photos.append((chat_id, caption))
+    async def send_document(self, chat_id, document, caption=None, **kw): self.docs.append((chat_id, caption))
+async def tg_run():
+    app = bot.make_app(); app["bot"] = FakeBot()
+    async with TestClient(TestServer(app)) as c:
+        async def fake_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=True):
+            yield "think", "сначала подумаю\n\n"
+            yield "think", "и ещё мысль"
+            yield "text", "ответ"
+        real = kimi.ask_stream; kimi.ask_stream = fake_stream; key = kimi.API_KEY; kimi.API_KEY = "test"
+        try:
+            r = await c.post("/api/chat", json={"messages": [U("привет")]}, headers=H)
+            ev = [_json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+            assert [e["t"] for e in ev] == ["status", "think", "think", "status", "text", "done", "tg"], ev
+            assert ev[0]["v"] == "think" and ev[3]["v"] == "write"; ok("стрим мышления Кими: статусы и дельты размышлений от имени Вишенки")
+            assert ev[1]["v"] == "сначала подумаю\n\n" and ev[2]["v"] == "и ещё мысль"   # мысли — стримом, по абзацам
+            assert ev[4]["v"] == "ответ" and ev[5]["reply"] == "ответ" and ev[5]["enabled"] is True
+            assert app["bot"].msgs == [(42, "ответ")]; ok("ответ пришёл в чат приложения и одновременно в Telegram")
+            assert ev[6] == {"t": "tg"}; ok("стрим подтверждает доставку ответа в Telegram")
+            # формат-картинка: шаги конвертации видны в стриме, файл уходит боту
+            async def html_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=True):
+                yield "text", HTML
+            kimi.ask_stream = html_stream
+            r = await c.post("/api/chat", json={"messages": [U("инфографика")], "format": "image"}, headers=H)
+            ev = [_json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+            kinds = [(e["t"], e.get("v")) for e in ev]
+            assert ("status", "pdf") in kinds and ("status", "png") in kinds, kinds   # Вишенка конвертирует HTML в PDF и рисует инфографику
+            done = [e for e in ev if e["t"] == "done"][0]
+            assert done["file"]["kind"] == "image" and done["file"]["sent"] is True and done["file"]["img"].startswith("data:image/png;base64,")
+            assert app["bot"].photos and kinds[-1] == ("tg", None); ok("картинка: шаги конвертации в стриме + файл ушёл в Telegram")
+        finally:
+            kimi.ask_stream = real; kimi.API_KEY = key
+HTML = ("<html><head><title>Тема</title><style>body{background-color:#FBF7E9;color:#0E2250}"
+        "h1{font-size:24pt}div{background-color:#FFFFFF;border:1pt solid #E9E1C8;padding:10pt}</style></head>"
+        "<body><h1>Тема недели</h1><div>Раз — и длинный текст карточки, чтобы проверить переносы строк и русский шрифт.</div>"
+        "<div>Два</div></body></html>")
+asyncio.run(tg_run())
+print("test_chat: OK")
 print("test_chat: OK")

@@ -1687,7 +1687,7 @@ async def api_payment_delete(request):
 # Мини-апп шлёт запись и КОНТЕКСТ: на какой вкладке и экране пользователь нажал «Голосовая команда»,
 # какой фильтр/период выбран, какая карточка открыта. Контекст приходит от клиента, поэтому проверяется
 # по белому списку: лишние ключи отбрасываются, неверный тип или значение → 400.
-VOICE_TABS = {"c": "Расписание", "p": "Оплаты", "s": "Ученики", "ch": "Чат", "mt": "Материалы", "kn": "Канал"}
+VOICE_TABS = {"c": "Расписание", "p": "Оплаты", "s": "Ученики", "ch": "Чат", "mt": "Материалы"}
 VOICE_SCREENS = {"lesson_form", "day_card", "student_card", "student_new", "payment_card", "payment_edit",
                  "payment_new", "balance", "debts", "print_preview", "grade_filter", "period_calendar",
                  "payment_student_pick", "payment_sort"}
@@ -1908,6 +1908,23 @@ async def tg_send_long(tg_bot, uid, text, buttons=None):
     for i, p in enumerate(parts):
         await tg_bot.send_message(uid, p, reply_markup=kb if i == len(parts) - 1 else None)
 
+async def tg_chat_answer(tg_bot, uid, text):
+    """Готовый ответ «Чата с ИИ» из мини-аппа дублируется в чат с ботом: ответ должен прийти
+    и в раздел приложения, и в Telegram. True — доставлено. Сбой доставки не роняет стрим:
+    ответ в приложение уже ушёл, просто без пометки о Telegram."""
+    if tg_bot is None or type(uid) is not int or uid <= 0:      # 0 — standalone-пользователь APK без Telegram
+        return False
+    try:
+        await asyncio.wait_for(tg_send_long(tg_bot, uid, text), 30)
+        return True
+    except asyncio.TimeoutError:
+        log.warning("chat tg send timeout: tg_id=%s", uid)
+    except TelegramAPIError as e:
+        log.warning("chat tg send failed: tg_id=%s err=%s", uid, e)
+    except Exception:
+        log.exception("chat tg send failed: tg_id=%s", uid)
+    return False
+
 def fragment_head(fragment, instruction, meta):
     short = fragment if len(fragment) <= 160 else fragment[:157].rstrip() + "…"
     short = " ".join(short.split())
@@ -1988,10 +2005,13 @@ async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
     format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
     (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
+    Готовый ответ приходит ОДНОВРЕМЕННО и в чат приложения, и в чат с ботом (файл — тоже в чат с ботом).
     Ответ — NDJSON-стрим событий (по одному JSON в строке):
-      {"t":"status","v":"read|think|write|file"} — что сейчас делает Вишенка (читает/думает/пишет/оформляет),
+      {"t":"status","v":"read|think|write|file|pdf|png"} — шаг работы Вишенки (читает/думает/пишет/оформляет/
+        конвертирует HTML в PDF/рисует инфографику); каждый шаг — отдельное сообщение в диалоге,
       {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
-      {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён."""
+      {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"tg"} — ответ ушёл и в Telegram,
+      {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён."""
     j = await request.json()
     if not isinstance(j, dict):
         raise ValueError
@@ -2028,19 +2048,33 @@ async def api_chat(request):
             reply = v
     log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=True", uid, len(hist), deep, fmt, len(names))
     if fmt == "text":
+        # готовый ответ приходит и в чат приложения, и в чат с бота — одним и тем же текстом;
+        # доставка в Telegram стартует одновременно с отдачей ответа в чат
+        tg = asyncio.create_task(tg_chat_answer(request.app.get("bot"), uid, reply))
         await send({"t": "done", "reply": reply, "enabled": True})
+        if await tg:
+            await send({"t": "tg"})
         await resp.write_eof()
         return resp
-    await send({"t": "status", "v": "file"})
     try:
-        data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, reply)
+        if fmt == "image":                  # конвейер картинки виден по шагам: HTML → PDF → PNG
+            await send({"t": "status", "v": "pdf"})
+            pdf = await asyncio.get_running_loop().run_in_executor(None, chatfiles.html_pdf, reply)
+            await send({"t": "status", "v": "png"})
+            data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
+            title = chatfiles.image_title(reply) if isinstance(reply, str) else ""
+            name = chatfiles.file_stem(title or "Инфографика") + ".png"
+            title = title or "Инфографика"
+        else:
+            await send({"t": "status", "v": "file"})
+            data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, reply)
     except Exception as e:                       # модель ответила не тем форматом — просто «не отвечает»
         log.warning("chat file: не собрался (%s): %r", fmt, e)
         await send({"t": "fail", "why": "build"})
         await resp.write_eof()
         return resp
     tg_bot, sent = request.app.get("bot"), False
-    if isinstance(uid, int) and tg_bot is not None:
+    if type(uid) is int and uid > 0 and tg_bot is not None:
         try:
             f = BufferedInputFile(data, filename=name)
             if fmt == "image":
@@ -2061,6 +2095,8 @@ async def api_chat(request):
     else:
         reply = "Готово: документ сформирован."
     await send({"t": "done", "reply": reply, "enabled": True, "file": file})
+    if sent:
+        await send({"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом
     await resp.write_eof()
     return resp
 

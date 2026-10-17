@@ -20,6 +20,16 @@ HTML = ("<html><head><title>Тема</title><style>body{background-color:#FBF7E9
         "<div>Два</div></body></html>")
 png = cf.html_png(HTML)
 assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000; ok("HTML-инфографика конвертируется в PNG")
+pdf = cf.html_pdf(HTML)
+assert pdf[:5] == b"%PDF-" and cf.pdf_png(pdf)[:8] == b"\x89PNG\r\n\x1a\n"; ok("конвейер картинки разделён на шаги: HTML → PDF → PNG (каждый шаг виден в чате)")
+assert cf.image_title(HTML) == "Тема"; ok("заголовок инфографики доступен отдельно — для имени файла")
+for badh in ("", "не html вообще", None):
+    try: cf.html_pdf(badh); raise SystemExit("не отклонено")
+    except ValueError: pass
+ok("шаг HTML → PDF отклоняет не-HTML")
+try: cf.pdf_png(b"not-a-pdf"); raise SystemExit("не отклонено")
+except ValueError: pass
+ok("шаг PDF → PNG отклоняет мусор")
 assert cf._html_title(HTML) == "Тема" and cf._html_title("<html><body><h2>Без title</h2></body></html>") == "Без title"; ok("заголовок инфографики берётся из <title> или первого заголовка")
 for badh in ("", "не html вообще", None, 5, "<html><body>   </body></html>"):
     try: cf.html_png(badh); raise SystemExit("не отклонено")
