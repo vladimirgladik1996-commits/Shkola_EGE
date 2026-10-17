@@ -20,5 +20,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- файл для снимка системной камеры: «Снять камерой» в чате с ИИ (MainActivity.onShowFileChooser → CaptureProvider) -->
+        <provider
+            android:name=".CaptureProvider"
+            android:authorities="ru.kabinet.tutor.capture"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

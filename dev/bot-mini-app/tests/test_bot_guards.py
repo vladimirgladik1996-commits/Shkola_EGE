@@ -32,8 +32,8 @@ ns["auth"] = types.SimpleNamespace(is_authorized=lambda u: u in sessions,
                                    check_token=lambda t: None)
 for n in tree.body:
     if isinstance(n, ast.FunctionDef) and n.name in {"authorized", "check_photo", "check_slot", "money_val", "clip", "monday",
-                                                     "check_pdf_token", "_pdf_link_uid"}: exec(compile(ast.Module([n], []), "bot", "exec"), ns)
-    if isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("PHOTO_RE", "TIME_FMT", "DAY_FMT", "MAX_MONEY", "PDF_TTL") for t in n.targets): exec(compile(ast.Module([n], []), "bot", "exec"), ns)
+                                                     "check_pdf_token", "_pdf_link_uid", "check_chat_file_token", "_chat_file_uid", "chat_file_token"}: exec(compile(ast.Module([n], []), "bot", "exec"), ns)
+    if isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("PHOTO_RE", "TIME_FMT", "DAY_FMT", "MAX_MONEY", "PDF_TTL", "CHAT_FILE_TTL") for t in n.targets): exec(compile(ast.Module([n], []), "bot", "exec"), ns)
 authorized, check_photo = ns["authorized"], ns["check_photo"]
 
 def sign(fields, token="123456:TESTTOKEN"):
@@ -41,7 +41,11 @@ def sign(fields, token="123456:TESTTOKEN"):
     key = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
     return urlencode({**fields, "hash": hmac.new(key, chk.encode(), hashlib.sha256).hexdigest()})
 class Rq:
-    def __init__(s, x): s.headers = {"X-Init": x} if x is not None else {}
+    def __init__(s, x, path="/api/data", query=None):
+        s.headers = {"X-Init": x} if x is not None else {}
+        s.path = path
+        s.match_info = {}
+        s.query = query or {}
 now = int(time.time()); user = lambda i=777: json.dumps({"id": i, "first_name": "T"})
 good = sign({"auth_date": str(now), "user": user(), "query_id": "AA"})
 
@@ -58,6 +62,21 @@ weird_list = (None, "", "hash=", "hash=é&user=1", "hash=\udcff", "a=1", "x" * 9
               sign({"auth_date": "abc", "user": user()}), sign({"user": user()}), sign({"auth_date": str(now), "user": "[" * 5000}))
 for w in weird_list: assert authorized(Rq(w)) == 403, str(w)[:60]
 print(f"✓ {len(weird_list)} уродливых X-Init → 403, без исключений")
+
+# --- подписная ссылка на файл чата с ИИ (карточка в чате открывается обычным переходом) ---
+chat_file_token, check_chat_file_token = ns["chat_file_token"], ns["check_chat_file_token"]
+tok = "abc123"; sig = chat_file_token(777, tok)
+assert check_chat_file_token(sig, tok) == 777 and check_chat_file_token(sig, "other") is None
+assert check_chat_file_token(sig.replace(".", "!", 1), tok) is None and check_chat_file_token("", tok) is None
+rq = Rq(None, path="/api/chat_file/" + tok, query={"tok": sig}); rq.match_info = {"tok": tok}
+assert authorized(rq) == 200; print("✓ подписная ссылка на файл чата открывается без X-Init (как «Поделиться PDF»)")
+tampered = sig[:-1] + ("0" if sig[-1] != "0" else "1")
+bad = Rq(None, path="/api/chat_file/" + tok, query={"tok": tampered}); bad.match_info = {"tok": tok}
+assert authorized(bad) == 403
+bad2 = Rq(None, path="/api/chat_file/" + tok, query={"tok": chat_file_token(555, "другой")}); bad2.match_info = {"tok": tok}
+assert authorized(bad2) == 403
+assert check_chat_file_token(chat_file_token(555, tok), tok) == 555   # владелец записан в подпись — сверяется в api_chat_file
+print("✓ подделанная или чужая подпись на файл → 403; подпись привязана к своему файлу и владельцу")
 
 jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
 assert check_photo(jpeg) == jpeg and check_photo("") == "" and check_photo(None) is None

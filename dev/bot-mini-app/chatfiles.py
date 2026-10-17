@@ -5,7 +5,7 @@
 отдельным тестом (tests/test_chat_files.py). Любая ошибка разбора вложения — ValueError
 (бот ответит 400), а не падение.
 """
-import base64, binascii, io, json, logging, os, re, zipfile
+import base64, binascii, html as html_lib, io, json, logging, os, re, zipfile
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -320,12 +320,45 @@ def html_png(html):
 
 
 # ---------- общий вход для api_chat ----------
-def build(fmt, res):
+def resolve_attach(html, attach):
+    """Картинки в HTML модели: <img src="attach:имя_файла"> → data-URI из вложений пользователя.
+    Всё, что не встроилось (чужой URL, неизвестное имя), убирается — в готовом файле не должно
+    остаться «битых» картинок."""
+    def rep(m):
+        tag = m.group(0)
+        s = re.search(r'''src\s*=\s*["']([^"']*)["']''', tag, re.I)
+        if not s:
+            return ""
+        url = s.group(1).strip()
+        if url.lower().startswith("data:image/"):
+            return tag
+        if url.lower().startswith("attach:"):
+            got = (attach or {}).get(url[7:].strip())
+            return (tag[:s.start()] + 'src="%s"' % got + tag[s.end():]) if got else ""
+        return ""
+    return re.sub(r"<img\b[^>]*>", rep, html, flags=re.I)
+
+
+def build(fmt, res, attach=None):
     """(формат, ответ модели) → (байты, имя файла, заголовок). ValueError — ответ модели не годится для файла.
-    res: str — для docx/pdf оформленный текст, для image — HTML-инфографика."""
+    res: str — для docx — оформленный текст, для pdf — HTML-документ (или текст: соберём из него),
+    для image — HTML-инфографика. attach — картинки из вложений пользователя (имя → data-URI) для
+    <img src=\"attach:имя\"> в HTML. После сборки файл можно показать модели на проверку:
+    render_shots(fmt, data) → картинки страниц."""
+    if isinstance(res, str) and "<img" in res.lower():
+        res = resolve_attach(res, attach)
     if fmt == "image":
         title = _html_title(res) if isinstance(res, str) else ""
         return html_png(res), file_stem(title or "Инфографика") + ".png", title or "Инфографика"
+    if fmt == "pdf" and isinstance(res, str) and "<html" in res.lower():
+        try:                                    # основной путь: модель рисует HTML, мы конвертируем в PDF
+            title = _html_title(res) or "Документ"
+            return html_pdf(res), file_stem(title) + ".pdf", title
+        except ValueError:
+            log.warning("build: HTML не собрался в PDF — собираю PDF из текста")
+            res = _html_text(res)
+    if isinstance(res, str) and "<html" in res.lower():
+        res = _html_text(res)                  # модель прислала HTML там, где ждали текст — вытаскиваем текст
     title, blocks = parse_doc(res)
     if fmt == "docx":
         return docx_bytes(title, blocks), file_stem(title) + ".docx", title
@@ -336,3 +369,53 @@ def build(fmt, res):
 
 def data_url(png):
     return "data:image/png;base64," + base64.b64encode(png).decode()
+
+
+# ---------- подстановка картинок вложений и проверка готового файла моделью ----------
+def _html_text(src):
+    """Грубый сброс тегов: модель прислала HTML там, где ждали текст (или PDF из HTML не собрался) —
+    остаётся читаемый текст с разбивкой на строки для parse_doc."""
+    s = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", str(src), flags=re.I | re.S)
+    s = re.sub(r"<br\s*/?>", "\n", s, flags=re.I)
+    s = re.sub(r"</(p|div|h[1-6]|li|tr|table|section)>", "\n", s, flags=re.I)
+    s = re.sub(r"<li[^>]*>", "\n- ", s, flags=re.I)
+    s = re.sub(r"<h([1-6])[^>]*>", "\n# ", s, flags=re.I)
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = html_lib.unescape(s)
+    s = re.sub(r"[ \t\u00a0]+", " ", s)
+    return "\n".join(l.strip() for l in s.split("\n") if l.strip())
+
+
+def _jpeg_b64(im, maxw=1200):
+    """Страница/картинка → JPEG в base64 (такой формат ждёт kimi.build_payload для vision)."""
+    from PIL import Image
+    im = im.convert("RGB")
+    if im.width > maxw:
+        im = im.resize((maxw, max(1, round(im.height * maxw / im.width))), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=85)
+    return base64.b64encode(out.getvalue()).decode()
+
+
+def render_shots(fmt, data, max_pages=3):
+    """Готовый файл → картинки страниц для проверки моделью (JPEG в base64, не больше max_pages).
+    Не отрендерилось — просто нет картинок: проверка пропустится, файл не сломается."""
+    try:
+        if fmt == "image":
+            from PIL import Image
+            im = Image.open(io.BytesIO(data))
+            im.load()
+            return [_jpeg_b64(im)]
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(data)
+        out = []
+        for k in range(min(len(doc), max_pages)):
+            page = doc[k]
+            w, _h = page.get_size()
+            if not w:
+                continue
+            out.append(_jpeg_b64(page.render(scale=min(2.0, 1200 / w)).to_pil()))
+        return out
+    except Exception as e:
+        log.warning("render_shots: не отрендерились страницы для проверки: %r", e)
+        return []

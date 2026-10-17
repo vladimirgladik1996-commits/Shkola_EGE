@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -19,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -53,7 +55,8 @@ import java.util.concurrent.TimeUnit;
 public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
-    private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи (см. onShowFileChooser)
+    private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи / файла (см. onShowFileChooser)
+    private File captureFile;                       // сюда системная камера кладёт снимок («Снять камерой»)
     private float lpX, lpY;                         // точка последнего касания — для elementFromPoint при долгом тапе
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
@@ -202,19 +205,30 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCb != null) fileCb.onReceiveValue(null);   // прошлый выбор не завершился
                 fileCb = cb;
-                Intent i;
                 try {
-                    i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
-                } catch (Exception e) {
-                    i = new Intent(Intent.ACTION_GET_CONTENT);
-                }
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("image/*");
-                try {
+                    if (params != null && params.isCaptureEnabled()) {   // «Снять камерой»: снимок сразу в наш файл
+                        Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                        if (cam.resolveActivity(getPackageManager()) != null) {
+                            File dir = new File(getCacheDir(), "captures");
+                            if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("captures");
+                            captureFile = new File(dir, "cap-" + System.currentTimeMillis() + ".jpg");
+                            Uri out = CaptureProvider.uriFor(MainActivity.this, captureFile);
+                            cam.putExtra(MediaStore.EXTRA_OUTPUT, out);
+                            cam.setClipData(ClipData.newRawUri("", out));   // grant-флаги доходят до камеры и на старых API
+                            cam.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            startActivityForResult(cam, FILE_CHOOSER_REQ);
+                            return true;
+                        }
+                        // приложения камеры на устройстве нет — уходим в обычный выбор картинки
+                    }
+                    Intent i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    fixChooserTypes(i, params);
                     startActivityForResult(i, FILE_CHOOSER_REQ);
                 } catch (Exception e) {
                     fileCb = null;
-                    Toast.makeText(MainActivity.this, "Не получилось открыть галерею", Toast.LENGTH_LONG).show();
+                    captureFile = null;
+                    Toast.makeText(MainActivity.this, "Не получилось открыть выбор файла", Toast.LENGTH_LONG).show();
                     return false;
                 }
                 return true;
@@ -626,13 +640,78 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Результат выбора фото из галереи → обратно в страницу (<input type="file">). */
+    /** Результат выбора файла/фото → обратно в страницу (<input type="file">).
+     *  Системная камера отдаёт снимок через EXTRA_OUTPUT и пустой intent — берём файл из captureFile. */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQ && fileCb != null) {
-            fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            ValueCallback<Uri[]> cb = fileCb;
             fileCb = null;
+            Uri[] res = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            File cap = captureFile;
+            captureFile = null;
+            if (res == null && cap != null) {
+                if (resultCode == RESULT_OK && cap.length() > 0) res = new Uri[]{CaptureProvider.uriFor(this, cap)};
+                else cap.delete();                     // снимок отменили — пустой файл не оставляем
+            }
+            cb.onReceiveValue(res);
+        }
+    }
+
+    /** accept-типы страницы приходят расширениями («.pdf,.docx») — WebView кладёт их в EXTRA_MIME_TYPES
+     *  как есть, и системный выборщик не показывает документы. Раньше тип ещё и принудительно
+     *  ставился image/* — «Файл» в чате с ИИ вообще не мог прикрепить PDF/Word.
+     *  Приводим расширения к MIME-типам и не мешаем множественному выбору. */
+    private void fixChooserTypes(Intent i, WebChromeClient.FileChooserParams params) {
+        String[] acc = params == null ? null : params.getAcceptTypes();
+        if (acc == null || acc.length == 0) {
+            if (i.getType() == null) i.setType("*/*");
+            return;
+        }
+        List<String> mimes = new ArrayList<>();
+        for (String a : acc) {
+            String m = extToMime(a);
+            if (m != null && !mimes.contains(m)) mimes.add(m);
+        }
+        String cur = i.getType();
+        if (mimes.isEmpty()) {                      // расширения незнакомые — не фильтруем вообще
+            if (cur == null || !cur.contains("/")) i.setType("*/*");
+            i.removeExtra(Intent.EXTRA_MIME_TYPES);
+            return;
+        }
+        if (cur == null || !cur.contains("/")) i.setType(mimes.size() == 1 ? mimes.get(0) : "*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, mimes.toArray(new String[0]));
+    }
+
+    /** Расширение (или MIME) из accept= → MIME-тип для системного выборщика файла. */
+    private static String extToMime(String accept) {
+        if (accept == null) return null;
+        String s = accept.trim().toLowerCase();
+        if (s.isEmpty()) return null;
+        if (s.contains("/")) return s;
+        if (s.startsWith(".")) s = s.substring(1);
+        switch (s) {
+            case "pdf": return "application/pdf";
+            case "doc": return "application/msword";
+            case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xls": return "application/vnd.ms-excel";
+            case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "ppt": return "application/vnd.ms-powerpoint";
+            case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "txt": return "text/plain";
+            case "md": return "text/markdown";
+            case "csv": return "text/csv";
+            case "rtf": return "application/rtf";
+            case "jpg": case "jpeg": return "image/jpeg";
+            case "png": return "image/png";
+            case "gif": return "image/gif";
+            case "webp": return "image/webp";
+            case "mp3": return "audio/mpeg";
+            case "m4a": return "audio/mp4";
+            case "mp4": return "video/mp4";
+            case "zip": return "application/zip";
+            default: return null;
         }
     }
 

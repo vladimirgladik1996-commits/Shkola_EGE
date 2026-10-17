@@ -58,6 +58,12 @@ try:
     assert "заголовок" in SEEN[-1][0][0]["content"]; ok("для Word/PDF модель просят оформить документ")
     asyncio.run(collect(fmt="image"))
     assert "HTML" in SEEN[-1][0][0]["content"] and "инфографик" in SEEN[-1][0][0]["content"]; ok("для картинки модель пишет HTML-инфографику")
+    for f in ("docx", "pdf", "image"):
+        asyncio.run(collect(fmt=f))
+        assert "ВОПРОС" in SEEN[-1][0][0]["content"]
+    ok("для файловых форматов модель может переспросить — «ВОПРОС: …» вместо файла")
+    assert assist.chat_question("ВОПРОС: Какой класс?") == "Какой класс?" and assist.chat_question("просто ответ") is None \
+        and assist.chat_question("  вопрос: всё?  ") == "всё?"; ok("уточняющий вопрос («ВОПРОС: …») отделяется от готового ответа")
     # --- сбой модели ---
     async def bad_stream(*a, **kw):
         yield "text", "обро"

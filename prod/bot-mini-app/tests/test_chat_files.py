@@ -54,4 +54,28 @@ for badv in ("x", [{}], [{"name": "a", "mime": "", "data": "!!"}], [{"name": "a"
     try: cf.read_files(badv); raise SystemExit("не отклонено")
     except ValueError: pass
 ok("мусор во вложениях отклоняется")
+
+# --- PDF из HTML модели и картинки страниц для проверки Кими ---
+p2 = cf.html_pdf(HTML)
+assert p2[:5] == b"%PDF-" and len(p2) > 3000; ok("HTML модели конвертируется в PDF")
+shots = cf.render_shots("pdf", p2)
+assert shots and len(shots) <= 3 and all(base64.b64decode(s)[:2] == b"\xff\xd8" for s in shots); ok("страницы PDF рендерятся в картинки для проверки моделью")
+assert len(cf.render_shots("image", png)) == 1; ok("инфографика отдаётся на проверку одной картинкой")
+data2, name2, t2 = cf.build("pdf", HTML)
+assert data2[:5] == b"%PDF-" and name2.endswith(".pdf") and t2 == "Тема"; ok("build(pdf) собирает PDF из HTML модели")
+assert cf.build("pdf", "# Т\nтекст")[2] == "Т"; ok("build(pdf) собирает PDF и из обычного текста (без HTML)")
+assert cf.build("docx", HTML)[2] == "Тема"; ok("HTML в ответе docx не ломает сборку — текст вытаскивается")
+assert cf.render_shots("pdf", b"garbage") == []; ok("битый файл не роняет проверку — просто нет картинок")
+
+# --- картинки из вложений пользователя в файлах (<img src="attach:имя">) ---
+solid = io.BytesIO(); Image.new("RGB", (600, 200), (200, 30, 30)).save(solid, "PNG")
+bimg = "data:image/png;base64," + b64(solid.getvalue())
+out = cf.resolve_attach('<html><body><img src="attach:a.png" width="120"><img src="attach:нет.png"><img src="https://evil/x.png"><p>т</p></body></html>', {"a.png": bimg})
+assert bimg in out and "attach:" not in out and "evil" not in out and out.count("<img") == 1; ok("картинки вложений подставляются, чужие ссылки убираются")
+p3, _, _ = cf.build("pdf", '<html><head><title>Т</title></head><body><img src="attach:a.png" width="600" height="200"></body></html>', {"a.png": bimg})
+assert p3[:5] == b"%PDF-"
+im = Image.open(io.BytesIO(base64.b64decode(cf.render_shots("pdf", p3)[0]))).convert("RGB")
+red = sum(1 for y in range(0, im.height, 6) for x in range(0, im.width, 6)
+          if im.getpixel((x, y))[0] > 120 and im.getpixel((x, y))[0] > im.getpixel((x, y))[1] + 60)
+assert red > 20; ok("PDF собирается с картинкой из вложения — она реально видна на странице")
 print("test_chat_files: OK")

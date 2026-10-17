@@ -31,7 +31,7 @@ case "$VC" in ''|*[!0-9]*) VC=1 ;; esac
 
 echo "==> javac"
 rm -rf build && mkdir -p build/classes build/dex
-javac --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classes src/ru/kabinet/tutor/MainActivity.java
+javac --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classes $(find src -name "*.java")
 
 echo "==> d8"
 "$BT/d8" --lib "$JAR" --release --output build/dex build/classes/ru/kabinet/tutor/*.class

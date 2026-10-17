@@ -1,4 +1,4 @@
-import asyncio, collections, hashlib, hmac, io, json, logging, os, re, sqlite3, time
+import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
 from datetime import date, timedelta
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl
@@ -1356,14 +1356,15 @@ def _pdf_link_uid(request):
 def authorized(request):
     """200 — можно; 401 — подпись верна, но вход не выполнен; 403 — подделка/устарело/чужой.
     Три способа: X-Init (Telegram Mini App, подпись initData), X-Session (токен standalone-приложения)
-    или подписная ссылка ?tok= — только для /api/week.pdf (см. pdf_token)."""
+    или подписная ссылка ?tok= — для /api/week.pdf и файлов «Чата с ИИ» (см. pdf_token/chat_file_token)."""
     try:
         raw = request.headers.get("X-Init", "")
         if not raw:
             ses = request.headers.get("X-Session", "")
             if ses:
                 return 200 if auth.check_token(ses) is not None else 403   # 0 — валидный standalone-пользователь (APK)
-            return 200 if _pdf_link_uid(request) is not None else 403
+            uid = _pdf_link_uid(request)
+            return 200 if (uid if uid is not None else _chat_file_uid(request)) is not None else 403
         if len(raw) > 8192:
             return 403
         d = dict(parse_qsl(raw))
@@ -1515,7 +1516,7 @@ async def api_material_part(request):
 
 def user_id(request):
     """Кто спрашивает: из подписи initData (Telegram), из токена X-Session (standalone)
-    или из подписной ссылки на PDF (?tok=)."""
+    или из подписной ссылки на PDF / файл чата (?tok=)."""
     try:
         uid = json.loads(dict(parse_qsl(request.headers.get("X-Init", ""))).get("user", "{}")).get("id")
     except (ValueError, RecursionError, TypeError):
@@ -1525,7 +1526,8 @@ def user_id(request):
     ses = auth.check_token(request.headers.get("X-Session", ""))
     if ses is not None:
         return ses                                    # 0 — standalone-вход (APK), не путать с «нет пользователя»
-    return _pdf_link_uid(request)
+    uid = _pdf_link_uid(request)
+    return uid if uid is not None else _chat_file_uid(request)
 
 def monday(s):
     if not isinstance(s, str) or not DAY_FMT.fullmatch(s):
@@ -2000,15 +2002,84 @@ async def api_fragment(request):
     if heard:
         res["heard"] = heard
     return web.json_response(res)
+# ---------- файлы ответов «Чата с ИИ»: карточка в чате получает ссылку на скачивание ----------
+CHAT_FILES = {}                                    # токен → [uid, байты, имя, время]
+CHAT_FILE_TTL = 30 * 60                            # полчаса: дольше файл не нужен — копия уже в Telegram
+
+
+def chat_file_token(uid, tok):
+    """Подпись ссылки на файл чата — та же схема, что у подписных ссылок на PDF (см. check_pdf_token)."""
+    exp = int(time.time()) + CHAT_FILE_TTL
+    sig = hmac.new(TOKEN.encode(), f"chatfile:{uid}:{tok}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{exp}.{uid}.{sig}"
+
+
+def check_chat_file_token(raw, tok):
+    """tg_id — ссылка ведёт на ЭТОТ файл и подписана нами; иначе None. Подпись сверяется за постоянное время."""
+    try:
+        exp_s, uid_s, sig = raw.split(".", 2)
+        exp, uid = int(exp_s), int(uid_s)
+    except (ValueError, AttributeError):
+        return None
+    now = time.time()
+    if not (now <= exp <= now + CHAT_FILE_TTL) or not (0 <= uid <= 2_000_000_000) or not isinstance(tok, str):
+        return None
+    want = hmac.new(TOKEN.encode(), f"chatfile:{uid}:{tok}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return uid if hmac.compare_digest(sig, want) else None
+
+
+def _chat_file_uid(request):
+    """Действующая подписная ссылка на файл чата с ИИ → tg_id; иначе None."""
+    if not request.path.startswith("/api/chat_file/"):
+        return None
+    return check_chat_file_token(request.query.get("tok", ""), request.match_info.get("tok", ""))
+
+
+def chat_file_put(uid, data, name):
+    """Кладёт готовый файл в память и возвращает подписанную ссылку для карточки в чате (см. api_chat_file)."""
+    now = time.time()
+    for t in [t for t, r in CHAT_FILES.items() if now - r[3] > CHAT_FILE_TTL]:
+        CHAT_FILES.pop(t, None)
+    tok = secrets.token_urlsafe(12)
+    CHAT_FILES[tok] = [uid, data, name, now]
+    return f"/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"
+
+
+@guarded
+async def api_chat_file(request):
+    """Файл ответа чата с ИИ для карточки в чате — та же копия, что ушла ботом в Telegram.
+    Карточка открывается обычным переходом по ссылке (без X-Init/X-Session), поэтому ссылка
+    подписная (?tok=, как «Поделиться PDF»), файл живёт полчаса и только у своего владельца."""
+    tok = request.match_info["tok"]
+    rec = CHAT_FILES.get(tok)
+    if not rec:
+        return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
+    uid, data, name, ts = rec
+    mine = user_id(request)
+    if mine is not None and mine != uid:
+        return web.Response(status=403, text="Нет доступа к этому файлу")
+    if time.time() - ts > CHAT_FILE_TTL:
+        CHAT_FILES.pop(tok, None)
+        return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
+    return web.Response(body=data, headers={"Content-Type": "application/octet-stream",
+                                            "Content-Disposition": 'attachment; filename="%s"' % re.sub(r'["\\\r\n]', "'", name)})
+
+
 @guarded
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
     format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
     (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
-    Готовый ответ приходит ОДНОВРЕМЕННО и в чат приложения, и в чат с ботом (файл — тоже в чат с ботом).
+    Готовый ответ приходит ОДНОВРЕМЕННО и в чат приложения, и в чат с ботом (файл — тоже в чат с ботом),
+    а в чате появляется карточка файла со ссылкой на скачивание.
+    PDF собирается из HTML, который рисует Кими; картинка — из HTML-инфографики. Перед отдачей Кими
+    проверяет готовый файл по картинкам страниц (assist.check_render): не поехала ли вёрстка и
+    соответствует ли запросу; нашлись огрехи — один заход на починку HTML (assist.fix_html).
+    Не хватило данных для ответа — модель отвечает строкой «ВОПРОС: …», и это обычная реплика в чате.
     Ответ — NDJSON-стрим событий (по одному JSON в строке):
-      {"t":"status","v":"read|think|write|file|pdf|png"} — шаг работы Вишенки (читает/думает/пишет/оформляет/
-        конвертирует HTML в PDF/рисует инфографику); каждый шаг — отдельное сообщение в диалоге,
+      {"t":"status","v":"read|think|write|file|pdf|png|check"} — шаг работы Вишенки (читает/думает/пишет/
+        оформляет/конвертирует HTML в PDF/рисует инфографику/проверяет готовый файл); каждый шаг —
+        отдельное сообщение в диалоге,
       {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
       {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"tg"} — ответ ушёл и в Telegram,
       {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён."""
@@ -2021,6 +2092,12 @@ async def api_chat(request):
         raise ValueError
     fmt = assist.chat_format(j.get("format"))
     images, docs, names = chatfiles.read_files(j.get("files"))
+    attach, img_names = {}, []                        # картинки вложений → <img src="attach:имя"> в файлах
+    for f in (j.get("files") or []):
+        if isinstance(f, dict) and isinstance(f.get("mime"), str) and f["mime"].startswith("image/"):
+            attach[f["name"]] = "data:%s;base64,%s" % (f["mime"], f["data"])
+            img_names.append(f["name"])
+    task = hist[-1]["content"]                   # сама задача — для проверки готового файла моделью
     uid = user_id(request)
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
@@ -2034,7 +2111,7 @@ async def api_chat(request):
         await resp.write_eof()
         return resp
     reply = ""
-    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt):
+    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt, img_names=img_names or None):
         if kind in ("status", "think", "text"):
             if kind == "text":
                 reply += v
@@ -2047,53 +2124,78 @@ async def api_chat(request):
         else:                                   # done
             reply = v
     log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=True", uid, len(hist), deep, fmt, len(names))
-    if fmt == "text":
-        # готовый ответ приходит и в чат приложения, и в чат с бота — одним и тем же текстом;
+    ask = assist.chat_question(reply) if fmt != "text" else None
+    if fmt == "text" or ask is not None:
+        # готовый ответ (или уточняющий вопрос) приходит и в чат приложения, и в чат с бота;
         # доставка в Telegram стартует одновременно с отдачей ответа в чат
-        tg = asyncio.create_task(tg_chat_answer(request.app.get("bot"), uid, reply))
-        await send({"t": "done", "reply": reply, "enabled": True})
+        say = ask if ask is not None else reply
+        tg = asyncio.create_task(tg_chat_answer(request.app.get("bot"), uid, say))
+        await send({"t": "done", "reply": say, "enabled": True})
         if await tg:
             await send({"t": "tg"})
         await resp.write_eof()
         return resp
-    try:
-        if fmt == "image":                  # конвейер картинки виден по шагам: HTML → PDF → PNG
-            await send({"t": "status", "v": "pdf"})
-            pdf = await asyncio.get_running_loop().run_in_executor(None, chatfiles.html_pdf, reply)
-            await send({"t": "status", "v": "png"})
-            data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
-            title = chatfiles.image_title(reply) if isinstance(reply, str) else ""
-            name = chatfiles.file_stem(title or "Инфографика") + ".png"
-            title = title or "Инфографика"
-        else:
-            await send({"t": "status", "v": "file"})
-            data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, reply)
-    except Exception as e:                       # модель ответила не тем форматом — просто «не отвечает»
-        log.warning("chat file: не собрался (%s): %r", fmt, e)
+    data = name = title = None
+    warn, src = "", reply
+    for attempt in (1, 2):                       # вторая попытка — после того, как Кими поправит HTML
+        try:
+            if fmt == "image":                  # конвейер картинки виден по шагам: HTML → PDF → PNG
+                await send({"t": "status", "v": "pdf"})
+                pdf = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: chatfiles.html_pdf(chatfiles.resolve_attach(src, attach)))
+                await send({"t": "status", "v": "png"})
+                data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
+                title = chatfiles.image_title(src) if isinstance(src, str) else ""
+                name = chatfiles.file_stem(title or "Инфографика") + ".png"
+                title = title or "Инфографика"
+            else:
+                await send({"t": "status", "v": "file"})
+                data, name, title = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: chatfiles.build(fmt, src, attach))
+        except Exception as e:                   # модель ответила не тем форматом — просто «не отвечает»
+            log.warning("chat file: не собрался (%s, попытка %s): %r", fmt, attempt, e)
+            data = None
+            break
+        await send({"t": "status", "v": "check"})
+        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.render_shots, fmt, data)
+        ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет: не поехала ли вёрстка
+        if ok:
+            break
+        warn = problems
+        log.warning("chat file: проверка нашла огрехи (%s, попытка %s): %s", fmt, attempt, problems)
+        fixed = await assist.fix_html(task, src, problems) if attempt == 1 and fmt in ("pdf", "image") else None
+        if not fixed:
+            break
+        src = fixed
+    if not data:
         await send({"t": "fail", "why": "build"})
         await resp.write_eof()
         return resp
+    furl = chat_file_put(uid, data, name)        # тот же файл — карточкой в чате с ИИ…
     tg_bot, sent = request.app.get("bot"), False
     if type(uid) is int and uid > 0 and tg_bot is not None:
         try:
             f = BufferedInputFile(data, filename=name)
             if fmt == "image":
-                await tg_bot.send_photo(uid, f, caption=title[:200])
+                await tg_bot.send_photo(uid, f, caption=title[:200])   # …и в диалог Telegram-бота
             else:
                 await tg_bot.send_document(uid, f, caption=title[:200])
             sent = True
         except TelegramAPIError as e:
             log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
-    if not sent and fmt != "image":              # документ без доставки бесполезен; картинку показываем прямо в чате
+    if not sent and not furl:                    # ни в чат, ни в Telegram — документ бесполезен
         await send({"t": "fail", "why": "send"})
         await resp.write_eof()
         return resp
     file = {"name": name, "kind": fmt, "sent": sent}
+    if furl:
+        file["url"] = furl
     if fmt == "image":
         file["img"] = chatfiles.data_url(data)
-        reply = "Готово: инфографика."
-    else:
-        reply = "Готово: документ сформирован."
+    reply = ("Готово: инфографика" if fmt == "image" else "Готово: документ сформирован")
+    reply += " — карточка файла в этом чате, " + ("копия пришла в Telegram." if sent else "в Telegram отправить не получилось.")
+    if fmt in ("pdf", "image"):
+        reply += (" Кими проверила файл: есть огрехи оформления — " + warn) if warn else " Кими проверила файл: оформление чистое."
     await send({"t": "done", "reply": reply, "enabled": True, "file": file})
     if sent:
         await send({"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом
@@ -2160,6 +2262,7 @@ def make_app():
     app.router.add_post("/api/voice", api_voice)
     app.router.add_post("/api/stt", api_stt)
     app.router.add_post("/api/chat", api_chat)
+    app.router.add_get("/api/chat_file/{tok}", api_chat_file)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)
