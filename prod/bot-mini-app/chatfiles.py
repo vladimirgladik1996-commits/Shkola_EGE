@@ -345,7 +345,9 @@ def build(fmt, res, attach=None):
     для image — HTML-инфографика. attach — картинки из вложений пользователя (имя → data-URI) для
     <img src=\"attach:имя\"> в HTML. После сборки файл можно показать модели на проверку:
     render_shots(fmt, data) → картинки страниц."""
-    if isinstance(res, str) and "<img" in res.lower():
+    if not isinstance(res, str) or not res.strip():
+        raise ValueError                        # не строка или пустой ответ — файла не будет
+    if "<img" in res.lower():
         res = resolve_attach(res, attach)
     if fmt == "image":
         title = _html_title(res) if isinstance(res, str) else ""

@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- микрофон нужен только голосовому помощнику: устройства без него не отсеиваем -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- Android 11+: без <queries> система скрывает пакеты камеры (package visibility), и
+         resolveActivity() для ACTION_IMAGE_CAPTURE возвращает null — «Снять камерой» не открывалось -->
+    <queries>
+        <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
+        <intent><action android:name="android.intent.action.GET_CONTENT" /></intent>
+    </queries>
     <application
         android:label="Надежда"
         android:icon="@mipmap/ic_launcher"

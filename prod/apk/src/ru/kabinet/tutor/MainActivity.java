@@ -207,19 +207,25 @@ public class MainActivity extends Activity {
                 fileCb = cb;
                 try {
                     if (params != null && params.isCaptureEnabled()) {   // «Снять камерой»: снимок сразу в наш файл
-                        Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                        if (cam.resolveActivity(getPackageManager()) != null) {
+                        // ВАЖНО: resolveActivity() на Android 11+ без <queries> в манифесте всегда возвращает null
+                        // (package visibility): раньше из-за такой «проверки» камера молча не открывалась, и тихо
+                        // уходили в галерею. Проверяем делом — startActivityForResult сам бросит исключение.
+                        try {
                             File dir = new File(getCacheDir(), "captures");
                             if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("captures");
                             captureFile = new File(dir, "cap-" + System.currentTimeMillis() + ".jpg");
                             Uri out = CaptureProvider.uriFor(MainActivity.this, captureFile);
+                            Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                             cam.putExtra(MediaStore.EXTRA_OUTPUT, out);
                             cam.setClipData(ClipData.newRawUri("", out));   // grant-флаги доходят до камеры и на старых API
                             cam.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                             startActivityForResult(cam, FILE_CHOOSER_REQ);
                             return true;
+                        } catch (Exception e) {
+                            // камеры нет или она недоступна — сообщаем ГРОМКО и уходим в выбор картинки
+                            captureFile = null;
+                            Toast.makeText(MainActivity.this, "Камера недоступна — открываю выбор картинки", Toast.LENGTH_LONG).show();
                         }
-                        // приложения камеры на устройстве нет — уходим в обычный выбор картинки
                     }
                     Intent i = params != null ? params.createIntent() : new Intent(Intent.ACTION_GET_CONTENT);
                     i.addCategory(Intent.CATEGORY_OPENABLE);
