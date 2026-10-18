@@ -648,6 +648,26 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-chip svg,.aif svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .aic-chip .x{position:absolute;top:0;right:0;width:28px;height:28px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px;color:#fff}
 .aic-chip .x i{width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);font-style:normal;font-size:14px;line-height:20px;text-align:center}
+/* «Снять камерой»: превью камеры + несколько снимков подряд (см. chCam*) */
+.aic-cam{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column;justify-content:space-between}
+.aic-cam[hidden]{display:none}
+.aic-cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.aic-cam.flash video{filter:brightness(1.8)}
+.aic-cam-top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 14px;color:#fff;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.aic-cam-top b{font-size:14px}
+.aic-cam-x{flex:none;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;display:grid;place-items:center}
+.aic-cam-x svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.aic-cam-bar{position:relative;z-index:2;display:flex;align-items:center;gap:12px;padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.68))}
+.aic-cam-th{flex:1;display:flex;gap:8px;overflow-x:auto;min-height:52px}
+.aic-cam-th:empty{display:none}
+.aic-cam-t{position:relative;flex:none;width:52px;height:52px;border-radius:10px;overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
+.aic-cam-t img{width:100%;height:100%;object-fit:cover}
+.aic-cam-t .x{position:absolute;top:0;right:0;width:24px;height:24px;border-radius:0 0 0 10px;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:24px;text-align:center}
+.aic-cam-sh{flex:none;width:68px;height:68px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.35)}
+.aic-cam-sh:active{transform:scale(.94)}
+.aic-cam-sh:disabled{opacity:.45}
+.aic-cam-ok{flex:none;min-width:88px;height:44px;border-radius:22px;background:var(--acc);color:#fff;font-size:14px;font-weight:700}
+.aic-cam-ok:disabled{opacity:.45}
 .aim .aia{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;white-space:normal}
 .aim .aia:last-child{margin-bottom:0}
 .aim .aia img{display:block;max-width:100%;max-height:220px;border-radius:12px}
@@ -2011,7 +2031,7 @@ function chatBar(){
   <div class="aic-menu" id="aic-f" data-btn="aic-fb" role="menu" hidden><div class="aic-cap">Выберите формат ответа</div>${CH_FM.map((f,k)=>`<button type="button" role="menuitemradio" class="${k==chFmt?"on":""}" aria-checked="${k==chFmt}" onclick="chFmtSet(${k})"><i class="aic-mi">${f.i}</i><span><b>${f.n}</b><small>${f.s}</small></span></button>`).join("")}</div>
   <div class="aic-menu" id="aic-a" data-btn="aic-ab" role="menu" hidden><div class="aic-cap">Прикрепите материал к задаче</div>
     <button type="button" role="menuitem" onclick="chPick('aic-ph')"><i class="aic-mi">${CH_IC.img}</i><span><b>Фото из галереи</b></span></button>
-    <button type="button" role="menuitem" onclick="chPick('aic-cam')"><i class="aic-mi">${CH_IC.cam}</i><span><b>Снять камерой</b></span></button>
+    <button type="button" role="menuitem" onclick="chCam()"><i class="aic-mi">${CH_IC.cam}</i><span><b>Снять камерой</b><small>Несколько фото подряд</small></span></button>
     <button type="button" role="menuitem" onclick="chPick('aic-fi')"><i class="aic-mi">${CH_IC.file}</i><span><b>Файл</b><small>PDF, Word, TXT</small></span></button></div>
   <div class="aic-box${chRec||chProc?" rec":""}${chProc?" proc":""}"><div class="aic-att" id="aic-att">${chAttHtml()}</div>
     <button type="button" id="aic-md" class="aic-ib${chDeep?" deep":""}" aria-haspopup="menu" aria-expanded="false" aria-label="${chDeep?"Режим: долгий ответ":"Режим: быстрый ответ"}" onclick="chMenu('aic-m')">${chDeep?CH_IC.spark:CH_IC.bolt}</button>
@@ -2111,6 +2131,73 @@ async function chPicked(inp){
     }catch(e){toast("Не получилось прочитать файл")}
     chAttUi()}
   if(chBytes(chAtt)>CH_BYTES){chAtt=[];chAttUi();toast("Вложения больше 8 МБ в сумме — прикрепите меньше")}}
+/* «Снять камерой»: камера открывается ПРЯМО в приложении (getUserMedia), а не через системный
+   выборщик — на части WebView атрибут capture у <input> игнорируется, и «Снять камерой» открывал
+   раздел «Фото» вместо камеры. Снимков можно сделать сколько угодно подряд (каждый — нажатием
+   затвора), все они прикрепляются к задаче одной кнопкой «Готово». Запасной путь — родной
+   <input capture="environment">: если камеру открыть не удалось (нет API, отказ в разрешении),
+   уходит системная камера (в APK — onShowFileChooser → launchCamera). */
+let chCamS=[],chCamStream=null;
+function chCamUi(){   // разметка создаётся один раз и живёт вне #app — переходы между разделами её не трогают
+  let o=$("#aic-cam-ui");if(o)return o;
+  o=document.createElement("div");o.id="aic-cam-ui";o.className="aic-cam";o.hidden=true;
+  o.innerHTML=`<video id="aic-cam-v" playsinline autoplay muted></video>
+    <div class="aic-cam-top"><button type="button" class="aic-cam-x" aria-label="Отменить съёмку" onclick="chCamClose(1)">${CH_IC.x}</button><b id="aic-cam-n">Снимков: 0</b></div>
+    <div class="aic-cam-bar"><div class="aic-cam-th" id="aic-cam-th"></div>
+      <button type="button" class="aic-cam-sh" id="aic-cam-sh" aria-label="Сделать фото" onclick="chCamShot()"></button>
+      <button type="button" class="aic-cam-ok" id="aic-cam-ok" onclick="chCamDone()">Готово</button></div>`;
+  document.body.appendChild(o);
+  return o}
+function chCamTh(){
+  const th=$("#aic-cam-th"),n=$("#aic-cam-n"),ok=$("#aic-cam-ok"),sh=$("#aic-cam-sh"),full=chAtt.length+chCamS.length>=CH_MAX;
+  if(th)th.innerHTML=chCamS.map((d,i)=>`<span class="aic-cam-t"><img src="${d}" alt="Снимок ${i+1}"><button type="button" class="x" aria-label="Убрать снимок" onclick="chCamDel(${i})">×</button></span>`).join("");
+  if(n)n.textContent="Снимков: "+chCamS.length;
+  if(ok){ok.textContent=chCamS.length?"Готово ("+chCamS.length+")":"Готово";ok.disabled=!chCamS.length}
+  if(sh)sh.disabled=full}
+function chCamDel(i){chCamS.splice(i,1);chCamTh()}
+async function chCam(){
+  chMenu();
+  const A=window.Android||{};
+  if(A.camStatus){   /* обёртка APK: системный диалог поверх pending-запроса WebView отменяет его на
+     части устройств — сначала разрешение камеры, getUserMedia зовём уже на следующее нажатие */
+    const st=A.camStatus();
+    if(st=="prompt"){try{A.askCamera()}catch(_){};toast("Разрешите камеру — и нажмите «Снять камерой» ещё раз");return}
+    if(st=="denied"){toast("Нет доступа к камере — включите его в настройках приложения");try{A.openSettings&&A.openSettings()}catch(_){};return}}
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){chPick("aic-cam");return}   // камеры в WebView нет — системная
+  const o=chCamUi(),v=$("#aic-cam-v");
+  o.hidden=false;chCamS=[];chCamTh();
+  try{
+    chCamStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    v.srcObject=chCamStream;try{await v.play()}catch(_){}
+  }catch(e){
+    chCamClose(1);
+    toast("Не получилось открыть камеру — открываю системную");
+    try{chPick("aic-cam")}catch(_){} }}
+function chCamShot(){   // один кадр из превью → JPEG ≤1600 px (те же правила, что у фото из галереи)
+  const v=$("#aic-cam-v");
+  if(!v||!v.videoWidth){toast("Камера ещё не готова — подождите секунду");return}
+  if(chAtt.length+chCamS.length>=CH_MAX){toast("Не больше "+CH_MAX+" вложений");return}
+  const k=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
+  c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+  const d=c.toDataURL("image/jpeg",.85);
+  const total=chBytes(chAtt)+chBytes(chCamS.map(x=>({d:x.split(",")[1]||""})))+Math.floor((d.split(",")[1]||"").length*.75);
+  if(total>CH_BYTES){toast("Вложения больше 8 МБ в сумме — прикрепите меньше");return}
+  chCamS.push(d);chCamTh();
+  const o=$("#aic-cam-ui");if(o){o.classList.add("flash");setTimeout(()=>o.classList.remove("flash"),120)}}
+function chCamDone(){   // «Готово»: все снимки одной пачкой уходят в вложения задачи
+  const shots=chCamS.slice();
+  chCamClose(0);
+  for(const d of shots){
+    if(chAtt.length>=CH_MAX){toast("Не больше "+CH_MAX+" вложений");break}
+    chAtt.push({n:"photo-"+Date.now().toString().slice(-6)+"-"+(chAtt.length+1)+".jpg",k:"img",img:d,d:d.split(",")[1],mime:"image/jpeg"})}
+  chAttUi()}
+function chCamClose(discard){   // поток камеры всегда выключаем: иначе индикатор камеры горит после закрытия
+  if(chCamStream){try{chCamStream.getTracks().forEach(t=>t.stop())}catch(_){};chCamStream=null}
+  const v=$("#aic-cam-v");if(v)try{v.srcObject=null}catch(_){}
+  const o=$("#aic-cam-ui");if(o)o.hidden=true;
+  if(discard)chCamS=[];
+  chCamTh()}
 /* Голосовой ввод в чате: запись через MediaRecorder → распознавание Whisper на сервере (/api/stt) —
    тот же путь, что у голосовых команд Вишенки. Web Speech API остаётся только запасным вариантом:
    в WebView Telegram его либо нет, либо он понимает русский заметно хуже Whisper'а */

@@ -9,7 +9,9 @@
 только при первом обращении; дальше запись стартует без вопросов.
 
 Инварианты:
-  1. Всего ОДИН вызов getUserMedia во всём мини-аппе — внутри micTake(); кнопки сами его не зовут.
+  1. Ровно ОДИН вызов getUserMedia на МИКРОФОН — внутри micTake(); кнопки сами его не зовут.
+     (Камера «Снять камерой» — отдельный поток видео: свой один вызов в chCam() и свой
+     getTracks() в chCamClose(); эти два инварианта проверяются с точностью до двух мест.)
   2. micTake() переиспользует живой поток (проверка готовности треков) и пересоздаёт его,
      только если треки умерли.
   3. Остановка записи НЕ останавливает общий поток (иначе следующее нажатие снова спросит
@@ -40,10 +42,12 @@ def fn(name):
     return rest[:end.start()] if end else rest
 
 
-# --- 1. один вызов getUserMedia на весь мини-апп -----------------------------
+# --- 1. один вызов getUserMedia на микрофон (второй — на камеру «Снять камерой») ---
 calls = re.findall(r"navigator\.mediaDevices\.getUserMedia\(", html)
-assert len(calls) == 1, f"getUserMedia вызывается из {len(calls)} мест — разрешение просят заново при каждой записи"
-ok("getUserMedia вызывается ровно в одном месте — при взятии общего потока")
+assert len(calls) == 2, f"getUserMedia вызывается из {len(calls)} мест — ожидается ровно два: микрофон (micTake) и камера (chCam)"
+assert "getUserMedia" in fn("micTake") and "getUserMedia" in fn("chCam"), \
+    "getUserMedia должен жить только в micTake() (микрофон) и chCam() (камера) — кнопки сами его не зовут"
+ok("getUserMedia вызывается ровно в двух местах: micTake() — микрофон, chCam() — камера")
 
 assert "function micTake(" in html and "function micDrop(" in html, "нет общего микрофона сеанса (micTake/micDrop)"
 ok("микрофон сеанса выделен: micTake() — взять/переиспользовать, micDrop() — освободить")
@@ -62,9 +66,9 @@ ok("кнопки виджета и микрофон чата работают ч
 # --- 2. остановка записи не убивает общий поток ------------------------------
 drop = fn("micDrop")
 assert "getTracks" in drop, "micDrop не освобождает поток — микрофон останется занятым навсегда"
-assert len(re.findall(r"\.getTracks\(\)", html)) == 1, \
-    "поток останавливается не только в micDrop() — запись гасит общий микрофон, и разрешение спросят снова"
-ok("getTracks() живёт только в micDrop(): конец записи ≠ конец микрофона")
+assert len(re.findall(r"\.getTracks\(\)", html)) == 2 and "getTracks" in fn("chCamClose"), \
+    "потоки должны останавливаться только в micDrop() (микрофон) и chCamClose() (камера) — иначе запись гасит общий микрофон, и разрешение спросят снова"
+ok("getTracks() живёт только в micDrop() и chCamClose(): конец записи ≠ конец микрофона")
 
 for f in ("voiceStop", "chRecKill", "chSendRec"):
     assert "getTracks" not in fn(f), f"{f} останавливает общий поток — следующая запись снова спросит разрешение"

@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
     private static final int CAMERA_REQ = 1003;          // «Снять камерой»: снимок возвращается отдельно от выбора файла
+    private static final int CAMERA_PERM_REQ = 1004;     // встроенная камера «Снять камерой» (getUserMedia на странице)
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
     private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
     private File micFile;
@@ -170,8 +171,9 @@ public class MainActivity extends Activity {
         // без onShowFileChooser WebView молча игнорирует <input type="file">
         // («Фото ученика → Выбрать из галереи» ничего не открывало).
         web.setWebChromeClient(new WebChromeClient() {
-            /** Голосовой помощник: страница просит микрофон (getUserMedia). Без этого обработчика WebView
-             *  молча отклоняет запрос. Разрешаем только звук и только нашему серверу, после системного запроса. */
+            /** Страница просит микрофон и/или камеру (getUserMedia: голосовой помощник и встроенная
+             *  съёмка «Снять камерой»). Без этого обработчика WebView молча отклоняет запрос.
+             *  Разрешаем только звук/видео и только нашему серверу, после системного запроса. */
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(new Runnable() {
@@ -181,20 +183,34 @@ public class MainActivity extends Activity {
                             String nowUrl = web == null ? null : web.getUrl();
                             String nowHost = nowUrl == null ? null : Uri.parse(nowUrl).getHost();
                             boolean ours = reqHost != null && (reqHost.equals(Uri.parse(url).getHost()) || reqHost.equals(nowHost));
-                            boolean audio = false;
-                            for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
-                            if (!ours || !audio) { request.deny(); return; }
-                            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                            boolean audio = false, video = false;
+                            for (String r : request.getResources()) {
+                                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) video = true;
+                            }
+                            if (!ours || (!audio && !video)) { request.deny(); return; }
+                            boolean micOk = !audio || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+                            boolean camOk = !video || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+                            if (micOk && camOk) {
+                                List<String> grant = new ArrayList<>();
+                                if (audio) grant.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE);
+                                if (video) grant.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+                                request.grant(grant.toArray(new String[0]));
                                 return;
                             }
                             // ВАЖНО: системный диалог поверх pending-запроса WebView отменяет его на части
                             // устройств (onPermissionRequestCanceled), и getUserMedia падает без объяснений —
                             // «Микрофон недоступен». Поэтому запрос страницы закрываем СРАЗУ, разрешение
                             // просим отдельно, а страница повторяет нажатие (см. виджет: micStatus/askMic).
-                            request.deny();
-                            askMicPermission(true);
-                            Toast.makeText(MainActivity.this, "Разрешите микрофон — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
+                            if (!micOk) {
+                                request.deny();
+                                askMicPermission(true);
+                                Toast.makeText(MainActivity.this, "Разрешите микрофон — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
+                            } else {
+                                request.deny();
+                                askCameraPermission(true);
+                                Toast.makeText(MainActivity.this, "Разрешите камеру — и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show();
+                            }
                         } catch (Exception ignored) {
                             // запрос WebView мог быть уже отменён (onPermissionRequestCanceled) — не роняем приложение
                         }
@@ -303,13 +319,29 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * Запрос камеры — встроенная съёмка «Снять камерой» (getUserMedia на странице).
+     * Та же схема, что у микрофона: pending-запрос WebView не держим, разрешение просим
+     * отдельно, страница повторяет нажатие (см. chCam: camStatus/askCamera).
+     * Запасной путь «Снять камерой» (системная камера через ACTION_IMAGE_CAPTURE)
+     * разрешения не требует и продолжает работать без него.
+     */
+    private void askCameraPermission(boolean force) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) return;
+        if (!force && prefs.getBoolean("camAsked", false)
+                && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) return;
+        prefs.edit().putBoolean("camAsked", true).apply();
+        requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERM_REQ);
+    }
+
+    /**
      * JS-мост для страницы (вызывается как Android.*):
      *  - sharePdf(url, name) — «Поделиться PDF»: скачивание + системный chooser;
      *  - shareFile(url, name, mime) — «Скачать/Переслать» файла из чата ИИ в любом формате (docx/pdf/png);
      *  - micStatus() — состояние микрофона: granted / denied / prompt — виджет решает,
      *    звать ли getUserMedia или сразу вести пользователя в настройки;
      *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
-     *  - openSettings() — настройки приложения: включить микрофон после «больше не спрашивать».
+     *  - camStatus() / askCamera() — то же самое для камеры («Снять камерой» — съёмка в приложении);
+     *  - openSettings() — настройки приложения: включить микрофон/камеру после «больше не спрашивать».
      * Методы моста вызываются из фонового потока — работу переносим в UI-поток.
      */
     private class JsBridge {
@@ -346,6 +378,23 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Состояние камеры для встроенной съёмки «Снять камерой»: granted / denied / prompt —
+         *  страница решает, звать ли getUserMedia или сразу вести пользователя в настройки. */
+        @JavascriptInterface
+        public String camStatus() {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) return "granted";
+            if (prefs.getBoolean("camAsked", false)
+                    && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) return "denied";
+            return "prompt";
+        }
+
+        @JavascriptInterface
+        public void askCamera() {
+            runOnUiThread(new Runnable() {
+                public void run() { askCameraPermission(true); }
+            });
+        }
+
         @JavascriptInterface
         public void openSettings() {
             runOnUiThread(new Runnable() {
@@ -354,7 +403,7 @@ public class MainActivity extends Activity {
                         startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.parse("package:" + getPackageName())));
                     } catch (Exception e) {
-                        Toast.makeText(MainActivity.this, "Откройте настройки приложения и включите микрофон", Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, "Откройте настройки приложения и включите микрофон или камеру", Toast.LENGTH_LONG).show();
                     }
                 }
             });
@@ -631,12 +680,20 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    /** Ответ пользователя на системный запрос микрофона. Страница у него pending-запроса не держит — просто подсказываем следующий шаг. */
+    /** Ответ пользователя на системный запрос микрофона/камеры. Страница у него pending-запроса не держит — просто подсказываем следующий шаг. */
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != MIC_PERM_REQ) return;
+        if (requestCode != MIC_PERM_REQ && requestCode != CAMERA_PERM_REQ) return;
         boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        if (requestCode == CAMERA_PERM_REQ) {
+            if (granted) {
+                Toast.makeText(this, "Камера разрешена — нажмите кнопку ещё раз", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Нет доступа к камере — включите его в настройках приложения", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (granted) {
             Toast.makeText(this, "Микрофон разрешён — нажмите кнопку ещё раз", Toast.LENGTH_SHORT).show();
         } else {

@@ -3,6 +3,9 @@
     package="ru.kabinet.tutor.dev">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- камера: встроенная съёмка «Снять камерой» в чате ИИ (getUserMedia на странице);
+         запасной путь (системная камера через ACTION_IMAGE_CAPTURE) разрешения не требует -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <!-- микрофон нужен только голосовому помощнику: устройства без него не отсеиваем -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- Android 11+: без <queries> система скрывает пакеты камеры (package visibility), и
@@ -11,8 +14,9 @@
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
         <intent><action android:name="android.intent.action.GET_CONTENT" /></intent>
     </queries>
-    <!-- съёмка камерой из чата ИИ («Снять камерой»): разрешения CAMERA не нужно —
-         снимок делает системное приложение камеры и пишет его в наш content:// URI -->
+    <!-- съёмка камерой из чата ИИ («Снять камерой»): основной путь — встроенная камера приложения
+         (getUserMedia, несколько снимков подряд); запасной — системное приложение камеры пишет
+         снимок в наш content:// URI (MainActivity.onShowFileChooser → CaptureProvider) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="Надежда DEV"

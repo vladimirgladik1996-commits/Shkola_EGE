@@ -4,7 +4,10 @@
 (галерею) вместо камеры — onShowFileChooser игнорировал isCaptureEnabled(). Здесь же —
   • выбор файла не навязывает image/* («Файл» в чате — PDF/Word/TXT) и умеет несколько файлов;
   • снимок пишется в content:// URI (CaptureProvider) — file:// запрещён с Android 7;
-  • файл из чата (docx/pdf/png) скачивается и пересылается: shareFile в JS-мосте, mime не зашит.
+  • файл из чата (docx/pdf/png) скачивается и пересылается: shareFile в JS-мосте, mime не зашит;
+  • «Снять камерой» открывает камеру ПРЯМО в приложении (getUserMedia) и умеет несколько
+    снимков подряд (chCam/chCamShot/chCamDone), обёртка даёт камере разрешение (camStatus/askCamera);
+    системная камера через capture остаётся запасным путём.
 Проверяются обе копии (dev и prod). Запуск: python3 tests/test_apk_camera.py
 """
 import os
@@ -46,8 +49,21 @@ for side in ("dev", "prod"):
         f"{side}: CaptureProvider должен отдавать только файлы камеры из cacheDir (без путей наружу)"
     assert re.search(r'android:name="(?:ru\.kabinet\.tutor)?\.?CaptureProvider"', manifest) \
         and "grantUriPermissions" in manifest
-    assert 'android:permission="android.permission.CAMERA"' not in manifest   # разрешения камеры не просим
-    ok(f"{side}: CaptureProvider отдаёт только файлы камеры из cacheDir (без путей наружу)")
+    assert '<uses-permission android:name="android.permission.CAMERA"' in manifest, \
+        f"{side}: без разрешения CAMERA встроенная камера «Снять камерой» (getUserMedia) не работает"
+    assert 'android:permission="android.permission.CAMERA"' not in manifest   # ограничение-атрибут на компонентах не ставим
+    ok(f"{side}: CaptureProvider отдаёт только файлы камеры из cacheDir (без путей наружу); CAMERA заявлена для встроенной съёмки")
+
+    # --- встроенная камера «Снять камерой»: превью + несколько снимков подряд ---
+    assert "function chCam()" in html and "chCamShot" in html and "getUserMedia" in html, \
+        f"{side}: «Снять камерой» не открывает камеру в приложении (нет chCam/chCamShot/getUserMedia)"
+    assert "chCamDone" in html and "chCamDel" in html and "chCamS" in html, \
+        f"{side}: нельзя сделать несколько снимков подряд и прикрепить их к задаче"
+    assert "RESOURCE_VIDEO_CAPTURE" in java and "askCameraPermission" in java \
+        and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?camStatus\s*\(", java) \
+        and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?askCamera\s*\(", java), \
+        f"{side}: обёртка не пускает камеру в WebView (нет camStatus/askCamera и выдачи RESOURCE_VIDEO_CAPTURE)"
+    ok(f"{side}: «Снять камерой» открывает камеру в приложении, снимков можно сделать несколько подряд")
 
     # --- файлы из чата: скачать и переслать в любом формате ---
     assert "shareFile" in java and 'startShare(url, name, "application/pdf", 0)' in java, \
