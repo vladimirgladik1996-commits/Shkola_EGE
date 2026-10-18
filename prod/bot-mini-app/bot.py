@@ -1223,6 +1223,56 @@ async def thinking(m: Message, on: bool = True):
             with suppress(asyncio.CancelledError):
                 await task
 
+
+# ---------- мышление Кими в чате: беззвучные сообщения от имени Вишенки ----------
+# Задача: при долгом разборе пользователь видит, что модель работает, но его не забалтывают.
+# Поэтому ход мыслей выкладывается короткими БЕЗЗВУЧНЫМИ сообщениями (disable_notification),
+# а когда готов ответ — все они УДАЛЯЮТСЯ, и в переписке остаётся только сам ответ.
+class ThinkRelay:
+    MAX_MSGS = 6        # больше не плодим сообщения — дальше дописываем в последнее
+    MIN_GAP = 3.0       # не чаще, чем раз в 3 с (Telegram ограничивает частоту)
+    MAX_LEN = 1200      # длина одного сообщения мышления
+
+    def __init__(self, bot, chat_id):
+        self.bot, self.chat_id = bot, chat_id
+        self.ids, self.buf, self.last = [], "", 0.0
+
+    async def push(self, delta):
+        """Кусочек размышления модели → в чат. Без звука, не чаще MIN_GAP."""
+        self.buf += delta or ""
+        if self.buf.strip() and time.monotonic() - self.last >= self.MIN_GAP:
+            await self.flush()
+
+    def _render(self, body, first):
+        return ("💭 Вишенка думает…" if first else "💭") + "\n\n" + body
+
+    async def flush(self):
+        body = self.buf.strip()[:self.MAX_LEN]
+        self.buf = ""
+        if not body:
+            return
+        try:
+            if len(self.ids) < self.MAX_MSGS:
+                msg = await self.bot.send_message(self.chat_id, self._render(body, not self.ids),
+                                                  disable_notification=True)
+                self.ids.append(msg.message_id)
+            else:                            # сообщений уже хватает — дописываем в последнее
+                await self.bot.edit_message_text(self._render(body, len(self.ids) == 1),
+                                                 chat_id=self.chat_id, message_id=self.ids[-1])
+        except Exception:                    # Telegram может отказать — мысль не важнее ответа
+            pass
+        self.last = time.monotonic()
+
+    async def cleanup(self):
+        """Удалить все сообщения мышления: в чате остаётся только готовый ответ."""
+        self.buf = ""
+        for mid in self.ids:
+            try:
+                await self.bot.delete_message(self.chat_id, mid)
+            except Exception:
+                pass
+        self.ids = []
+
 def pdf_text(data):
     """Текст из PDF (до 8000 символов). Если pypdf не установлен — честное сообщение, без падения."""
     try:
@@ -1316,12 +1366,18 @@ async def ai_doc(m: Message):
 async def ai_cb(c: CallbackQuery):
     await c.answer()
     deep = c.data == "ai:deep"
+    relay = ThinkRelay(c.message.bot, c.message.chat.id) if c.data in ("ai:fast", "ai:deep") else None
     status = None
     if deep and kimi.enabled():
         # долгий режим — модель думает до 2–3 минут: заглушка вместо тишины
         status = await c.message.answer("🧠 Долгий ответ на сложный вопрос — думаю, это может занять 2–3 минуты…")
-    async with thinking(c.message, kimi.enabled()):
-        res = await assist.handle_reply(c.from_user.id, c.data)
+    try:
+        async with thinking(c.message, kimi.enabled()):
+            res = await assist.handle_reply(c.from_user.id, c.data,
+                                            think=relay.push if relay else None)
+    finally:
+        if relay:
+            await relay.cleanup()   # мысли удаляются — остаётся только готовый ответ
     reply, buttons = res["reply"], res.get("buttons")
     if status is not None and reply and len(reply) <= 3800 and not buttons:
         try:
