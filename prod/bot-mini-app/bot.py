@@ -792,6 +792,25 @@ async def logout(m: Message, state: FSMContext):
     auth.logout(m.from_user.id)
     await m.answer("Вы вышли. Чтобы войти снова, нажмите /start.", reply_markup=ReplyKeyboardRemove())
 
+@r.message(Command("balance"))
+async def cmd_balance(m: Message, state: FSMContext):
+    """Баланс аккаунта Кими (Moonshot) — /balance: сколько денег осталось на API."""
+    await state.clear()
+    b = await kimi.balance()
+    if b is None:
+        await m.answer("Не получилось узнать баланс Кими. Проверьте KIMI_API_KEY и попробуйте ещё раз.")
+        return
+    def f(x):
+        try: return f"{float(x):,.2f}".replace(",", " ").replace(".", ",")
+        except (TypeError, ValueError): return "—"
+    await m.answer("\n".join([
+        "💳 Баланс Кими (Moonshot), CNY:",
+        f"• Доступно: {f(b.get('available_balance'))}",
+        f"• Ваучеры: {f(b.get('voucher_balance'))}",
+        f"• Основной счёт: {f(b.get('cash_balance'))}",
+    ]))
+
+
 @r.message(F.text == "Занятия сегодня")
 async def today_lessons(m: Message, state: FSMContext):
     await state.clear()
@@ -2143,7 +2162,7 @@ async def api_chat(request):
             await send({"t": kind, "v": v})
         elif kind == "err":
             log.warning("chat: tg_id=%s стрим оборвался (%s)", uid, v)
-            await send({"t": "fail", "why": "net"})
+            await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
             await resp.write_eof()
             return resp
         else:                                   # done
