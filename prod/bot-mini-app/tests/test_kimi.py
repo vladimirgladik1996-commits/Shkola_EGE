@@ -47,7 +47,7 @@ async def main():
         assert r == "Привет!"
         h, b = CALLS[-1][1], CALLS[-1][2]
         assert h["Authorization"] == "Bearer TESTKEY" and b["model"] == "kimi-k2.6"
-        assert b["thinking"] == {"type": "disabled"} and b["max_tokens"] == 800
+        assert b["thinking"] == {"type": "disabled"} and "max_tokens" not in b   # лимитов нет
         assert "response_format" not in b and "reasoning_effort" not in b
         ok("обычный запрос: kimi-k2.6, thinking выключен, заголовок авторизации")
 
@@ -55,7 +55,7 @@ async def main():
         r = await kimi.ask([{"role": "user", "content": "сочинение"}], deep=True)
         b = CALLS[-1][2]
         assert r == "Привет!" and b["model"] == "kimi-k3" and b["reasoning_effort"] == "max"
-        assert b["max_tokens"] == kimi.MAX_TOKENS_DEEP and "thinking" not in b
+        assert "max_tokens" not in b and "thinking" not in b   # лимитов нет: K3 думает без ограничения
         ok("глубокий режим: kimi-k3, reasoning_effort=max, увеличенный лимит токенов")
 
         # --- kimi: JSON-режим и vision --------------------------------------
