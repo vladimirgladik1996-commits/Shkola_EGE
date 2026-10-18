@@ -6,6 +6,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOK = "123456:TESTTOKEN"
 os.environ.update(BOT_TOKEN=TOK, PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID", "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
+          "KIMI_MODEL_FAST", "KIMI_MODEL_DEEP", "KIMI_EFFORT", "KIMI_MAX_TOKENS", "KIMI_MAX_TOKENS_DEEP",
+          "KIMI_MAX_TOKENS_CEILING", "KIMI_THINK_EXTRA",
           "WHISPER_API_KEY", "WHISPER_BASE_URL"):
     os.environ.pop(k, None)
 sys.path.insert(0, ROOT)
@@ -20,6 +22,9 @@ STT = {"code": 200, "text": "добавь занятие в среду в две
 
 async def fake_kimi(request):
     CALLS.append(("chat", dict(request.headers), await request.json()))
+    if MODE.get("reject"):                      # имитация отказа API по лимиту max_tokens
+        MODE["reject"] -= 1
+        return web.json_response({"error": {"message": "max_tokens must be <= 65536"}}, status=400)
     return web.json_response(MODE["json"], status=MODE["code"])
 
 async def fake_stt(request):
@@ -47,16 +52,39 @@ async def main():
         assert r == "Привет!"
         h, b = CALLS[-1][1], CALLS[-1][2]
         assert h["Authorization"] == "Bearer TESTKEY" and b["model"] == "kimi-k2.6"
-        assert b["thinking"] == {"type": "disabled"} and "max_tokens" not in b   # лимитов нет
+        assert b["thinking"] == {"type": "disabled"}                       # быстрый режим — без размышлений
+        assert b["max_tokens"] == 100_000_000                              # лимит всегда огромный
         assert "response_format" not in b and "reasoning_effort" not in b
-        ok("обычный запрос: kimi-k2.6, thinking выключен, заголовок авторизации")
+        ok("обычный запрос: kimi-k2.6, thinking выключен, max_tokens=100 000 000, авторизация")
 
         # --- kimi: глубокий режим (kimi-k3 + reasoning_effort=max) ----------
         r = await kimi.ask([{"role": "user", "content": "сочинение"}], deep=True)
         b = CALLS[-1][2]
         assert r == "Привет!" and b["model"] == "kimi-k3" and b["reasoning_effort"] == "max"
-        assert "max_tokens" not in b and "thinking" not in b   # лимитов нет: K3 думает без ограничения
-        ok("глубокий режим: kimi-k3, reasoning_effort=max, увеличенный лимит токенов")
+        assert b["max_tokens"] == 100_000_000 and "thinking" not in b      # K3 думает всегда, поля thinking не требует
+        ok("глубокий режим: kimi-k3, reasoning_effort=max, max_tokens=100 000 000")
+
+        # --- модель не подменяется никогда ---------------------------------
+        r = await kimi.ask([{"role": "user", "content": "сочинение"}], model="kimi-k2.6")
+        assert CALLS[-1][2]["model"] == "kimi-k2.6"
+        r = await kimi.ask([{"role": "user", "content": "сочинение"}], deep=True, model="kimi-k3")
+        assert CALLS[-1][2]["model"] == "kimi-k3"
+        ok("явно выбранная модель уходит в запрос строго как есть")
+
+        # --- отказ API по лимиту max_tokens → повтор с меньшим бюджетом -----
+        MODE["reject"] = 1
+        n0 = len(CALLS)
+        r = await kimi.ask([{"role": "user", "content": "привет"}], deep=True)
+        assert r == "Привет!" and len(CALLS) == n0 + 2
+        assert CALLS[-2][2]["max_tokens"] == 100_000_000
+        assert CALLS[-1][2]["max_tokens"] == 65536                        # максимум из ошибки API
+        assert CALLS[-1][2]["model"] == CALLS[-2][2]["model"] == "kimi-k3"
+        ok("400 по max_tokens: повтор с бюджетом из ошибки, модель и режим не меняются")
+
+        # запомненный потолок применяется и дальше — без лишних 400
+        r = await kimi.ask([{"role": "user", "content": "привет"}], deep=True)
+        assert CALLS[-1][2]["max_tokens"] == 65536 and len(CALLS) == n0 + 3
+        ok("принятый API потолок max_tokens запоминается и применяется к следующим запросам")
 
         # --- kimi: JSON-режим и vision --------------------------------------
         MODE["json"] = {"choices": [{"message": {"content": json.dumps({"kind": "chat", "n": 1})}}]}

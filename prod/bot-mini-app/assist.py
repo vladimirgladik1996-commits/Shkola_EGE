@@ -688,7 +688,10 @@ async def chat_stream(history, deep=False, images=None, docs=None, fmt="text", i
     if docs or images:
         yield "status", "read"
     reply, thinking, writing = "", False, False
-    async for kind, v in kimi.ask_stream(msgs, deep=bool(deep), images=images or None):
+    # Режим выбирается строго один раз и дальше не меняется: deep → KIMI_MODEL_DEEP с размышлением,
+    # иначе KIMI_MODEL без размышления. Никаких подмен модели при повторах нет (см. kimi.ask_stream).
+    async for kind, v in kimi.ask_stream(msgs, deep=bool(deep), images=images or None,
+                                         thinking=bool(deep)):
         if kind == "think":
             if not thinking:
                 thinking = True

@@ -2402,8 +2402,9 @@ async function chAsk(){
     else if(ev.t=="off"){why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
     else if(ev.t=="fail"){why=ev.why=="send"?"Не получилось отправить файл в диалог с ботом. Попробуйте ещё раз."
       :ev.why=="build"?"Не получилось оформить файл. Попробуйте ещё раз."
-      :ev.why=="empty"?"ИИ сейчас не отвечает: модель не вернула ответ. Нажмите «Повторить» — запрос уйдёт заново без ограничений."
+      :ev.why=="empty"?"ИИ сейчас не отвечает: модель не вернула текст ответа. Нажмите «Повторить» — запрос уйдёт заново, с тем же режимом и без ограничения по токенам."
       :ev.why=="http"?"ИИ сейчас не отвечает: сервис модели временно отказал. Попробуйте ещё раз чуть позже."
+      :ev.why=="net"?"ИИ сейчас не отвечает: соединение с моделью прервалось. Нажмите «Повторить» — запрос уйдёт заново."
       :"ИИ сейчас не отвечает. Попробуйте ещё раз чуть позже."}
     else if(ev.t=="done"){
       if(ev.file&&typeof ev.file.name=="string")file={n:ev.file.name,k:"out",u:typeof ev.file.url=="string"&&ev.file.url?API_BASE+ev.file.url:undefined,m:typeof ev.file.mime=="string"?ev.file.mime:undefined,img:typeof ev.file.img=="string"&&/^data:image\/png;base64,/.test(ev.file.img)?ev.file.img:undefined};
