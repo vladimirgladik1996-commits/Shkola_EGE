@@ -10,8 +10,10 @@
 
 Инварианты:
   1. Ровно ОДИН вызов getUserMedia на МИКРОФОН — внутри micTake(); кнопки сами его не зовут.
-     (Камера «Снять камерой» — отдельный поток видео: свой один вызов в chCam() и свой
-     getTracks() в chCamClose(); эти два инварианта проверяются с точностью до двух мест.)
+     Камера «Снять камерой» — отдельный поток видео со своим одним вызовом в camTake(): разрешение
+     просят один раз на сеанс, поток переиспользуется всеми съёмками (Telegram спрашивает доступ
+     на КАЖДЫЙ getUserMedia) и освобождается при закрытии страницы (camDrop ← pagehide).
+     Эти два инварианта проверяются с точностью до двух мест.
   2. micTake() переиспользует живой поток (проверка готовности треков) и пересоздаёт его,
      только если треки умерли.
   3. Остановка записи НЕ останавливает общий поток (иначе следующее нажатие снова спросит
@@ -44,10 +46,12 @@ def fn(name):
 
 # --- 1. один вызов getUserMedia на микрофон (второй — на камеру «Снять камерой») ---
 calls = re.findall(r"navigator\.mediaDevices\.getUserMedia\(", html)
-assert len(calls) == 2, f"getUserMedia вызывается из {len(calls)} мест — ожидается ровно два: микрофон (micTake) и камера (chCam)"
-assert "getUserMedia" in fn("micTake") and "getUserMedia" in fn("chCam"), \
-    "getUserMedia должен жить только в micTake() (микрофон) и chCam() (камера) — кнопки сами его не зовут"
-ok("getUserMedia вызывается ровно в двух местах: micTake() — микрофон, chCam() — камера")
+assert len(calls) == 2, f"getUserMedia вызывается из {len(calls)} мест — ожидается ровно два: микрофон (micTake) и камера (camTake)"
+assert "getUserMedia" in fn("micTake") and "getUserMedia" in fn("camTake"), \
+    "getUserMedia должен жить только в micTake() (микрофон) и camTake() (камера) — кнопки сами его не зовут"
+ok("getUserMedia вызывается ровно в двух местах: micTake() — микрофон, camTake() — камера")
+assert re.search(r"pagehide.{0,40}camDrop|camDrop.{0,40}pagehide", html), "поток камеры не освобождается при закрытии страницы (pagehide → camDrop)"
+ok("поток камеры сеансовый: разрешение просят один раз, освобождение — при закрытии страницы")
 
 assert "function micTake(" in html and "function micDrop(" in html, "нет общего микрофона сеанса (micTake/micDrop)"
 ok("микрофон сеанса выделен: micTake() — взять/переиспользовать, micDrop() — освободить")
@@ -66,9 +70,9 @@ ok("кнопки виджета и микрофон чата работают ч
 # --- 2. остановка записи не убивает общий поток ------------------------------
 drop = fn("micDrop")
 assert "getTracks" in drop, "micDrop не освобождает поток — микрофон останется занятым навсегда"
-assert len(re.findall(r"\.getTracks\(\)", html)) == 2 and "getTracks" in fn("chCamClose"), \
-    "потоки должны останавливаться только в micDrop() (микрофон) и chCamClose() (камера) — иначе запись гасит общий микрофон, и разрешение спросят снова"
-ok("getTracks() живёт только в micDrop() и chCamClose(): конец записи ≠ конец микрофона")
+assert len(re.findall(r"\.getTracks\(\)", html)) == 2 and "getTracks" in fn("camDrop"), \
+    "потоки должны останавливаться только в micDrop() (микрофон) и camDrop() (камера) — иначе запись гасит общий микрофон, и разрешение спросят снова"
+ok("getTracks() живёт только в micDrop() и camDrop(): конец записи ≠ конец микрофона")
 
 for f in ("voiceStop", "chRecKill", "chSendRec"):
     assert "getTracks" not in fn(f), f"{f} останавливает общий поток — следующая запись снова спросит разрешение"

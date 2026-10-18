@@ -59,11 +59,16 @@ for side in ("dev", "prod"):
         f"{side}: «Снять камерой» не открывает камеру в приложении (нет chCam/chCamShot/getUserMedia)"
     assert "chCamDone" in html and "chCamDel" in html and "chCamS" in html, \
         f"{side}: нельзя сделать несколько снимков подряд и прикрепить их к задаче"
+    assert "camTake" in html and "camDrop" in html \
+        and re.search(r"pagehide.{0,40}camDrop|camDrop.{0,40}pagehide", html), \
+        f"{side}: поток камеры не переиспользуется — Telegram спрашивает доступ при каждом нажатии «Снять камерой»"
+    assert "CH_CAM_ICON" in html and "camPulse" in html, \
+        f"{side}: кнопка затвора без иконки/пульсации"
     assert "RESOURCE_VIDEO_CAPTURE" in java and "askCameraPermission" in java \
         and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?camStatus\s*\(", java) \
         and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?askCamera\s*\(", java), \
         f"{side}: обёртка не пускает камеру в WebView (нет camStatus/askCamera и выдачи RESOURCE_VIDEO_CAPTURE)"
-    ok(f"{side}: «Снять камерой» открывает камеру в приложении, снимков можно сделать несколько подряд")
+    ok(f"{side}: «Снять камерой» открывает камеру в приложении, разрешение — один раз, снимков — несколько подряд")
 
     # --- файлы из чата: скачать и переслать в любом формате ---
     assert "shareFile" in java and 'startShare(url, name, "application/pdf", 0)' in java, \
