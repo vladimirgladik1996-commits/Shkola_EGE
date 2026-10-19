@@ -1286,9 +1286,9 @@ let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
       открывает системный chooser «Переслать файл»;
    2) клиент с Web Share API (браузер, часть WebView/клиентов Telegram) — скачивание +
       navigator.share с файлом;
-   3) Telegram WebApp — файл приходит в чат с ботом: из диалога работает родное окно
-      Telegram «⋮ → Поделиться» в любые мессенджеры (нативно открыть его из веб-страницы
-      Telegram не позволяет — есть только downloadFile/shareMessage/shareToStory). */
+   3) Telegram WebApp — документ уходит в диалог Telegram, откуда его пересылает сам пользователь
+      (нативно открыть окно пересылки из веб-страницы Telegram не позволяет — есть только
+      downloadFile/shareMessage/shareToStory). */
 const NATIVE_SHARE=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
 const pdfName=()=>"raspisanie_"+pdfStart+".pdf";
 function dlBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name;
@@ -1307,15 +1307,10 @@ async function sharePdf(){
       dlBlob(pdfBlob,pdfName());
       const f=new File([pdfBlob],pdfName(),{type:"application/pdf"});
       await navigator.share({files:[f]});return}
-    /* 3) Telegram WebApp: файл уходит в чат с ботом — из диалога работает родное окно
-       Telegram «Поделиться» в любые мессенджеры (⋮ над файлом) */
+    /* 3) Telegram WebApp: документ уходит в диалог Telegram */
     if(!APP&&tg.initData){
       btn.textContent="Отправляю…";
-      const r=await api("/api/week/send",{start:pdfStart});
-      if(r){
-        const tip="Файл уже в чате с ботом. Нажмите на него → в правом верхнем углу «Поделиться» → выберите мессенджер.";
-        try{tg.showPopup({title:"PDF в чате",message:tip,buttons:[{id:"open",type:"default",text:"Открыть чат"},{id:"ok",type:"cancel",text:"Понятно"}]},id=>{if(id=="open")tg.close()})}
-        catch(e){toast(tip)}}
+      await api("/api/week/send",{start:pdfStart});
       return}
     /* 4) запасной вариант — просто скачать */
     if(pdfBlob){dlBlob(pdfBlob,pdfName());toast("Файл сохранён — перешлите его из «Загрузок»");return}
@@ -2116,10 +2111,9 @@ function chConfetti(){
   setTimeout(()=>box.remove(),2500)}
 /* «Скачать» и тап по файлу/стикеру — ОДНА функция «скачать и открыть» (chOpen):
    APK — DownloadManager + ACTION_VIEW: файл скачивается и открывается на экране;
-   Telegram 8.0+ — родное окно загрузки + подсказка, где открыть документ (Telegram не показывает
-   docx из веб-страницы — его открывает штатный просмотрщик по тапу на документ в чате с ботом,
-   копия файла всегда уходит туда — см. api_chat в bot.py);
-   браузер — скачивание файла. Никаких ссылок на страницу файла — <a href> никуда не уводит. */
+   Telegram — tg.openLink: файл открывается системным способом (браузер скачивает документ
+   и открывает его просмотрщиком) — иного способа открыть файл из мини-аппа Telegram нет;
+   браузер — скачивание файла. Никаких ссылок и лишних сообщений. */
 const chMime=x=>x.m||(/\.pdf$/i.test(x.n||"")?"application/pdf":/\.png$/i.test(x.n||"")?"image/png"
   :/\.jpe?g$/i.test(x.n||"")?"image/jpeg":/\.docx$/i.test(x.n||"")?CH_DOCX:"application/octet-stream");
 function chOpen(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
@@ -2127,11 +2121,9 @@ function chOpen(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u){toast("Файл
   try{
     if(A.openFile){A.openFile(u,x.n,mime);return true}   // APK: скачать + открыть на экране системным просмотрщиком
     if(A.shareFile){toast("Обновите приложение — эта версия не умеет открывать файлы");return false}   // старый APK без openFile
-    if(!APP&&tg&&tg.downloadFile&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){   // Telegram 8.0+: родное окно загрузки
-      tg.downloadFile({url:u,file_name:x.n,mime_type:mime},ok=>{if(ok)toast("Файл скачан — откройте его в чате с ботом или в «Загрузках»")});
-      return true}
-    const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
-    toast("Файл скачивается — открыть его можно в «Загрузках»");return true
+    if(!APP&&tg&&tg.openLink){tg.openLink(u);return true}   // Telegram: система скачивает файл и открывает его
+    if(!APP&&tg&&tg.downloadFile){tg.downloadFile({url:u,file_name:x.n,mime_type:mime});return true}   // Telegram без openLink
+    const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();return true
   }catch(e){toast("Не получилось открыть файл");return false}}
 function chDl(i,j){chOpen(i,j)}   // кнопка «Скачать» — ровно тот же путь, что и тап по файлу/стикеру
 let chShBusy=false;
@@ -2139,9 +2131,7 @@ let chShBusy=false;
    APK — системное окно «Переслать файл» (ACTION_SEND с файлом);
    Telegram 8.0+ — родное окно «Отправить в…» (tg.shareMessage: контакт получает сам .docx);
    браузер/WebView — системное окно шаринга с файлом (Web Share API Level 2, navigator.share({files})).
-   Раньше запасные пути (шаринг ссылки через t\.me и navigator.share({url})) клали в сообщение ПОДПИСНУЮ ССЫЛКУ:
-   она живёт полчаса и чужому не открывается — получатель видел «сломанную» страницу вместо документа.
-   Если передать файл не получилось — он скачивается, и пользователь пересылает его сам (chShareSave). */
+   Запасной путь (chShareSave) только скачивает файл — без ссылок и без лишних сообщений. */
 async function chShare(i,j){const x=chDocAt(i,j);if(!x){toast("Файл устарел — попросите ответ ещё раз");return}
   if(chShBusy)return;chShBusy=true;
   const u=chAbs(x),A=window.Android||{},mime=chMime(x);
@@ -2149,22 +2139,27 @@ async function chShare(i,j){const x=chDocAt(i,j);if(!x){toast("Файл уста
     if(A.shareFile){A.shareFile(u,x.n,mime);return}   // APK: системный chooser — пересылка именно файла
     if(!APP&&tg&&tg.initData&&tg.shareMessage&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){   // Telegram 8.0+: окно «Отправить в…» с САМИМ ФАЙЛОМ
       const tok=(x.u.match(/\/api\/chat_file\/([^/?]+)/)||[])[1];
-      if(tok){const r=await api("/api/chat_file/prepare",{tok});
+      if(tok){const r=await chPrep(tok);
         if(r&&typeof r.id=="string"&&r.id){tg.shareMessage(r.id,s=>{if(!s)chShareSave(x)});return}}
       chShareSave(x);return}
     if(navigator.canShare){   // браузер/WebView: системное окно шаринга с самим файлом
       const r=await fetch(u);if(r.ok){const f=new File([await r.blob()],x.n,{type:mime});
         if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:x.n});return}}
       chShareSave(x);return}
-    chShareSave(x)   // передать файл нечем — скачиваем и объясняем; ссылку не отправляем никогда
+    chShareSave(x)   // передать файл нечем — скачиваем; ссылку не отправляем никогда
   }catch(e){if(e&&e.name=="AbortError")return;chShareSave(x)}   // отмена шаринга пользователем — тихо
   finally{chShBusy=false}}
-/* Запасной путь «Поделиться» без единой ссылки: файл скачивается,
-   дальше его пересылают из чата с ботом или из «Загрузок» обычным прикреплением */
+/* Подготовка пересылки файла (savePreparedInlineMessage на сервере) — отдельным запросом, без api():
+   отказ подготовки не должен ронять экран (api() по 401/403 уводит всё приложение на lockScreen) */
+async function chPrep(tok){try{
+  const r=await fetch(API_BASE+"/api/chat_file/prepare",{method:"POST",headers:{"X-Init":tg.initData,"Content-Type":"application/json"},
+    body:JSON.stringify({tok}),cache:"no-store"});
+  return r.ok?await r.json():null}catch(e){return null}}
+/* Запасной путь «Поделиться»: файл скачивается — дальше его пересылают из «Загрузок» */
 function chShareSave(x){const u=chAbs(x),A=window.Android||{},mime=chMime(x);
   try{
     if(!APP&&tg&&tg.downloadFile&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){
-      tg.downloadFile({url:u,file_name:x.n,mime_type:mime},ok=>{if(ok)toast("Файл скачан — перешлите его из чата с ботом или из «Загрузок»")});
+      tg.downloadFile({url:u,file_name:x.n,mime_type:mime},ok=>{if(ok)toast("Файл скачан — перешлите его из «Загрузок»")});
       return}
     const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
     toast("Файл скачан — перешлите его из «Загрузок»")
@@ -2512,7 +2507,7 @@ async function chAsk(){
     else if(ev.t=="text"&&typeof ev.v=="string"){acc+=ev.v;chStepCur("write",fmt).t+=ev.v}
     else if(ev.t=="tg"){const a=CH[CH.length-1];if(a&&a.r=="a"&&!a.err&&!a.step)a.tg=1}   // ответ ушёл и в Telegram
     else if(ev.t=="off"){why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
-    else if(ev.t=="fail"){why=ev.why=="send"?"Не получилось отправить файл в диалог с ботом. Попробуйте ещё раз."
+    else if(ev.t=="fail"){why=ev.why=="send"?"Не получилось отправить файл. Попробуйте ещё раз."
       :ev.why=="build"?"Не получилось оформить файл. Попробуйте ещё раз."
       :ev.why=="empty"?"ИИ сейчас не отвечает: модель не вернула текст ответа. Нажмите «Повторить» — запрос уйдёт заново, с тем же режимом и без ограничения по токенам."
       :ev.why=="http"?"ИИ сейчас не отвечает: сервис модели временно отказал. Попробуйте ещё раз чуть позже."

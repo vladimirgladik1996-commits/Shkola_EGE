@@ -75,22 +75,26 @@ async def main():
 
         # --- 5. контракт фронтенда: «Поделиться» передаёт ТОЛЬКО файл — любые ссылки запрещены ---
         html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
-        assert "tg.shareMessage" in html and 'api("/api/chat_file/prepare"' in html, "нет tg.shareMessage/prepare"
+        assert "tg.shareMessage" in html and "/api/chat_file/prepare" in html, "нет tg.shareMessage/prepare"
         assert 'api("/api/chat_file/send"' not in html, "старый bot-copy путь остался"
         assert "выберите контакт" not in html, "мусорный тост «файл уже в боте» остался"
-        assert "tg.downloadFile" in html, "нет tg.downloadFile"
         # баг 1: t.me/share/url и navigator.share({url}) отправляли подписную ссылку вместо файла — вырезаны полностью
         assert "t.me/share/url" not in html and "chShLink" not in html, \
             "ссылочный шаринг остался — получатель снова получит ссылку вместо файла"
         assert "navigator.share({title" not in html, "шаринг URL вместо файла остался"
         assert "navigator.share({files" in html, "нет шаринга самим файлом (Web Share API)"
         assert "A.openFile" in html, "нет Android.openFile — «Скачать»/тап не открывают файл"
-        ok("фронт: шарится только файл (Android.shareFile / tg.shareMessage / navigator.share({files})); ссылочных путей нет")
+        # запрещённые сообщения о том, что файл якобы «в чате с ботом» — не возвращаются никогда
+        for bad in ("Файл уже в чате с ботом", "откройте его в чате с ботом", "перешлите его из чата с ботом",
+                    "PDF в чате", "Открыть чат", "файл в диалог с ботом"):
+            assert bad not in html, f"запрещённое сообщение вернулось: {bad}"
+        ok("фронт: шарится только файл (Android.shareFile / tg.shareMessage / navigator.share({files})); ссылок и запрещённых сообщений нет")
 
         # --- 6. баги 2+3: «Скачать» и тап по файлу/стикеру сходятся в одну функцию «скачать и открыть» ---
         assert re.search(r"function chDl\(i,j\)\{chOpen\(i,j\)\}", html), "кнопка «Скачать» не зовёт chOpen"
         assert re.search(r"const chFileTap=\(i,j,e\)=>\{[^}]*chOpen\(i,j\)", html), "тап по файлу/стикеру не зовёт chOpen"
         assert "return chFileTap(" in html, "стикер и карточка документа должны быть кликабельными"
+        assert "tg.openLink" in html, "Telegram-путь «скачать+открыть» должен открывать файл системным способом"
         ok("фронт: «Скачать» и тап по файлу/стикеру — одна функция chOpen (скачать + открыть)")
 
 

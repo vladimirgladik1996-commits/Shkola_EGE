@@ -2089,7 +2089,7 @@ async def api_fragment(request):
     return web.json_response(res)
 # ---------- файлы ответов «Чата с ИИ»: карточка в чате получает ссылку на скачивание ----------
 CHAT_FILES = {}                                    # токен → [uid, байты, имя, время]
-CHAT_FILE_TTL = 30 * 60                            # полчаса: дольше файл не нужен — копия уже в Telegram
+CHAT_FILE_TTL = 24 * 3600                          # сутки: карточка файла живёт в истории чата, тапнуть её можно и завтра
 
 
 def chat_file_token(uid, tok):
@@ -2179,7 +2179,7 @@ async def api_chat_file_prepare(request):
     if time.time() - ts > CHAT_FILE_TTL:
         CHAT_FILES.pop(tok, None)
         return web.json_response({"error": "expired"}, status=404)
-    url = str(request.url.origin()) + f"/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"
+    url = f"https://{request.url.host}/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
     res = InlineQueryResultDocument(id=tok, document_url=url, title=name,
                                     mime_type=mime or "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                     description="Документ из «Чата с ИИ»")
