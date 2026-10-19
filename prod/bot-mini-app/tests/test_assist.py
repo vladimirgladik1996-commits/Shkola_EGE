@@ -109,7 +109,7 @@ async def main():
         assert "занято" in r["reply"] and lessons(DAY2, "10:00") == [(ANNA, DAY2, "10:00")]
         ok("конфликт по времени ловится до базы, чужое занятие не перезаписано")
 
-        # --- 4. общий вопрос: быстрый / глубокий ----------------------------
+        # --- 4. общий вопрос: быстрый — всегда текстом; глубокий — с выбором формата ---
         jtask(kind="chat", action="none", params={}, question="")
         r = await assist.handle_chat(104, "напиши сочинение про весну")
         assert [b[1] for b in r["buttons"]] == ["ai:fast", "ai:deep"]
@@ -117,16 +117,56 @@ async def main():
 
         QUEUE.append("Короткий ответ.")
         r = await assist.handle_reply(104, "ai:fast")
-        assert r["reply"] == "Короткий ответ." and CALLS[-1][2]["model"] == "kimi-k2.6"
-        ok("быстрый режим → дешёвая модель kimi-k2.6")
+        assert r["reply"] == "Короткий ответ." and CALLS[-1][2]["model"] == "kimi-k2.6" and "fmt" not in r
+        ok("«Быстрый ответ» → сразу текстом (kimi-k2.6), формат не спрашивается")
 
         jtask(kind="chat", action="none", params={}, question="")
         await assist.handle_chat(104, "разбери задачу по физике подробно")
-        QUEUE.append("Длинный разбор.")
         r = await assist.handle_reply(104, "ai:deep")
+        assert [b[1] for b in r["buttons"]] == ["ai:fmt:text", "ai:fmt:docx", "ai:fmt:pdf", "ai:fmt:image"]
+        assert [b[0] for b in r["buttons"]] == ["📄 Текст", "📘 Word-документ", "📕 PDF-документ", "🖼 Картинка / инфографика"]
+        assert assist.PENDING.get(104, {}).get("phase") == "format"
+        ok("«Долгий ответ» → выбор формата: текст, Word, PDF, картинка — как в разделе «Чат с ИИ»")
+
+        QUEUE.append("Длинный разбор.")
+        r = await assist.handle_reply(104, "ai:fmt:text")
         b = CALLS[-1][2]
-        assert r["reply"] == "Длинный разбор." and b["model"] == "kimi-k3" and b["reasoning_effort"] == "max"
-        ok("глубокий режим → kimi-k3 с reasoning_effort=max")
+        assert r["reply"] == "Длинный разбор." and b["model"] == "kimi-k3" and b["reasoning_effort"] == "max" and "fmt" not in r
+        ok("формат «Текст» → kimi-k3 с reasoning_effort=max, ответ репликой")
+
+        jtask(kind="chat", action="none", params={}, question="")
+        await assist.handle_chat(104, "сделай тест с пропусками")
+        await assist.handle_reply(104, "ai:deep")
+        QUEUE.append("# Тест по русскому\n- м_рковь\n- п_рёл")
+        r = await assist.handle_reply(104, "ai:fmt:docx")
+        q = CALLS[-1][2]["messages"][-1]["content"]
+        assert r["fmt"] == "docx" and r["reply"].startswith("# Тест") and r["task"] == "сделай тест с пропусками"
+        assert "Оформи ответ как готовый документ" in q and "ВОПРОС:" in q
+        ok("формат «Word-документ» → модель просят оформить документ (хвост «Чата с ИИ»), файл собирает бот")
+
+        jtask(kind="chat", action="none", params={}, question="")
+        await assist.handle_chat(104, "собери PDF")
+        await assist.handle_reply(104, "ai:deep")
+        QUEUE.append("<html><head><title>Т</title></head><body><p>Текст</p></body></html>")
+        r = await assist.handle_reply(104, "ai:fmt:pdf")
+        assert r["fmt"] == "pdf" and "<html>" in r["reply"] and "готовый PDF-документ" in CALLS[-1][2]["messages"][-1]["content"]
+        ok("формат «PDF-документ» → модель пишет HTML-документ для конвертации в PDF")
+
+        jtask(kind="chat", action="none", params={}, question="")
+        await assist.handle_chat(104, "сделай инфографику")
+        await assist.handle_reply(104, "ai:deep")
+        QUEUE.append("<html><head><title>И</title></head><body><p>Т</p></body></html>")
+        r = await assist.handle_reply(104, "ai:fmt:image")
+        assert r["fmt"] == "image" and "инфографики-картинки" in CALLS[-1][2]["messages"][-1]["content"]
+        ok("формат «Картинка / инфографика» → модель пишет HTML-инфографику")
+
+        jtask(kind="chat", action="none", params={}, question="")
+        await assist.handle_chat(104, "собери PDF по теме")
+        await assist.handle_reply(104, "ai:deep")
+        QUEUE.append("ВОПРОС: по какой теме?")
+        r = await assist.handle_reply(104, "ai:fmt:pdf")
+        assert "fmt" not in r and r["reply"] == "по какой теме?"
+        ok("«ВОПРОС: …» вместо файла → уточняющий вопрос обычной репликой")
 
         # --- 5. мини-апп: команда со страницы → подтверждение → действие ----
         async with TestClient(TestServer(bot.make_app())) as wc:

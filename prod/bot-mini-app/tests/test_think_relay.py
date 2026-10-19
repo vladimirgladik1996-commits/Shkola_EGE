@@ -141,17 +141,19 @@ async def main():
     # --- 7) handle_reply прокидывает колбэк в answer_chat, режим сохраняется ---
     calls = []
 
-    async def fake_ac(text, deep=False, images=None, docs=None, think=None):
-        calls.append({"deep": deep, "think": think})
+    async def fake_ac(text, deep=False, images=None, docs=None, think=None, fmt="text"):
+        calls.append({"deep": deep, "think": think, "fmt": fmt})
         return "ок"
 
     real_ac = assist.answer_chat
     assist.answer_chat = fake_ac
     try:
-        assist._keep(42, phase="mode", text="вопрос")
         cb = lambda d: None
-        r1 = await assist.handle_reply(42, "ai:deep", think=cb)
-        assert calls[-1]["deep"] is True and calls[-1]["think"] is cb, calls
+        assist._keep(42, phase="mode", text="вопрос")
+        r0 = await assist.handle_reply(42, "ai:deep", think=cb)
+        assert calls == [] and [b[1] for b in r0["buttons"]] == ["ai:fmt:text", "ai:fmt:docx", "ai:fmt:pdf", "ai:fmt:image"]
+        r1 = await assist.handle_reply(42, "ai:fmt:text", think=cb)
+        assert calls[-1]["deep"] is True and calls[-1]["think"] is cb and calls[-1]["fmt"] == "text", calls
         assist._keep(43, phase="mode", text="вопрос")
         r2 = await assist.handle_reply(43, "ai:fast", think=None)
         assert calls[-1]["deep"] is False and calls[-1]["think"] is None, calls
@@ -159,8 +161,8 @@ async def main():
         assist.answer_chat = real_ac
         assist.PENDING.pop(42, None)
         assist.PENDING.pop(43, None)
-    assert r1["reply"] == "ок" and r2["reply"] == "ок"
-    ok("handle_reply прокидывает think в answer_chat; глубокий режим не потерян")
+    assert r1["reply"] == "ок" and r2["reply"] == "ок" and "fmt" not in r1
+    ok("кнопки формата — после «Долгого»; think и глубокий режим доходят до answer_chat")
 
 
 asyncio.run(main())

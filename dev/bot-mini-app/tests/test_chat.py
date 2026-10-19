@@ -136,6 +136,22 @@ async def tg_run():
             done = [e for e in ev if e["t"] == "done"][0]
             assert done["file"]["kind"] == "image" and done["file"]["sent"] is True and done["file"]["img"].startswith("data:image/png;base64,")
             assert app["bot"].photos and kinds[-1] == ("tg", None); ok("картинка: шаги конвертации в стриме + файл ушёл в Telegram")
+            # форматы Word и PDF: ответ модели собирается в файл и уходит боту документом
+            async def doc_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=True):
+                yield "text", "# Разбор\n- пункт"
+            kimi.ask_stream = doc_stream
+            r = await c.post("/api/chat", json={"messages": [U("разбор")], "format": "docx"}, headers=H)
+            ev = [_json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+            done = [e for e in ev if e["t"] == "done"][0]
+            assert done["file"]["kind"] == "docx" and done["file"]["sent"] is True and done["file"]["name"].endswith(".docx")
+            assert app["bot"].docs; ok("Word: документ собран и ушёл в Telegram")
+            kimi.ask_stream = html_stream
+            r = await c.post("/api/chat", json={"messages": [U("отчёт")], "format": "pdf"}, headers=H)
+            ev = [_json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+            done = [e for e in ev if e["t"] == "done"][0]
+            assert done["file"]["kind"] == "pdf" and done["file"]["mime"] == "application/pdf" and done["file"]["sent"] is True
+            assert ("status", "file") in [(e["t"], e.get("v")) for e in ev]
+            ok("PDF: HTML модели конвертировался в PDF, файл ушёл в Telegram")
         finally:
             kimi.ask_stream = real; kimi.API_KEY = key
 HTML = ("<html><head><title>Тема</title><style>body{background-color:#FBF7E9;color:#0E2250}"

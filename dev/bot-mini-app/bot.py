@@ -1362,14 +1362,44 @@ async def ai_doc(m: Message):
         res = await assist.handle_chat(m.from_user.id, text, images=images or None, docs=docs or None)
     await say(m, res["reply"], res.get("buttons"))
 
+# Ответ модели в формате файла (Word / PDF / картинка) собирается и проверяется тем же конвейером,
+# что и в разделе «Чат с ИИ» (см. api_chat): chatfiles.build → страницы глазами Кими (check_render)
+# → одна починка HTML (fix_html). (байты, имя, заголовок, огрехи) или None — модель ответила не тем форматом.
+async def tg_chat_file(fmt, src, task):
+    warn = ""
+    for attempt in (1, 2):
+        try:
+            if fmt == "image":
+                pdf = await asyncio.get_running_loop().run_in_executor(None, chatfiles.html_pdf, src)
+                data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
+                title = chatfiles.image_title(src) if isinstance(src, str) else ""
+                name = chatfiles.file_stem(title or "Инфографика") + ".png"
+                title = title or "Инфографика"
+            else:
+                data, name, title = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, src)
+        except Exception as e:
+            log.warning("bot chat file: не собрался (%s, попытка %s): %r", fmt, attempt, e)
+            return None
+        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.render_shots, fmt, data)
+        ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет готовый файл
+        if ok:
+            return data, name, title, warn
+        warn = problems
+        log.warning("bot chat file: огрехи (%s, попытка %s): %s", fmt, attempt, problems)
+        fixed = await assist.fix_html(task, src, problems) if attempt == 1 and fmt in ("pdf", "image") else None
+        if not fixed:
+            return data, name, title, warn
+        src = fixed
+    return data, name, title, warn
+
 @r.callback_query(F.data.startswith("ai:"))
 async def ai_cb(c: CallbackQuery):
     await c.answer()
-    deep = c.data == "ai:deep"
-    relay = ThinkRelay(c.message.bot, c.message.chat.id) if c.data in ("ai:fast", "ai:deep") else None
+    fmt = c.data[7:] if c.data.startswith("ai:fmt:") else None   # формат выбран — модель работает
+    relay = ThinkRelay(c.message.bot, c.message.chat.id) if fmt else None
     status = None
-    if deep and kimi.enabled():
-        # долгий режим — модель думает до 2–3 минут: заглушка вместо тишины
+    if fmt and kimi.enabled():
+        # сильная модель думает до 2–3 минут: заглушка вместо тишины
         status = await c.message.answer("🧠 Долгий ответ на сложный вопрос — думаю, это может занять 2–3 минуты…")
     try:
         async with thinking(c.message, kimi.enabled()):
@@ -1379,6 +1409,28 @@ async def ai_cb(c: CallbackQuery):
         if relay:
             await relay.cleanup()   # мысли удаляются — остаётся только готовый ответ
     reply, buttons = res["reply"], res.get("buttons")
+    if res.get("fmt"):   # ответ — файлом (Word / PDF / картинка), как в разделе «Чат с ИИ»
+        if status is not None:
+            try: await status.delete()
+            except TelegramAPIError: pass
+        built = await tg_chat_file(res["fmt"], reply, res.get("task") or "")
+        if built is None:   # модель ответила не тем форматом — отправляем текстом
+            await say(c.message, "Не получилось собрать файл — отправляю текстом:\n\n" + (reply or "")[:3000])
+            return
+        data, name, title, warn = built
+        try:
+            f = BufferedInputFile(data, filename=name)
+            if res["fmt"] == "image":
+                await c.message.answer_photo(f, caption=title[:200])
+            else:
+                await c.message.answer_document(f, caption=title[:200])
+        except TelegramAPIError as e:
+            log.warning("bot chat file: не отправился (%s): %r", res["fmt"], e)
+            await say(c.message, "Файл собрался, но отправить его не получилось.")
+            return
+        if warn:
+            await say(c.message, "Кими проверила файл: есть огрехи оформления — " + warn)
+        return
     if status is not None and reply and len(reply) <= 3800 and not buttons:
         try:
             await status.edit_text(reply)      # ответ сразу вместо заглушки — без лишних сообщений
