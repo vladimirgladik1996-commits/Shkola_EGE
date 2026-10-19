@@ -335,6 +335,9 @@ def confirm_text(action, p):
                 (f", {bot.grade_text(p['grade'])}" if p.get("grade") else "") +
                 (f", {p['subject']}" if p.get("subject") else "") +
                 (f", {bot.money(p['price'])}/занятие" if p.get("price") else ", без цены"))
+    if action == "cancel_lesson":
+        l = lesson_id(p["day"], p["time"])        # AssistError, если такого занятия нет — вместо падения на p["student"]
+        return f"Отменить занятие: {_student_name(l['student_id'])}, {bot.pretty(p['day'], p['time'])}"
     name = p["student"]["name"]
     if action == "add_lesson":
         return (f"Добавить занятие: {name}, {bot.pretty(p['day'], p['time'])}, {p['dur']} мин" +
@@ -342,11 +345,46 @@ def confirm_text(action, p):
     if action == "move_lesson":
         return (f"Перенести занятие {bot.pretty(p['day'], p['time'])} → "
                 f"{bot.pretty(p['new_day'], p['new_time'])}" + (f", {p['dur']} мин" if p.get("dur") else ""))
-    if action == "cancel_lesson":
-        return f"Отменить занятие: {bot.pretty(p['day'], p['time'])}"
     if action == "add_payment":
         return f"Записать оплату: {name}, {bot.money(p['amount'])}"
     raise AssistError("Не знаю, как выполнить это действие.")
+
+
+def _student_name(sid):
+    rows = bot.q("select name from students where id=?", sid)
+    return rows[0]["name"] if rows else "—"
+
+
+def confirm_fields(action, p):
+    """Те же ПРОВЕРЕННЫЕ параметры, но по полям — для крупной карточки подтверждения в мини-аппе.
+    add_student («Ученики»), add_payment («Оплаты»), add_lesson / move_lesson / cancel_lesson («Расписание»)."""
+    if action == "add_payment":
+        return [{"k": "Ученик", "v": p["student"]["name"]},
+                {"k": "Сумма", "v": bot.money(p["amount"])}]
+    if action == "add_lesson":
+        return [{"k": "Ученик", "v": p["student"]["name"]},
+                {"k": "Когда", "v": bot.pretty(p["day"], p["time"])},
+                {"k": "Длительность", "v": f"{p['dur']} мин"},
+                {"k": "Повтор", "v": "каждую неделю" if p.get("regular") else "разово"}]
+    if action == "move_lesson":
+        f = [{"k": "Ученик", "v": p["student"]["name"]},
+             {"k": "Было", "v": bot.pretty(p["day"], p["time"])},
+             {"k": "Станет", "v": bot.pretty(p["new_day"], p["new_time"])}]
+        if p.get("dur"):
+            f.append({"k": "Длительность", "v": f"{p['dur']} мин"})
+        return f
+    if action == "cancel_lesson":
+        rows = bot.q("select student_id from lessons where day=? and time=?", p["day"], p["time"])
+        if not rows:
+            return None
+        return [{"k": "Ученик", "v": _student_name(rows[0]["student_id"])},
+                {"k": "Занятие", "v": bot.pretty(p["day"], p["time"])}]
+    if action != "add_student":
+        return None
+    return [{"k": "Имя", "v": p["name"]},
+            {"k": "Класс", "v": bot.grade_text(p["grade"]) if p.get("grade") else "не указан"},
+            {"k": "Предмет", "v": p.get("subject") or "не указан"},
+            {"k": "Цена за урок", "v": bot.money(p["price"]) if p.get("price") else "без цены"}]
 
 
 def lesson_id(day, t):
@@ -406,7 +444,9 @@ PROMPT = (
     "params по действиям:\n"
     "add_student: {name, grade, subject, price} — name полное каноническое имя, grade класс, "
     "price цена за занятие (0 — если цены нет);\n"
-    "add_lesson: {student, day, time, dur, regular};\n"
+    "add_lesson: {student, day, time, dur, regular} — regular=true ТОЛЬКО если в речи ЯВНО сказано про регулярное занятие "
+    "(«каждую неделю», «каждый четверг», «еженедельно», «регулярно»); иначе regular=false или опусти поле: "
+    "занятие по умолчанию РАЗОВОЕ, регулярность нельзя выводить из контекста или предполагать;\n"
     "move_lesson: {day, time, new_day, new_time, dur} — где day/time это текущее занятие;\n"
     "cancel_lesson: {day, time};\n"
     "add_payment: {student, amount}.\n"
@@ -1006,8 +1046,12 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
     except AssistError as e:
         return {"stage": "clarify", "reply": str(e), "confirm": None}
     _keep(uid, phase="page_confirm", task=_task_state(action, params, asked))
-    return {"stage": "confirm", "reply": "Проверьте: " + what + ".\nЕсли распознано неверно — поправьте голосом: кнопка «Поправить распознанное» внизу.",
-            "confirm": what}
+    res = {"stage": "confirm", "reply": "Проверьте: " + what + ".\nЕсли распознано неверно — поправьте голосом: кнопка «Поправить распознанное» внизу.",
+           "confirm": what}
+    fields = confirm_fields(action, params)
+    if fields:
+        res["fields"] = fields
+    return res
 
 
 async def confirm_page(uid):

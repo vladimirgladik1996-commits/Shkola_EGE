@@ -264,5 +264,32 @@ async def main():
             j = await r.json()
             assert j["stage"] == "stub" and "Оплаты" in j["reply"] and "WHISPER_API_KEY" in j["reply"]
         ok("без KIMI_API_KEY и без WHISPER_API_KEY — вежливые заглушки, ничего не падает")
+f = assist.confirm_fields("add_payment", {"student": {"name": "Настя"}, "amount": 4000})
+assert [i["k"] for i in f] == ["Ученик", "Сумма"] and f[0]["v"] == "Настя" and "4" in f[1]["v"] and "000" in f[1]["v"]
+_d = (date.today() + timedelta(days=3)).isoformat()
+_sid = bot.run("insert into students(name,price) values(?,?)", "Тест Полей", 1000)
+assert bot.add_lesson(_sid, _d, "17:00", False, 60) is not None
+_st = {"id": _sid, "name": "Тест Полей"}
+fa = assist.confirm_fields("add_lesson", {"student": _st, "day": _d, "time": "17:00", "dur": 90, "regular": True})
+assert [i["k"] for i in fa] == ["Ученик", "Когда", "Длительность", "Повтор"] and fa[2]["v"] == "90 мин" and fa[3]["v"] == "каждую неделю"
+fm = assist.confirm_fields("move_lesson", {"student": _st, "day": _d, "time": "17:00", "new_day": _d, "new_time": "18:00"})
+assert [i["k"] for i in fm] == ["Ученик", "Было", "Станет"]
+fc = assist.confirm_fields("cancel_lesson", {"day": _d, "time": "17:00"})
+assert [i["k"] for i in fc] == ["Ученик", "Занятие"] and fc[0]["v"] == "Тест Полей"
+assert assist.confirm_fields("cancel_lesson", {"day": _d, "time": "23:00"}) is None
+# отмена раньше падала с KeyError('student') при построении подтверждения
+assert "Тест Полей" in assist.confirm_text("cancel_lesson", {"day": _d, "time": "17:00"})
+try:
+    assist.confirm_text("cancel_lesson", {"day": _d, "time": "23:00"}); assert False
+except assist.AssistError as e:
+    assert "не нашёл" in str(e)
+assert "РАЗОВОЕ" in assist.PROMPT and "ТОЛЬКО если в речи ЯВНО" in assist.PROMPT   # правило в инструкции модели
+_p, _need = assist.prepare({"student": "Тест Полей", "day": _d, "time": "18:00"}, "add_lesson")
+assert _p["regular"] is False                                  # без явного «регулярно» занятие разовое
+_p, _need = assist.prepare({"student": "Тест Полей", "day": _d, "time": "18:00", "regular": True}, "add_lesson")
+assert _p["regular"] is True
+ok("занятие по умолчанию разовое; регулярное — только когда прямо сказано (правило в инструкции + дефолт в коде)")
+ok("confirm_fields: добавить / перенести / отменить занятие; отмена больше не падает на p['student']")
+ok("confirm_fields: оплата → поля «Ученик» и «Сумма»; для остальных действий None")
 asyncio.run(main())
 print("OK")

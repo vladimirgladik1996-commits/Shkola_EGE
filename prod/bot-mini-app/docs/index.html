@@ -201,13 +201,15 @@ body:has(#sheet.on) #burger,body:has(#pr.on) #burger{z-index:6}
 .mn-paw{position:absolute;right:-12px;bottom:-16px;width:96px;height:96px;fill:#FFC93C;opacity:.16;transform:rotate(-18deg);pointer-events:none}
 #nv{position:relative;display:flex;flex-direction:column;gap:6px;padding:18px 14px}
 #nvi{position:absolute;left:14px;right:14px;top:0;height:56px;border-radius:18px;background:var(--yel);box-shadow:0 8px 16px -10px #C58A00;pointer-events:none;transition:transform .34s cubic-bezier(.32,.72,0,1),height .25s}
-.mn-it{-webkit-tap-highlight-color:transparent;position:relative;z-index:1;display:flex;align-items:center;gap:14px;height:56px;padding:0 16px;border-radius:18px;font-size:17px;font-weight:800;text-align:left;color:var(--tx);transition:color .25s}
+.mn-it,.mn-dl{-webkit-tap-highlight-color:transparent;position:relative;z-index:1;display:flex;align-items:center;gap:14px;height:56px;padding:0 16px;border-radius:18px;font-size:17px;font-weight:800;text-align:left;color:var(--tx);transition:color .25s}
 .mn-it.on{color:var(--yon)}
-.mn-it svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.mn-it svg,.mn-dl svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
 .mn-it.on svg{transform:scale(1.14) rotate(-6deg)}
+/* «Скачать АПК» — самый низ меню, с отступом от разделов */
+.mn-dl{margin-top:20px}
 @keyframes mnIn{from{opacity:0;transform:translateX(-18px)}}
-#drawer.on .mn-it{animation:mnIn .5s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.12s + var(--i)*60ms)}
-@media (prefers-reduced-motion:reduce){#drawer,#scrim,#burger,#burger i,#nvi,.mn-logo,.mn-it,.mn-it svg{transition-duration:.01ms!important;transition-delay:0s!important}#drawer.on .mn-it{animation:none}}
+#drawer.on .mn-it,#drawer.on .mn-dl{animation:mnIn .5s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.12s + var(--i)*60ms)}
+@media (prefers-reduced-motion:reduce){#drawer,#scrim,#burger,#burger i,#nvi,.mn-logo,.mn-it,.mn-it svg,.mn-dl,.mn-dl svg{transition-duration:.01ms!important;transition-delay:0s!important}#drawer.on .mn-it,#drawer.on .mn-dl{animation:none}}
 /* ===== Патч: форма занятия, список классов, календарь, анимация «карточка → ячейка дня» ===== */
 @keyframes shUp{from{transform:translateY(46px);opacity:0}}
 @keyframes bdIn{from{opacity:0}}
@@ -351,6 +353,67 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 #sheet.on .chs h3{animation-delay:.2s}#sheet.on .chs p{animation-delay:.26s}#sheet.on .chs .act{animation-delay:.38s}
 .chs .chr{margin:0;font-size:13.5px;color:var(--hint)}
 .chs .chr:empty{display:none}
+.chs .chk{margin:22px 14px 16px;padding-top:20px;border-top:2px solid var(--ln);text-align:left}
+.chs .ck-t{font-size:24px;font-weight:800;line-height:1.15;color:var(--tx);margin:0 0 12px}
+.chs .ck-x{margin-top:22px}
+.chs .cff{margin:20px 14px 10px;padding-top:18px;border-top:2px solid var(--ln);text-align:left}.chs .cff[hidden]{display:none}
+.chs .cf-r{display:flex;align-items:center;gap:14px;padding:8px 0}
+.chs .cf-r+.cf-r{border-top:1.5px solid color-mix(in srgb,var(--ln) 70%,transparent)}
+.chs .cf-r small{display:block;margin-bottom:2px;font-size:14px;font-weight:700;line-height:1.1;color:var(--hint)}
+.chs .cf-r b{display:block;font-size:22px;font-weight:800;line-height:1.2;color:var(--tx);word-break:break-word}
+.chs.cfm .chr{display:none}
+.chs.cfm .chb{width:56px;height:56px;margin-bottom:6px}
+.chs.cfm .chh{margin:8px 14px 18px;font-size:18px;font-weight:600;line-height:1.4;color:color-mix(in srgb,var(--tx) 70%,transparent);text-align:left}
+.chs.cfm .chh::before{margin-bottom:5px;font-size:14px}
+.chs.hk .mic svg{width:24px;height:24px}
+/* стартовый экран «Ученики»: кнопка по ширине текста, крупная, ближе к примеру */
+.chs.hk .zone{min-height:16px;margin:0 14px 16px;transition:min-height .3s ease}
+.chs.hk.rc .zone{min-height:72px}
+.chs.hk .act{width:auto;max-width:none;margin:0 14px}
+.chs.hk .act:not(.cf) .mic{padding:22px 24px;font-size:19px;gap:12px}
+.chs.hk .act:not(.cf) .mic svg{width:28px;height:28px}
+.chs .act .ok svg,.chs .act .no svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+.chs .act .no svg{stroke:var(--red)}
+/* экран подтверждения: «Применить» — главная, «Отмена» — тише, «Поправить распознанное» — крупная жёлтая */
+.chs.hk .act.cf .ok,.chs.hk .act.cf .no{flex:1 1 0;min-height:62px;padding:0 10px;font-size:18px;font-weight:800;line-height:1;gap:8px}
+.chs.hk .act.cf .ok{flex-grow:1.25;color:var(--on);background:linear-gradient(180deg,color-mix(in srgb,var(--grn) 86%,#fff),var(--grn));box-shadow:0 14px 26px -12px color-mix(in srgb,var(--grn) 90%,transparent),inset 0 1px 0 rgba(255,255,255,.28)}
+.chs.hk .act.cf .no{flex-grow:1;margin-left:10px;color:color-mix(in srgb,var(--red) 78%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--red) 8%,var(--card)),color-mix(in srgb,var(--red) 17%,var(--card)));box-shadow:0 14px 26px -14px color-mix(in srgb,var(--red) 75%,transparent),inset 0 1px 0 rgba(255,255,255,.55)}
+.chs.hk .act.cf .ok svg,.chs.hk .act.cf .no svg{box-sizing:content-box;width:18px;height:18px;padding:5px;border-radius:50%;stroke-width:2.8}
+.chs.hk .act.cf .ok svg{background:rgba(255,255,255,.24)}
+.chs.hk .act.cf .no svg{stroke:currentColor;background:color-mix(in srgb,var(--red) 17%,transparent)}
+.chs.hk .act.cf .mic{margin-top:12px;min-height:62px;padding:0 16px;font-size:17px;font-weight:800;line-height:1;gap:12px;color:var(--yon);background:linear-gradient(180deg,color-mix(in srgb,var(--yel) 82%,#fff),var(--yel));box-shadow:0 14px 26px -12px color-mix(in srgb,var(--yel) 95%,transparent),inset 0 1px 0 rgba(255,255,255,.45)}
+.chs.hk .act.cf .mic svg{box-sizing:content-box;width:22px;height:22px;padding:6px;border-radius:50%;background:rgba(14,34,80,.10);stroke-width:2.3}
+.chs.hk .act.cf .mic.rec{background:var(--grn);color:var(--on);box-shadow:none}
+.chs.hk .act.cf .mic.rec svg{background:rgba(255,255,255,.22)}
+.chs.rc .act.cf .ok,.chs.rc .act.cf .no{display:none}
+/* под окном виджета плавающей кнопки Вишенки нет — запас снизу 86px не нужен, иначе экран подтверждения не помещается */
+#sheet .sh:has(.chs.hk){padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+/* низкие экраны: убираем аватар и имя, чтобы подсказка/подтверждение и кнопки помещались без прокрутки */
+@media (max-height:780px){.chs.hk .chb,.chs.hk h3{display:none}.chs.hk .chk,.chs.hk .cff{border-top:0}.chs.hk .ck-s::before{display:none}.chs.cfm .cff{margin-top:6px;padding-top:10px}.chs.cfm .cf-r{padding:5px 0}.chs.cfm .chh{margin:4px 14px 12px}}
+.chs.hk.rc .act.cf .mic{margin-top:0}
+.chs .ck-l{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.chs .ck-l li{display:flex;align-items:center;gap:14px;font-size:20px;font-weight:700;line-height:1.2;color:var(--tx)}
+.chs .ck-l i,.chs .cf-r i{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:16px;font-weight:800;background:var(--yel);color:var(--acc);box-shadow:0 6px 12px -6px var(--sh)}
+.chs .ck-m{position:relative;padding:14px 18px 15px;border-radius:24px 24px 24px 6px;font-size:19px;font-weight:700;line-height:1.4;color:var(--acc);background:color-mix(in srgb,var(--yel) 30%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--yel) 75%,transparent)}
+.chs .ck-m::before{content:"«";margin-right:2px;font-weight:800}.chs .ck-m::after{content:"»";margin-left:2px;font-weight:800}
+.chs .ck-m span{white-space:nowrap}
+/* слайдер примеров (вкладка «Расписание»): карточки со свайпом, следующая выглядывает справа, под ними точки */
+.chs .ck-s{margin-left:-16px;margin-right:-16px;padding-top:0;border-top:0}
+.chs .ck-s::before{content:"";display:block;margin:0 30px 20px;border-top:2px solid var(--ln)}
+.chs .ck-sl{position:relative;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-left:30px;padding:0 30px 6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
+.chs .ck-sl::-webkit-scrollbar{display:none}
+.chs .ck-c{flex:0 0 86%;min-width:0;scroll-snap-align:start;padding:16px 16px 18px;border-radius:26px;box-shadow:inset 0 0 0 2px var(--ln);text-align:left}
+.chs .ck-c .ck-t{margin:0 0 12px;font-size:22px}
+.chs .ck-c .ck-lb{margin:0 0 8px;font-size:15px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--hint)}
+.chs .ck-c .ck-l{margin:0 0 16px;gap:8px}
+.chs .ck-c .ck-l li{gap:12px;font-size:18px}
+.chs .ck-c .ck-l i{width:28px;height:28px;font-size:14px}
+.chs .ck-c .ck-m{padding:12px 16px 13px;font-size:18px;line-height:1.35}
+.chs .ck-c .ck-m span{white-space:normal;text-wrap:balance}
+.chs .ck-d{display:flex;justify-content:center;gap:8px;margin-top:12px}
+.chs .ck-d b{width:8px;height:8px;border-radius:99px;background:var(--ln);cursor:pointer;transition:width .3s ease,background .3s}
+.chs .ck-d b.on{width:24px;background:var(--acc)}
+#sheet.on .chs .chk{animation:chUp .45s cubic-bezier(.22,1,.36,1) .3s both}
 .chs .chr.on{animation:chUp .4s cubic-bezier(.22,1,.36,1)}
 /* прогресс обработки голосовой команды: тонкая полоса под ответом, пока сервер распознаёт и разбирает */
 .chs .pr{height:0;margin:0 6px;border-radius:99px;background:color-mix(in srgb,var(--ln) 65%,transparent);overflow:hidden;opacity:0;transition:height .3s cubic-bezier(.22,1,.36,1),margin .3s,opacity .25s}
@@ -975,7 +1038,7 @@ frame()
 <div id="scrim"></div>
 <aside id="drawer" aria-label="Разделы" aria-hidden="true">
 <div class="mn-head"><div class="mn-logo" id="mnav"><span id="mnini"></span></div><div class="mn-who"><b id="mnname">Профиль</b><small>Кабинет репетитора</small></div><svg class="mn-paw" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10L2 25l30 15 24-12v17h4V25z"/><path d="M14 38v10c0 4 8 9 18 9s18-5 18-9V38L32 47z"/></svg></div>
-<nav id="nv"><i id="nvi"></i><button class="mn-it on" data-t="c" style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span>Расписание</span></button><button class="mn-it" data-t="p" style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 16.5V7.5h3.2a2.6 2.6 0 010 5.2H8.5M8.5 15h5"/></svg><span>Оплаты</span></button><button class="mn-it" data-t="s" style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z"/><path d="M6.5 11.8v4c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4M21.5 9.5v5"/></svg><span>Ученики</span></button><button class="mn-it" data-t="ch" style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v7a2.5 2.5 0 01-2.5 2.5H12l-4.5 4v-4h-1A2.5 2.5 0 014 13.5z"/></svg><span>Чат с ИИ</span></button><button class="mn-it" data-t="mt" style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span>Материалы</span></button></nav>
+<nav id="nv"><i id="nvi"></i><button class="mn-it on" data-t="c" style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span>Расписание</span></button><button class="mn-it" data-t="p" style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 16.5V7.5h3.2a2.6 2.6 0 010 5.2H8.5M8.5 15h5"/></svg><span>Оплаты</span></button><button class="mn-it" data-t="s" style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z"/><path d="M6.5 11.8v4c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4M21.5 9.5v5"/></svg><span>Ученики</span></button><button class="mn-it" data-t="ch" style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v7a2.5 2.5 0 01-2.5 2.5H12l-4.5 4v-4h-1A2.5 2.5 0 014 13.5z"/></svg><span>Чат с ИИ</span></button><button class="mn-it" data-t="mt" style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span>Материалы</span></button><button class="mn-dl" style="--i:5" onclick="apkDl()" aria-label="Скачать АПК — последняя версия приложения"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4.5 19.5h15"/></svg><span>Скачать АПК</span></button></nav>
 
 </aside>
 <main id="app"></main>
@@ -1711,7 +1774,7 @@ async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Вв�
 
 /* ---------- каркас ---------- */
 $("#chimg").src=$("#tmk").src;
-const MIC_I='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',OK_I='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const MIC_I='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',OK_I='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',X_I='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
 /* ---------- контекст для голосового помощника ---------- */
 // scr — какой экран открыт поверх вкладки (карточка, форма…). Функции-открыватели оборачиваются, чтобы запомнить имя и id/день.
 var scr=null,vctx=null;
@@ -1726,12 +1789,25 @@ function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]}
   return c}
 var vc=null;   // состояние записи: {raf, stream, ctx, an}
 var vfrag=null;   // режим «Спросить у Вишенки»: {fragment, cat, n, part} — запись уходит на /api/fragment, ответ приходит в чат с ботом
-function chatOpen(){if($("#sheet.on .chs")){close_();return}vfrag=null;vctx=voiceCtx();open(`<div class="chs"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3><p>Нажмите кнопку и скажите команду.</p>
-  <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+function ckDots(e){const k=[...e.children],x=e.scrollLeft+k[0].offsetLeft;let b=0,m=1e9;   // слайдер примеров: какая карточка сейчас перед глазами
+  k.forEach((c,i)=>{const d=Math.abs(c.offsetLeft-x);if(d<m){m=d;b=i}});
+  document.querySelectorAll("#ckd b").forEach((d,i)=>d.classList.toggle("on",i===b))}
+function ckGo(i){const e=$("#cks");if(!e||!e.children[i])return;   // плавность руками: вызов прокрутки с объектом-параметрами кидает TypeError в старом WebView (test_apk_shell)
+  const to=e.children[i].offsetLeft-e.children[0].offsetLeft,from=e.scrollLeft,t0=performance.now();
+  e.style.scrollSnapType="none";
+  const f=t=>{const k=Math.min(1,(t-t0)/280);e.scrollLeft=from+(to-from)*(1-Math.pow(1-k,3));if(k<1)requestAnimationFrame(f);else{e.style.scrollSnapType="";e.scrollLeft=to}};
+  requestAnimationFrame(f)}
+function chatHint(){   // подсказка над кнопкой — по вкладке; пока придумана для «Ученики», «Оплаты» и «Расписание»
+  if(tab==="s"&&!scr)return '<div class="chk" id="chk"><div class="ck-t">Назовите:</div><ol class="ck-l"><li><i>1</i>Имя ученика</li><li><i>2</i>Класс</li><li><i>3</i>Предмет</li><li><i>4</i>Цену урока</li></ol><div class="ck-x"><div class="ck-t">Пример:</div><div class="ck-m"><span>Настя,</span> <span>7 класс,</span> <span>ОГЭ (Русский язык),</span> <span>4.000 рублей</span></div></div></div>';
+  if(tab==="p"&&!scr)return '<div class="chk" id="chk"><div class="ck-t">Назовите:</div><ol class="ck-l"><li><i>1</i>Имя ученика</li><li><i>2</i>Сумму оплаты</li></ol><div class="ck-x"><div class="ck-t">Пример:</div><div class="ck-m"><span>Настя,</span> <span>4.000 рублей</span></div></div></div>';
+  if(tab==="c"&&!scr)return '<div class="chk ck-s" id="chk"><div class="ck-sl" id="cks" role="region" aria-label="Примеры команд" onscroll="ckDots(this)"><div class=\"ck-c\"><div class=\"ck-t\">Новое занятие</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>Имя ученика</li><li><i>2</i>День</li><li><i>3</i>Время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Настя, четверг, 17:00</span></div></div><div class=\"ck-c\"><div class=\"ck-t\">Перенос занятия</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>Имя ученика</li><li><i>2</i>Старое время</li><li><i>3</i>Новое время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Настя, с четверга 17:00 на пятницу 18:00</span></div></div><div class=\"ck-c\"><div class=\"ck-t\">Отмена занятия</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>День</li><li><i>2</i>Время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Отмени четверг, 17:00</span></div></div></div><div class="ck-d" id="ckd"><b class="on" onclick="ckGo(0)"></b><b onclick="ckGo(1)"></b><b onclick="ckGo(2)"></b></div></div>';
+  return ""}
+function chatOpen(){if($("#sheet.on .chs")){close_();return}vfrag=null;vctx=voiceCtx();open(`<div class="chs${chatHint()?" hk":""}"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3>${chatHint()||"<p>Нажмите кнопку и скажите команду.</p>"}<div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+  <div class="cff" id="cff" hidden></div>
   <div class="chh" id="chh" aria-live="polite"></div>
   <p class="chr" id="chr" aria-live="polite"></p>
   <div class="pr" id="chp" aria-hidden="true"><i></i></div></div>
-  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">✅ Применить</button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">❌ Отмена</button></div></div>`)}
+  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">${OK_I}<span>Применить</span></button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">${X_I}<span>Отмена</span></button></div></div>`)}
 /* ---------- «Спросить у Вишенки»: выделили текст в варианте → виджет просит голосом уточнить задачу → ответ приходит в чат с ботом ---------- */
 function fragOpen(a){
   const t=String(a.text||"").replace(/\r/g,"").replace(/[ \t\u00a0]+/g," ").trim().slice(0,3000),m=MATS.find(x=>x.id===a.cat),n=Number(a.n);
@@ -1742,6 +1818,7 @@ function fragOpen(a){
   <blockquote class="fq"><span>${esc(q).replace(/\n+/g," ")}</span><small>${k} ${w} · вариант ${n}, ${esc(m.s)}</small></blockquote>
   <p>Что сделать с этим фрагментом? Нажмите кнопку и скажите — например, «перепиши» или «найди аргументы получше».</p>
   <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+  <div class="cff" id="cff" hidden></div>
   <div class="chh" id="chh" aria-live="polite"></div>
   <p class="chr" id="chr" aria-live="polite"></p>
   <div class="pr" id="chp" aria-hidden="true"><i></i></div></div>
@@ -1756,7 +1833,7 @@ function chrBtns(confirm){const a=$("#cha");if(!a)return;confirm=!!confirm;a.cla
   for(const [id,off] of [["cok",!confirm],["cno",!confirm]]){const b=$("#"+id);if(b){b.inert=off;off?b.setAttribute("aria-hidden","true"):b.removeAttribute("aria-hidden")}}
   micLabel()}
 function chrHeard(t){const e=$("#chh");if(!e)return;e.classList.remove("on");e.textContent=t?"«"+t+"»":"";if(t){void e.offsetWidth;e.classList.add("on")}}
-async function voiceConfirm(){chrBtns(false);chrSay("Выполняю…");chrProg(1);
+async function voiceConfirm(){chrFields(null);chrBtns(false);chrSay("Выполняю…");chrProg(1);
   let r=null;try{r=await api("/api/voice_confirm",{})}catch(e){}
   if(!(r&&r.ok)){chrSay(r&&r.reply?r.reply:"Не получилось выполнить");chrProg(0);return}   // ошибка: окно остаётся, причина — в строке ответа
   chrProg(2);
@@ -1793,7 +1870,7 @@ async function voiceDone(r){const a=r.action,i=r.info||{};
     const el=$(`.srow[onclick="card(${i.sid})"]`);
     if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),800)}return}
   await voiceFold();await load()}
-async function voiceCancel(){chrBtns(false);
+async function voiceCancel(){chrFields(null);chrBtns(false);
   let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
   chrSay(r&&r.reply?r.reply:"Отменил — ничего не менял")}
 /* «Открыть материал»: Вишенка сама переходит на страницу «Материалы» и открывает нужный вариант
@@ -1802,15 +1879,20 @@ async function voiceOpen(o){const ci=MATS.findIndex(x=>x.id===o.cat);if(ci<0){to
   await voiceFold();tab="mt";matCat=ci;matQ="";render();scrollTo(0,0);
   try{await matOpen(ci,o.n)}catch(e){}
   toast("Открыто: "+MATS[ci].s+" · Вариант "+o.n)}
+function chrFields(f){const e=$("#cff"),w=document.querySelector(".chs");if(!e)return;   // крупная карточка «Проверьте» вместо строки мелкого текста
+  if(!f||!f.length){e.hidden=true;e.textContent="";if(w)w.classList.remove("cfm");return}
+  e.innerHTML='<div class="ck-t">Проверьте:</div>'+f.map((x,i)=>`<div class="cf-r"><i>${i+1}</i><div><small>${esc(x.k)}</small><b>${esc(x.v)}</b></div></div>`).join("");
+  e.hidden=false;if(w)w.classList.add("cfm")}
 function voiceReply(r){const say=chrSay;chrHeard(r&&r.heard||"");
   if(r&&r.open){say(r.reply||"Открываю материал");voiceOpen(r.open);return}
+  chrFields(r&&r.confirm&&r.fields?r.fields:null);
   say(r&&r.reply?r.reply:"Не получилось отправить команду");chrBtns(!!(r&&r.confirm))}
 function micLabel(rec){const b=$("#micb");if(!b)return;
   if(micFix===1){b.innerHTML="⚙️<span>Микрофон в настройках</span>";return}   // состояние «включите микрофон» не затирается
   if(micFix===2){b.innerHTML="⬇️<span>Обновить приложение</span>";return}
   const cf=$("#cha")&&$("#cha").classList.contains("cf");
   b.innerHTML=(rec?OK_I:MIC_I)+"<span>"+(rec?"Готово":cf?"Поправить распознанное":vfrag?"Сказать, что сделать":"Голосовая команда")+"</span>"}
-function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);micLabel(rec);const e=$("#eq");if(e)e.classList.toggle("on",rec)}
+function micUi(rec){const b=$("#micb");if(!b)return;b.classList.toggle("rec",rec);{const w=document.querySelector(".chs");if(w)w.classList.toggle("rc",rec)}micLabel(rec);const e=$("#eq");if(e)e.classList.toggle("on",rec)}
 function chrSay(t){const e=$("#chr");if(!e)return;e.textContent=t;e.classList.remove("on");void e.offsetWidth;e.classList.add("on")}
 /* прогресс обработки голосовой команды: 1 — «сервер думает» (полоса растёт),
    2 — готово (до 100% и гаснет), 0 — сбой/отмена/новая запись (гаснет сразу) */
@@ -1857,7 +1939,7 @@ async function micTake(){   // живой общий поток или null (к�
       catch(e){err=e;if(k<tries-1){await new Promise(r=>setTimeout(r,400));continue}}}}
   micHubErr=(err&&err.name)||"unknown";return null}
 async function voiceToggle(){
-  chrHeard("");   // новая попытка — старая расшифровка не должна висеть над кнопками
+  chrFields(null);chrHeard("");   // новая попытка — старая расшифровка не должна висеть над кнопками
   chrProg(0);   // и старый прогресс тоже — начинается новая запись
   if(chRec)chStop();   // две записи сразу не бывает: запись чата гасится, микрофон общий
   const A=window.Android||{},oldWrap=!!(A.sharePdf&&!A.micStatus);   // APK со старой обёрткой — просим обновить приложение
@@ -1939,6 +2021,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden&&vc)voiceSt
   clearTimeout(micIdleT);if(document.hidden)micIdleT=setTimeout(micDrop,MIC_IDLE_MS)});
 window.addEventListener("pagehide",micDrop);
 async function voiceSend(blob,ctx,dur){const say=chrSay;
+  {const k=$("#chk");if(k)k.remove()}   // подсказка сделала своё дело — освобождаем место под расшифровку, вопрос и кнопки
   say("Отправляю…");chrBtns(false);chrProg(1);   // полоса идёт, пока сервер распознаёт и разбирает команду
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});
   if(!audio){say("Не удалось прочитать запись");chrProg(0);return}
@@ -2144,6 +2227,22 @@ async function chOpen(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Фай
     const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();return true
   }catch(e){toast("Не получилось открыть файл");return false}}
 function chDl(i,j){chOpen(i,j)}   // кнопка «Скачать» — ровно тот же путь, что и тап по файлу/стикеру
+/* УНИВЕРСАЛЬНАЯ ссылка на САМУЮ ПОСЛЕДНЮЮ сборку APK:
+   GitHub-релиз «apk-latest» — CI при каждой сборке ПЕРЕЗАЛИВАЕТ туда файлы, поэтому адрес
+   не меняется и всегда ведёт на свежую версию. Номер версии в ссылку не зашит. */
+const APK_URL="https://github.com/vladimirgladik1996-commits/Shkola_EGE/releases/download/apk-latest/kabinet-repetitora-prod.apk";
+/* «Скачать АПК» (нижний пункт меню): тап → скачивается последняя версия мобильного приложения.
+   Универсальная ссылка APK_URL — основная; /apk (тот же файл от кабинета) — запасной вариант. */
+function apkDl(){const A=window.Android||{},go=u=>{
+    try{
+      if(A.openFile){A.openFile(u,"kabinet-repetitora.apk","application/vnd.android.package-archive");return}   // APK: скачать и открыть установщик
+      if(APP){location.href=u;return}   // старая обёртка: файл заберёт DownloadListener (как «Обновить приложение»)
+      if(tg&&tg.openLink){tg.openLink(u);return}   // Telegram: система скачивает файл
+      if(tg&&tg.downloadFile){tg.downloadFile({url:u,file_name:"kabinet-repetitora.apk",mime_type:"application/vnd.android.package-archive"});return}
+      const a=document.createElement("a");a.href=u;a.download="kabinet-repetitora.apk";a.rel="noopener";document.body.appendChild(a);a.click();a.remove()   // браузер: обычное скачивание
+    }catch(e){location.href=u}};
+  setNav(false);
+  go(APK_URL)}   // всегда самая последняя версия (см. APK_URL)
 let chShBusy=false;
 /* «Поделиться» — ПЕРЕСЫЛКА САМОГО ФАЙЛА, ссылки запрещены полностью:
    APK — системное окно «Переслать файл» (ACTION_SEND с файлом);
