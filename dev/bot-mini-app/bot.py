@@ -1396,6 +1396,8 @@ async def ai_cb(c: CallbackQuery):
 INIT_MAX_AGE = 24 * 3600     # initData старше суток не принимаем: украденную строку нельзя воспроизводить вечно
 
 PDF_TTL = 600   # ссылка на PDF живёт 10 минут: хватает на «Сохранить», но не для повторного использования
+TG_ID_MAX = 2**53 - 1   # sanity-граница tg_id: у новых аккаунтов Telegram id уже за 2 млрд (напр. 4 267 559 270),
+                        # а защита подписных ссылок — в HMAC-подписи, а не в диапазоне чисел
 
 def pdf_token(uid, start):
     """Подписанная ссылка на PDF. Нужна для Telegram.WebApp.downloadFile и DownloadManager в APK:
@@ -1413,7 +1415,7 @@ def check_pdf_token(raw, start):
     except (ValueError, AttributeError):
         return None
     now = time.time()
-    if not (now <= exp <= now + PDF_TTL) or not (0 <= uid <= 2_000_000_000):
+    if not (now <= exp <= now + PDF_TTL) or not (0 <= uid <= TG_ID_MAX):
         return None
     want = hmac.new(TOKEN.encode(), f"pdf:{uid}:{start}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
     return uid if hmac.compare_digest(sig, want) else None
@@ -1773,7 +1775,7 @@ VOICE_MAX_B64 = 1_500_000            # ~1,1 МБ звука; запись на �
 VOICE_MAX_SEC = 60
 
 def _int_id(x):
-    if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x <= 2_000_000_000:
+    if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x <= TG_ID_MAX:
         raise ValueError
     return x
 
@@ -2107,7 +2109,7 @@ def check_chat_file_token(raw, tok):
     except (ValueError, AttributeError):
         return None
     now = time.time()
-    if not (now <= exp <= now + CHAT_FILE_TTL) or not (0 <= uid <= 2_000_000_000) or not isinstance(tok, str):
+    if not (now <= exp <= now + CHAT_FILE_TTL) or not (0 <= uid <= TG_ID_MAX) or not isinstance(tok, str):
         return None
     want = hmac.new(TOKEN.encode(), f"chatfile:{uid}:{tok}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
     return uid if hmac.compare_digest(sig, want) else None
@@ -2156,7 +2158,39 @@ async def api_chat_file(request):
     except UnicodeEncodeError:
         disp = "attachment; filename*=UTF-8''" + quote(name)
     return web.Response(body=data, content_type=mime or "application/octet-stream",
-                        headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=3600"})
+                        headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=3600",
+                                 # CORS обязателен для Telegram.WebApp.downloadFile (см. api_week_pdf)
+                                 "Access-Control-Allow-Origin": "https://web.telegram.org"})
+
+
+@guarded
+async def api_chat_file_send(request):
+    """«Поделиться» файлом «Чата с ИИ» из мини-аппа — по паттерну «Поделиться PDF» (см. api_week_send):
+    в WebView Telegram нельзя приложить файл к системному шаре, поэтому бот присылает копию документа
+    в чат с пользователем — оттуда он пересылается любому контакту (⋮ над файлом → «Переслать»).
+    tok — идентификатор файла из ссылки карточки; отправить можно только СВОЙ файл."""
+    tok = (await request.json()).get("tok", "")
+    rec = CHAT_FILES.get(tok) if isinstance(tok, str) else None
+    uid, tg_bot = user_id(request), request.app.get("bot")
+    if not rec or not isinstance(uid, int) or uid <= 0 or tg_bot is None:
+        return web.json_response({"error": "unavailable"}, status=503)
+    fuid, data, name, mime, ts = rec
+    if fuid != uid:                                  # чужой файл переслать нельзя
+        return web.json_response({"error": "forbidden"}, status=403)
+    if time.time() - ts > CHAT_FILE_TTL:
+        CHAT_FILES.pop(tok, None)
+        return web.json_response({"error": "expired"}, status=404)
+    try:
+        f = BufferedInputFile(data, filename=name)
+        cap = "Из «Чата с ИИ» — перешлите нужному контакту (⋮ над файлом → «Переслать»)"
+        if (mime or "").startswith("image/"):
+            await tg_bot.send_photo(uid, f, caption=cap)
+        else:
+            await tg_bot.send_document(uid, f, caption=cap)
+    except TelegramAPIError as e:
+        log.warning("chat file share failed: tg_id=%s err=%s", uid, e)
+        return web.json_response({"error": "send_failed"}, status=502)
+    return web.json_response({"ok": True})
 
 
 @guarded
@@ -2369,6 +2403,7 @@ def make_app():
     app.router.add_post("/api/stt", api_stt)
     app.router.add_post("/api/chat", api_chat)
     app.router.add_get("/api/chat_file/{tok}", api_chat_file)
+    app.router.add_post("/api/chat_file/send", api_chat_file_send)   # «Поделиться»: копия файла в чат с ботом
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)

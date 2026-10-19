@@ -2123,7 +2123,7 @@ function chDl(i,j){const x=chDocAt(i,j);if(!x){toast("Файл устарел �
   const u=chAbs(x),A=window.Android||{};
   try{
     if(A.shareFile){A.shareFile(u,x.n,x.m||CH_DOCX);return}   // APK: «Загрузки» + верное русское имя файла
-    if(!APP&&tg.downloadFile&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){tg.downloadFile({url:u,file_name:x.n});return}   // Telegram 8.0+: родное окно загрузки
+    if(!APP&&tg.downloadFile&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){tg.downloadFile({url:u,file_name:x.n,mime_type:x.m||CH_DOCX});return}   // Telegram 8.0+: родное окно загрузки
     const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();toast("Файл скачивается")
   }catch(e){toast("Не получилось скачать файл")}}
 let chShBusy=false;
@@ -2135,8 +2135,12 @@ async function chShare(i,j){const x=chDocAt(i,j);if(!x){toast("Файл уста
     if(navigator.share&&navigator.canShare){   // браузер / клиент с Web Share API: сам файл, не ссылка
       try{const r=await fetch(u);if(r.ok){const f=new File([await r.blob()],x.n,{type:mime});if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:x.n});return}}}
       catch(e){if(e&&e.name=="AbortError")return}}
-    if(!APP){   // Telegram: родное окно «Переслать» (выбор чата/контакта) со ссылкой на файл
-      const l="https://t.me/share/url?url="+encodeURIComponent(u)+"&text="+encodeURIComponent("Word-документ: "+x.n);
+    if(!APP&&tg.initData){   // Telegram: файл нельзя приложить к системному шаре — бот присылает копию
+      // в чат (как «Поделиться PDF»), оттуда она пересылается любому контакту (⋮ над файлом → «Переслать»)
+      const tok=(x.u.match(/\/api\/chat_file\/([^/?]+)/)||[])[1];
+      if(tok){const r=await api("/api/chat_file/send",{tok});
+        if(r){toast("Файл уже в чате с ботом. Нажмите на него → в правом верхнем углу «Поделиться» → выберите контакт");return}}
+      const l="https://t.me/share/url?url="+encodeURIComponent(u)+"&text="+encodeURIComponent("Word-документ: "+x.n);   // запасной путь — ссылкой
       try{tg.openTelegramLink(l)}catch(e){window.open(l,"_blank")}
       return}
     if(navigator.share){await navigator.share({title:x.n,url:u});return}
