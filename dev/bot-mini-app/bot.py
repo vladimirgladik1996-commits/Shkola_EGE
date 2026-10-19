@@ -2252,13 +2252,16 @@ async def api_chat_file_rebuild(request):
     name = j.get("name") if isinstance(j, dict) else None
     if not isinstance(text, str) or not text.strip() or len(text) > 100_000 or not isinstance(uid, int) or uid <= 0:
         return web.json_response({"error": "bad"}, status=400)
-    data, built, _ = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, "docx", text)
     if not isinstance(name, str):
         name = ""
     name = name.replace('"', "").replace("\n", " ").replace("\r", " ").strip()
-    if not name.lower().endswith(".docx"):
+    # PDF-карточка пересобирается в PDF, Word — в Word (путь docx не меняется)
+    fmt = "pdf" if name.lower().endswith(".pdf") else "docx"
+    data, built, _ = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, fmt, text)
+    if not name.lower().endswith((".docx", ".pdf")):
         name = built
-    return web.json_response({"url": chat_file_put(uid, data, name, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+    mime = "application/pdf" if fmt == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return web.json_response({"url": chat_file_put(uid, data, name, mime)})
 
 
 @guarded
