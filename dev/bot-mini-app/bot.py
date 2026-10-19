@@ -2120,14 +2120,16 @@ def _chat_file_uid(request):
     return check_chat_file_token(request.query.get("tok", ""), request.match_info.get("tok", ""))
 
 
-def chat_file_put(uid, data, name, mime=None):
+def chat_file_put(uid, data, name, mime=None, tg_fid=None):
     """Кладёт готовый файл в память и возвращает подписанную ссылку для карточки в чате (см. api_chat_file).
-    mime — тип файла (docx/pdf/png): без него пересылка из чата уходит как application/octet-stream."""
+    mime — тип файла (docx/pdf/png): без него пересылка из чата уходит как application/octet-stream.
+    tg_fid — file_id этой же копии файла на серверах Telegram (появляется, когда ответ уходит в диалог
+    бота): по нему «Поделиться» пересылает САМ файл в исходном формате (см. api_chat_file_prepare)."""
     now = time.time()
     for t in [t for t, r in CHAT_FILES.items() if now - r[4] > CHAT_FILE_TTL]:
         CHAT_FILES.pop(t, None)
     tok = secrets.token_urlsafe(12)
-    CHAT_FILES[tok] = [uid, data, name, mime, now]
+    CHAT_FILES[tok] = [uid, data, name, mime, now, tg_fid]
     return f"/api/chat_file/{tok}/{quote(name)}?tok={chat_file_token(uid, tok)}"   # имя в пути: Telegram по нему называет присланный документ
 
 
@@ -2140,7 +2142,7 @@ async def api_chat_file(request):
     rec = CHAT_FILES.get(tok)
     if not rec:
         return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
-    uid, data, name, mime, ts = rec
+    uid, data, name, mime, ts = rec[:5]
     mine = user_id(request)
     if mine is not None and mine != uid:
         return web.Response(status=403, text="Нет доступа к этому файлу")
@@ -2161,45 +2163,61 @@ async def api_chat_file(request):
                                  "Access-Control-Allow-Origin": "https://web.telegram.org"})
 
 
+async def tg_upload_file_id(tg_bot, uid, data, name):
+    """Кладёт файл на сервера Telegram и возвращает его file_id (или None).
+    Файл уходит пользователю тихим сообщением (без уведомления) и сразу удаляется — так у Telegram
+    появляется копия файла, по которой «Поделиться» пересылает САМ ФАЙЛОМ (см. api_chat_file_prepare).
+    Это не ссылка и не архив: получатель берёт те же байты с тем же именем."""
+    try:
+        msg = await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), disable_notification=True)
+        fid = getattr(getattr(msg, "document", None), "file_id", None)
+    except TelegramAPIError as e:
+        log.warning("chat file upload failed: tg_id=%s err=%s", uid, e)
+        return None
+    mid = getattr(msg, "message_id", None)
+    if not fid or mid is None:
+        return fid
+    try:
+        await tg_bot.delete_message(uid, mid)   # служебное сообщение пользователю не нужно
+    except TelegramAPIError as e:
+        log.warning("chat file upload: сообщение не удалилось: tg_id=%s err=%s", uid, e)
+    return fid
+
+
 @guarded
 async def api_chat_file_prepare(request):
     """«Поделиться» файлом «Чата с ИИ» (Telegram ≥ 8.0, см. tg.shareMessage): бот готовит
     сообщение с документом (savePreparedInlineMessage), мини-апп открывает РОДНОЕ окно
-    Telegram «Отправить в…» — выбранный контакт получает сам файл, а не ссылку.
-    tok — идентификатор файла из ссылки карточки; подготовить можно только СВОЙ файл."""
-    from aiogram.types import InlineQueryResultDocument   # локально: функция самодостаточна для тестов
+    Telegram «Отправить в…» — выбранный контакт получает сам файл в ЕГО ИСХОДНОМ ФОРМАТЕ
+    (.docx приходит .docx, .pdf — .pdf; имя и байты не меняются), а не ссылку и не архив.
+    tok — идентификатор файла из ссылки карточки; подготовить можно только СВОЙ файл.
+
+    Формат сохраняется жёстко, потому что пересылка идёт САМИМ файлом по file_id
+    (InlineQueryResultCachedDocument): файл уже лежит на серверах Telegram — ограничений по
+    формату нет. Отправка по ссылке (InlineQueryResultDocument) принимает только .pdf/.zip —
+    из-за этого Word приходилось заворачивать в архив, и получатель вместо «План урока.docx»
+    получал zip-архив. Архивов больше нет: file_id либо сохранён при доставке ответа в чат,
+    либо файл кладётся тихим сообщением, которое сразу удаляется (см. tg_upload_file_id)."""
+    from aiogram.types import InlineQueryResultCachedDocument   # локально: функция самодостаточна для тестов
     tok = (await request.json()).get("tok", "")
     rec = CHAT_FILES.get(tok) if isinstance(tok, str) else None
     uid, tg_bot = user_id(request), request.app.get("bot")
     if not rec or not isinstance(uid, int) or uid <= 0 or tg_bot is None:
         return web.json_response({"error": "unavailable"}, status=503)
-    fuid, data, name, mime, ts = rec
+    fuid, data, name, mime, ts = rec[:5]
     if fuid != uid:                                  # чужой файл переслать нельзя
         return web.json_response({"error": "forbidden"}, status=403)
     if time.time() - ts > CHAT_FILE_TTL:
         CHAT_FILES.pop(tok, None)
         return web.json_response({"error": "expired"}, status=404)
-    # Telegram через окно «Отправить в…» пересылает ТОЛЬКО .pdf и .zip — офиц. документация
-    # InlineQueryResultDocument: «Currently, only .PDF and .ZIP files can be sent using this method».
-    # Попытка отправить .docx у Telegram падает на доставке — у получателя сообщение с красным «!»
-    # и файл не открывается. Поэтому Word-файл пересылается zip-архивом: внутри лежит сам
-    # «План урока.docx» — получатель открывает архив и сразу получает Word-файл.
-    # (В APK «Поделиться» шлёт .docx напрямую — там ограничения Telegram нет.)
-    if (mime or "").endswith("pdf"):
-        payload, fname, pmime = data, name, "application/pdf"
-    else:
-        import io as _io, zipfile as _zipfile
-        buf = _io.BytesIO()
-        with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as z:
-            z.writestr(name if "." in name else name + ".docx", data)
-        payload = buf.getvalue()
-        fname = (name.rsplit(".", 1)[0] if "." in name else name) + ".zip"
-        pmime = "application/zip"
-    path = chat_file_put(uid, payload, fname, pmime)   # своя запись в памяти: карточка продолжает отдавать сам .docx
-    url = f"https://{request.url.host}{path}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
-    res = InlineQueryResultDocument(id=tok, document_url=url, title=name,
-                                    mime_type=pmime,
-                                    description="Документ из «Чата с ИИ»")
+    fid = rec[5] if len(rec) > 5 else None
+    if not fid:                                      # файла нет на серверах Telegram — кладём тихо
+        fid = await tg_upload_file_id(tg_bot, uid, data, name)
+        if not fid:
+            return web.json_response({"error": "prepare_failed"}, status=502)
+        rec[5] = fid                                 # кэш: повторное «Поделиться» не загружает файл заново
+    res = InlineQueryResultCachedDocument(id=tok, document_file_id=fid, title=name,
+                                          description="Документ из «Чата с ИИ»")
     try:
         prep = await tg_bot.save_prepared_inline_message(
             user_id=uid, result=res, allow_user_chats=True, allow_bot_chats=False,
@@ -2215,14 +2233,23 @@ async def api_chat_file_rebuild(request):
     """Оживление карточки Word-файла из истории чата: файл собран из текста ответа, и этот текст
     лежит в самой карточке — значит файл можно собрать заново и выдать свежую подписанную ссылку.
     Раньше старые карточки умирали навсегда: файл жил в памяти сервера, а подпись истекала —
-    все три кнопки (Скачать/Поделиться/тап) на такой карточке были мертвы."""
+    все три кнопки (Скачать/Поделиться/тап) на такой карточке были мертвы.
+
+    Передан tok исходной записи (адрес файла в карточке) — пока файл ещё жив в памяти,
+    отдаётся ссылка на НЕГО ЖЕ: «Скачать»/«Поделиться» выдают сам файл ответа, а не
+    пересобранную копию (иначе, например, терялись встроенные картинки)."""
     try:
         j = await request.json()
     except Exception:
         return web.json_response({"error": "bad"}, status=400)
+    tok = j.get("tok") if isinstance(j, dict) else None
+    uid = user_id(request)
+    if isinstance(tok, str) and tok and isinstance(uid, int) and uid > 0:
+        rec = CHAT_FILES.get(tok)
+        if rec and rec[0] == uid and time.time() - rec[4] <= CHAT_FILE_TTL:
+            return web.json_response({"url": f"/api/chat_file/{tok}/{quote(rec[2])}?tok={chat_file_token(uid, tok)}"})
     text = j.get("text") if isinstance(j, dict) else None
     name = j.get("name") if isinstance(j, dict) else None
-    uid = user_id(request)
     if not isinstance(text, str) or not text.strip() or len(text) > 100_000 or not isinstance(uid, int) or uid <= 0:
         return web.json_response({"error": "bad"}, status=400)
     data, built, _ = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, "docx", text)
@@ -2351,18 +2378,21 @@ async def api_chat(request):
     mime = ("image/png" if fmt == "image" else
             "application/pdf" if fmt == "pdf" else
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    furl = chat_file_put(uid, data, name, mime)   # тот же файл — карточкой в чате с ИИ…
-    tg_bot, sent = request.app.get("bot"), False
+    tg_bot, sent, tg_fid = request.app.get("bot"), False, None
     if type(uid) is int and uid > 0 and tg_bot is not None:
         try:
             f = BufferedInputFile(data, filename=name)
             if fmt == "image":
                 await tg_bot.send_photo(uid, f, caption=title[:200])   # …и в диалог Telegram-бота
             else:
-                await tg_bot.send_document(uid, f, caption=title[:200])
+                msg = await tg_bot.send_document(uid, f, caption=title[:200])
+                # id файла на серверах Telegram сохраняется для «Поделиться»: контакт получает сам
+                # файл в исходном формате (Word приходит Word-ом), повторно загружать его не нужно
+                tg_fid = getattr(getattr(msg, "document", None), "file_id", None)
             sent = True
         except TelegramAPIError as e:
             log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
+    furl = chat_file_put(uid, data, name, mime, tg_fid)   # тот же файл — карточкой в чате с ИИ…
     if not sent and not furl:                    # ни в чат, ни в Telegram — документ бесполезен
         await send({"t": "fail", "why": "send"})
         await resp.write_eof()
