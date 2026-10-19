@@ -68,8 +68,17 @@ async def main():
         assert r.status == 200 and (await r.json())["id"] == "prepared-id-1", r.status
         uid, res, kw = fb.prepared[-1]
         assert uid == 42 and isinstance(res, InlineQueryResultDocument), type(res)
-        assert res.title == "План урока.docx" and res.mime_type == "application/zip"   # docx=zip: Telegram пропускает только pdf/zip
-        assert res.document_url.startswith("http") and res.document_url.endswith(furl)
+        assert res.title == "План урока.docx" and res.mime_type == "application/zip"   # Telegram шлёт через это окно только pdf/zip
+        assert res.document_url.startswith("https://")
+        # получатель забирает файл из document_url: там zip-архив, внутри — сам «План урока.docx»
+        import io, zipfile
+        from urllib.parse import urlparse
+        pu = urlparse(res.document_url)
+        rz = await c.get(pu.path + ("?" + pu.query if pu.query else ""))
+        zb = await rz.read()
+        zf = zipfile.ZipFile(io.BytesIO(zb))
+        assert rz.status == 200 and zf.namelist() == ["План урока.docx"] and zf.read("План урока.docx") == DOCX
+        assert "План урока.zip" in unquote(pu.path)   # имя архива — из имени Word-файла
         assert kw.get("allow_user_chats") and kw.get("allow_group_chats")
         ok("владеleц получает id подготовленного сообщения: document_url — наш подписной файл, имя и mime верные")
 

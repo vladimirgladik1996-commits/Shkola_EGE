@@ -2179,12 +2179,24 @@ async def api_chat_file_prepare(request):
     if time.time() - ts > CHAT_FILE_TTL:
         CHAT_FILES.pop(tok, None)
         return web.json_response({"error": "expired"}, status=404)
-    url = f"https://{request.url.host}/api/chat_file/{tok}/{quote(name)}?tok={chat_file_token(uid, tok)}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
-    # Telegram НЕ ПРОПУСКАЕТ docx/png/octet-stream в savePreparedInlineMessage — только
-    # application/pdf и application/zip (проверено прогоном API: «unallowed document MIME type»).
-    # .docx — это zip-контейнер (PK), поэтому готовим как application/zip: валидация проходит,
-    # а получатель получает сам файл с именем из пути/Content-Disposition — «План урока.docx».
-    pmime = "application/pdf" if (mime or "").endswith("pdf") else "application/zip"
+    # Telegram через окно «Отправить в…» пересылает ТОЛЬКО .pdf и .zip — офиц. документация
+    # InlineQueryResultDocument: «Currently, only .PDF and .ZIP files can be sent using this method».
+    # Попытка отправить .docx у Telegram падает на доставке — у получателя сообщение с красным «!»
+    # и файл не открывается. Поэтому Word-файл пересылается zip-архивом: внутри лежит сам
+    # «План урока.docx» — получатель открывает архив и сразу получает Word-файл.
+    # (В APK «Поделиться» шлёт .docx напрямую — там ограничения Telegram нет.)
+    if (mime or "").endswith("pdf"):
+        payload, fname, pmime = data, name, "application/pdf"
+    else:
+        import io as _io, zipfile as _zipfile
+        buf = _io.BytesIO()
+        with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as z:
+            z.writestr(name if "." in name else name + ".docx", data)
+        payload = buf.getvalue()
+        fname = (name.rsplit(".", 1)[0] if "." in name else name) + ".zip"
+        pmime = "application/zip"
+    path = chat_file_put(uid, payload, fname, pmime)   # своя запись в памяти: карточка продолжает отдавать сам .docx
+    url = f"https://{request.url.host}{path}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
     res = InlineQueryResultDocument(id=tok, document_url=url, title=name,
                                     mime_type=pmime,
                                     description="Документ из «Чата с ИИ»")
