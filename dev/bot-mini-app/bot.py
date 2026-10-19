@@ -2128,7 +2128,7 @@ def chat_file_put(uid, data, name, mime=None):
         CHAT_FILES.pop(t, None)
     tok = secrets.token_urlsafe(12)
     CHAT_FILES[tok] = [uid, data, name, mime, now]
-    return f"/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"
+    return f"/api/chat_file/{tok}/{quote(name)}?tok={chat_file_token(uid, tok)}"   # имя в пути: Telegram по нему называет присланный документ
 
 
 @guarded
@@ -2179,9 +2179,14 @@ async def api_chat_file_prepare(request):
     if time.time() - ts > CHAT_FILE_TTL:
         CHAT_FILES.pop(tok, None)
         return web.json_response({"error": "expired"}, status=404)
-    url = f"https://{request.url.host}/api/chat_file/{tok}?tok={chat_file_token(uid, tok)}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
+    url = f"https://{request.url.host}/api/chat_file/{tok}/{quote(name)}?tok={chat_file_token(uid, tok)}"   # всегда https: страница открыта по https, иначе Telegram не заберёт файл
+    # Telegram НЕ ПРОПУСКАЕТ docx/png/octet-stream в savePreparedInlineMessage — только
+    # application/pdf и application/zip (проверено прогоном API: «unallowed document MIME type»).
+    # .docx — это zip-контейнер (PK), поэтому готовим как application/zip: валидация проходит,
+    # а получатель получает сам файл с именем из пути/Content-Disposition — «План урока.docx».
+    pmime = "application/pdf" if (mime or "").endswith("pdf") else "application/zip"
     res = InlineQueryResultDocument(id=tok, document_url=url, title=name,
-                                    mime_type=mime or "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    mime_type=pmime,
                                     description="Документ из «Чата с ИИ»")
     try:
         prep = await tg_bot.save_prepared_inline_message(
@@ -2191,6 +2196,30 @@ async def api_chat_file_prepare(request):
         log.warning("chat file prepare failed: tg_id=%s err=%s", uid, e)
         return web.json_response({"error": "prepare_failed"}, status=502)
     return web.json_response({"id": prep.id})
+
+
+@guarded
+async def api_chat_file_rebuild(request):
+    """Оживление карточки Word-файла из истории чата: файл собран из текста ответа, и этот текст
+    лежит в самой карточке — значит файл можно собрать заново и выдать свежую подписанную ссылку.
+    Раньше старые карточки умирали навсегда: файл жил в памяти сервера, а подпись истекала —
+    все три кнопки (Скачать/Поделиться/тап) на такой карточке были мертвы."""
+    try:
+        j = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad"}, status=400)
+    text = j.get("text") if isinstance(j, dict) else None
+    name = j.get("name") if isinstance(j, dict) else None
+    uid = user_id(request)
+    if not isinstance(text, str) or not text.strip() or len(text) > 100_000 or not isinstance(uid, int) or uid <= 0:
+        return web.json_response({"error": "bad"}, status=400)
+    data, built, _ = await asyncio.get_running_loop().run_in_executor(None, chatfiles.build, "docx", text)
+    if not isinstance(name, str):
+        name = ""
+    name = name.replace('"', "").replace("\n", " ").replace("\r", " ").strip()
+    if not name.lower().endswith(".docx"):
+        name = built
+    return web.json_response({"url": chat_file_put(uid, data, name, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
 
 
 @guarded
@@ -2403,7 +2432,9 @@ def make_app():
     app.router.add_post("/api/stt", api_stt)
     app.router.add_post("/api/chat", api_chat)
     app.router.add_get("/api/chat_file/{tok}", api_chat_file)
+    app.router.add_get("/api/chat_file/{tok}/{fname}", api_chat_file)   # имя файла в пути — так документ называется у получателя
     app.router.add_post("/api/chat_file/prepare", api_chat_file_prepare)   # «Поделиться»: tg.shareMessage — файл, не ссылка
+    app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)   # оживление старых карточек: файл собирается заново из текста ответа
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)

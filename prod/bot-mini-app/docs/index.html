@@ -2116,7 +2116,19 @@ function chConfetti(){
    браузер — скачивание файла. Никаких ссылок и лишних сообщений. */
 const chMime=x=>x.m||(/\.pdf$/i.test(x.n||"")?"application/pdf":/\.png$/i.test(x.n||"")?"image/png"
   :/\.jpe?g$/i.test(x.n||"")?"image/jpeg":/\.docx$/i.test(x.n||"")?CH_DOCX:"application/octet-stream");
-function chOpen(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
+/* Карточка Word-файла живёт в истории чата, а файл на сервере — в памяти и со сроком подписи:
+   чтобы кнопки работали и на СТАРЫХ карточках, файл собирается заново из текста ответа
+   (он лежит в самой карточке) и берётся свежая подписанная ссылка */
+async function chFresh(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u||!chIsDoc(x))return x;
+  const t=((CH[i]||{}).t||"").trim();if(!t)return x;
+  try{
+    const h={"Content-Type":"application/json"};if(tg&&tg.initData)h["X-Init"]=tg.initData;
+    if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
+    const r=await fetch(API_BASE+"/api/chat_file/rebuild",{method:"POST",headers:h,
+      body:JSON.stringify({text:t.slice(0,100000),name:x.n}),cache:"no-store"});
+    if(r.ok){const d=await r.json();if(d&&d.url)return Object.assign({},x,{u:d.url})}}catch(e){}
+  return x}
+async function chOpen(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
   const u=chAbs(x),A=window.Android||{},mime=chMime(x);
   try{
     if(A.openFile){A.openFile(u,x.n,mime);return true}   // APK: скачать + открыть на экране системным просмотрщиком
@@ -2132,7 +2144,7 @@ let chShBusy=false;
    Telegram 8.0+ — родное окно «Отправить в…» (tg.shareMessage: контакт получает сам .docx);
    браузер/WebView — системное окно шаринга с файлом (Web Share API Level 2, navigator.share({files})).
    Запасной путь (chShareSave) только скачивает файл — без ссылок и без лишних сообщений. */
-async function chShare(i,j){const x=chDocAt(i,j);if(!x){toast("Файл устарел — попросите ответ ещё раз");return}
+async function chShare(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return}
   if(chShBusy)return;chShBusy=true;
   const u=chAbs(x),A=window.Android||{},mime=chMime(x);
   try{

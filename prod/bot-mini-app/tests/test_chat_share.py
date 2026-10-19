@@ -68,7 +68,7 @@ async def main():
         assert r.status == 200 and (await r.json())["id"] == "prepared-id-1", r.status
         uid, res, kw = fb.prepared[-1]
         assert uid == 42 and isinstance(res, InlineQueryResultDocument), type(res)
-        assert res.title == "План урока.docx" and res.mime_type == MIME
+        assert res.title == "План урока.docx" and res.mime_type == "application/zip"   # docx=zip: Telegram пропускает только pdf/zip
         assert res.document_url.startswith("http") and res.document_url.endswith(furl)
         assert kw.get("allow_user_chats") and kw.get("allow_group_chats")
         ok("владеleц получает id подготовленного сообщения: document_url — наш подписной файл, имя и mime верные")
@@ -95,7 +95,21 @@ async def main():
         assert re.search(r"const chFileTap=\(i,j,e\)=>\{[^}]*chOpen\(i,j\)", html), "тап по файлу/стикеру не зовёт chOpen"
         assert "return chFileTap(" in html, "стикер и карточка документа должны быть кликабельными"
         assert "tg.openLink" in html, "Telegram-путь «скачать+открыть» должен открывать файл системным способом"
-        ok("фронт: «Скачать» и тап по файлу/стикеру — одна функция chOpen (скачать + открыть)")
+        assert "/api/chat_file/rebuild" in html and "chFresh" in html, \
+            "нет оживления старых карточек — файлы из истории чата остаются мёртвыми"
+        ok("фронт: «Скачать» и тап по файлу/стикеру — одна функция chOpen (скачать + открыть); старые карточки оживают")
+
+        # --- 7. старые карточки оживают: файл пересобирается из текста ответа, ссылка свежая ---
+        r = await c.post("/api/chat_file/rebuild", json={"text": "# План урока\nРазминка 5 минут", "name": "План урока.docx"}, headers=H)
+        d = await r.json()
+        assert r.status == 200 and d["url"].startswith("/api/chat_file/"), (r.status, d)
+        rr = await c.get(d["url"])
+        b = await rr.read()
+        assert rr.status == 200 and b[:2] == b"PK" and "План урока.docx" in unquote(rr.headers["Content-Disposition"])
+        ok("старая карточка оживает: файл собирается заново из текста ответа и отдаётся по свежей ссылке")
+        assert (await c.post("/api/chat_file/rebuild", json={"text": "", "name": "x.docx"}, headers=H)).status == 400
+        assert (await c.post("/api/chat_file/rebuild", json={"text": "# Т\nтекст"})).status == 403
+        ok("пересборка: пустой текст и запрос без входа отклоняются")
 
 
 
