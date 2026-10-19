@@ -61,6 +61,15 @@ for side in ("dev", "prod"):
         f"{side}: нет MIME-фильтров или снимок не возвращается в страницу"
     ok(f"{side}: галерея и «Файл» получают свои MIME-типы, снимок возвращается в страницу")
 
+    # --- файлы ответа чата: «Скачать»/тап открывают файл, «Поделиться» — только пересылка ---
+    assert "openFile" in java and "ACTION_VIEW" in java, \
+        f"{side}: нет openFile (ACTION_VIEW) — «Скачать»/тап по файлу не открывают документ на экране"
+    assert "startDownload" in java and "Intent.ACTION_SEND" in java, \
+        f"{side}: «Поделиться» должен оставаться системным окном пересылки файла (ACTION_SEND)"
+    assert "FLAG_GRANT_READ_URI_PERMISSION" in java, \
+        f"{side}: просмотрщик файла не получит доступ к content:// URI скачанного документа"
+    ok(f"{side}: openFile скачивает и открывает файл (ACTION_VIEW), shareFile — пересылка (ACTION_SEND)")
+
     # --- страница отдаёт все три опции ---
     for inp in ("aic-ph", "aic-cam", "aic-fi"):
         assert f'id="{inp}"' in html, f"{side}: на странице нет ввода {inp}"

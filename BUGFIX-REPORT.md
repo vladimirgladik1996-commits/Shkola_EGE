@@ -1,6 +1,6 @@
 # ОТЧЁТ О КРИТИЧЕСКИХ БАГАХ — карточка Word-ответа в «Чате с ИИ»
 
-Статус: **анализ завершён, правки ЕЩЁ НЕ внесены**. Документ — подробный разбор и план исправления.
+Статус: **правки ВНЕСЕНЫ — см. §9 «Внесённые правки»**. Документ — разбор, план и журнал исправления.
 Дата: 2026-10-19. Затронуты обе копии кода: `dev/` и `prod/` (вносятся синхронно — их идентичность
 контролирует `tests/test_release_contract.py`; на момент написания `diff` dev↔prod чистый).
 
@@ -249,3 +249,60 @@ assert "tg.downloadFile" in html and "t.me/share/url" in html
 | 1 | «Поделиться» шлёт ссылку | `chShLink` (t.me/share/url) + `navigator.share({url})` | удалить ссылочные пути; шарить только файл: `Android.shareFile` / `tg.shareMessage` / `navigator.share({files})`; фолбэк — скачивание с подсказкой |
 | 2 | «Скачать» не открывает | `chDl` только скачивает; в APK зовёт shareFile (окно шаринга) | APK: `openFile` (DownloadManager + ACTION_VIEW); Telegram: `tg.downloadFile` + подсказка открыть из чата с ботом |
 | 3 | Тап по файлу/стикеру мёртв | `chFileTap` → `tg.openLink` (страница-ссылка) или `shareFile` (шаринг) | единая функция «скачать+открыть» (та же, что для «Скачать»), `preventDefault` на `<a href>` |
+
+
+---
+
+## 9. ВНЕСЁННЫЕ ПРАВКИ (журнал патча)
+
+Статус: **код исправлен, тесты зелёные**. Правки внесены синхронно в `dev/` и `prod/`
+(`diff` dev↔prod чистый, кроме штатной разницы адресов сервера в `MainActivity.java`).
+
+### 9.1. БАГ 1 — «Поделиться» шлёт ссылку → теперь передаётся только файл
+
+`dev|prod/bot-mini-app/docs/index.html` (`chShare`):
+
+- **вырезаны полностью**: `chShLink` (t.me/share/url), `navigator.share({title, url})`,
+  фолбэк с копированием ссылки в буфер — ни один путь больше не кладёт в сообщение ссылку;
+- цепочка пересылки файла: `Android.shareFile` (APK, ACTION_SEND) → `tg.shareMessage` +
+  `/api/chat_file/prepare` (Telegram ≥ 8.0, контакт получает сам .docx) →
+  `navigator.share({files:[File]})` (браузер/WebView, Web Share API Level 2);
+- отказ `shareMessage` (callback `false`) и любые сбои ведут не на ссылку, а на **новый
+  фолбэк `chShareSave`**: файл скачивается (`tg.downloadFile` / `<a download>`) и показывается
+  подсказка «перешлите его из чата с ботом или из «Загрузок»».
+
+### 9.2. БАГ 2 — «Скачать» не открывает файл → новая функция `chOpen` (скачать + открыть)
+
+- `index.html`: кнопка «Скачать» (`chDl`) теперь зовёт общую `chOpen(i,j)`;
+- APK: **новый JsBridge `openFile(url, name, mime)`** в `dev|prod/apk/src/ru/kabinet/tutor/MainActivity.java` —
+  `DownloadManager` + `Intent.ACTION_VIEW` c `content://` URI скачанного файла и
+  `FLAG_GRANT_READ_URI_PERMISSION`: документ скачивается и открывается на экране системным
+  просмотрщиком; нет просмотрщика — тост «Файл скачался — нет приложения для открытия этого файла»;
+- `startShare` разложен на `startDownload(..., open)`: `open=false` — прежнее окно пересылки
+  (строго для «Поделиться»), `open=true` — ACTION_VIEW;
+- Telegram ≥ 8.0: `tg.downloadFile` + честная подсказка «Файл скачан — откройте его в чате с ботом
+  или в «Загрузках»» (Telegram не даёт веб-странице показать docx — но копия файла всегда приходит
+  документом в диалог с ботом, и тап по нему открывает штатный просмотрщик Telegram);
+- браузер: `<a download>` + подсказка.
+
+### 9.3. БАГ 3 — тап по файлу/стикеру мёртв → тот же `chOpen`
+
+- `chFileTap` переписан: всегда `e.preventDefault()` ( `<a href>` больше не уводит на подписную
+  страницу) и вызов той же `chOpen`, что и у кнопки «Скачать» — тап по стикеру Вишенки (`fc-stk`)
+  и по карточке документа (`fc-doc`) = скачать + открыть;
+- старые APK без `openFile` получают тост «Обновите приложение…» вместо тихого ничего.
+
+### 9.4. Тесты — контракт обновлён под новый поведение
+
+- `tests/test_chat_share.py`: инвертирован контракт ссылок — `t.me/share/url` и `chShLink`
+  **запрещены**, `navigator.share({title` запрещён; требуются `tg.shareMessage`,
+  `navigator.share({files`, `A.openFile`; проверка, что `chDl` и `chFileTap` сходятся в `chOpen`;
+- `tests/test_chat_materials.py`: контракт чипа файла — тап зовёт `openFile`, а не `openLink`;
+- `tests/test_apk_files.py`: в `MainActivity.java` есть `openFile` + `ACTION_VIEW` +
+  `FLAG_GRANT_READ_URI_PERMISSION`, пересылка остаётся на `ACTION_SEND`;
+- сервер (`bot.py`) не менялся: `/api/chat_file/prepare` (savePreparedInlineMessage) и подписанная
+  отдача файла уже соответствовали контракту.
+
+### 9.5. Прогон
+
+`python3 tests/test_*.py` в `dev/` и `prod/` — **PASS=32 FAIL=0 в обеих копиях**.

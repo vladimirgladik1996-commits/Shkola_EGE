@@ -336,7 +336,10 @@ public class MainActivity extends Activity {
     /**
      * JS-мост для страницы (вызывается как Android.*):
      *  - sharePdf(url, name) — «Поделиться PDF»: скачивание + системный chooser;
-     *  - shareFile(url, name, mime) — «Скачать/Переслать» файла из чата ИИ в любом формате (docx/pdf/png);
+     *  - shareFile(url, name, mime) — «Поделиться» файлом из чата ИИ в любом формате (docx/pdf/png):
+     *    скачать + системное окно ПЕРЕСЫЛКИ файла (Telegram и другие контакты);
+     *  - openFile(url, name, mime) — «Скачать»/тап по файлу: скачать и СРАЗУ ОТКРЫТЬ на экране
+     *    системным просмотрщиком (ACTION_VIEW) — кнопки «Скачать» и карточка файла зовут именно его;
      *  - micStatus() — состояние микрофона: granted / denied / prompt — виджет решает,
      *    звать ли getUserMedia или сразу вести пользователя в настройки;
      *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
@@ -353,12 +356,24 @@ public class MainActivity extends Activity {
         }
 
         /** Файл из «Чата с ИИ» (docx/pdf/png): скачать в «Загрузки» и открыть системное окно пересылки
-         *  (Telegram и другие контакты) — для файлов в любом формате, mime не зашит в код. */
+         *  (Telegram и другие контакты) — для файлов в любом формате, mime не зашит в код.
+         *  СТРОГО кнопка «Поделиться»: открывает окно пересылки, а не просмотр документа. */
         @JavascriptInterface
         public void shareFile(final String url, final String name, final String mime) {
             runOnUiThread(new Runnable() {
                 public void run() {
-                    startShare(url, name, (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime, 0);
+                    startDownload(url, name, (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime, 0, false);
+                }
+            });
+        }
+
+        /** «Скачать» и тап по файлу/стикеру: скачать и СРАЗУ ОТКРЫТЬ документ на экране
+         *  (DownloadManager + ACTION_VIEW — системный просмотрщик .docx/.pdf/.png). */
+        @JavascriptInterface
+        public void openFile(final String url, final String name, final String mime) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    startDownload(url, name, (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime, 0, true);
                 }
             });
         }
@@ -567,8 +582,14 @@ public class MainActivity extends Activity {
         Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
     }
 
-    /** Запуск загрузки + ожидание её окончания. Только в UI-потоке. attempt — номер повтора при занятом имени файла. */
+    /** Запуск загрузки + ожидание её окончания. Только в UI-потоке. attempt — номер повтора при занятом имени файла.
+     *  open=false — системное окно ПЕРЕСЫЛКИ файла (кнопка «Поделиться»);
+     *  open=true — файл ОТКРЫВАЕТСЯ на экране системным просмотрщиком (кнопка «Скачать» и тап по файлу). */
     private void startShare(final String url, final String name, final String mime, final int attempt) {
+        startDownload(url, name, mime, attempt, false);
+    }
+
+    private void startDownload(final String url, final String name, final String mime, final int attempt, final boolean open) {
         try {
             final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             final String fn = numberedName(safePdfName(name), attempt);
@@ -610,7 +631,7 @@ public class MainActivity extends Activity {
                     if (status != DownloadManager.STATUS_SUCCESSFUL) {
                         if (status == DownloadManager.STATUS_FAILED
                                 && reason == DownloadManager.ERROR_FILE_ALREADY_EXISTS && attempt < 3) {
-                            startShare(url, name, mime, attempt + 1);     // такой файл уже лежит в «Загрузках» — другое имя
+                            startDownload(url, name, mime, attempt + 1, open);     // такой файл уже лежит в «Загрузках» — другое имя
                             return;
                         }
                         toastLong("Не получилось скачать файл — попробуйте ещё раз");
@@ -618,7 +639,19 @@ public class MainActivity extends Activity {
                     }
                     Uri u = dm.getUriForDownloadedFile(id);
                     if (u == null) {
-                        toastLong("Файл скачался, но открыть окно пересылки не получилось");
+                        toastLong(open ? "Файл скачался, но открыть его не получилось"
+                                : "Файл скачался, но открыть окно пересылки не получилось");
+                        return;
+                    }
+                    if (open) {   // «Скачать»/тап по файлу: открыть документ на экране системным просмотрщиком
+                        try {
+                            Intent v = new Intent(Intent.ACTION_VIEW);
+                            v.setDataAndType(u, mime);
+                            v.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            startActivity(Intent.createChooser(v, "Открыть файл"));
+                        } catch (Exception e) {
+                            toastLong("Файл скачался — нет приложения для открытия этого файла");
+                        }
                         return;
                     }
                     try {
@@ -640,7 +673,7 @@ public class MainActivity extends Activity {
             else registerReceiver(rc, f);
             shareReceivers.add(rc);
         } catch (Exception e) {
-            toastLong("Не получилось поделиться файлом");
+            toastLong(open ? "Не получилось скачать файл" : "Не получилось поделиться файлом");
         }
     }
 

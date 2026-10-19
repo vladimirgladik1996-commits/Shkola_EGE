@@ -1,7 +1,7 @@
 """Карточка Word-ответа: скачивание/открытие файла и «Поделиться» через tg.shareMessage.
 Сеть Telegram подменяется (FakeBot), база — в пимяти. Регрессия главного бага:
 подписные ссылки должны работать для tg_id > 2 млрд (новые аккаунты Telegram)."""
-import asyncio, hashlib, hmac, json, os, sqlite3, sys, time
+import asyncio, hashlib, hmac, json, os, re, sqlite3, sys, time
 from urllib.parse import urlencode, unquote
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ.update(BOT_TOKEN="***", PUBLIC_URL="https://bot.example.com", LOG_LEVEL="CRITICAL")
@@ -73,18 +73,32 @@ async def main():
         assert kw.get("allow_user_chats") and kw.get("allow_group_chats")
         ok("владеleц получает id подготовленного сообщения: document_url — наш подписной файл, имя и mime верные")
 
-        # --- 5. контракт фронтенда: shareMessage на месте, бот-copy и его тост удалены ---
+        # --- 5. контракт фронтенда: «Поделиться» передаёт ТОЛЬКО файл — любые ссылки запрещены ---
         html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
         assert "tg.shareMessage" in html and 'api("/api/chat_file/prepare"' in html, "нет tg.shareMessage/prepare"
-        assert 'api("/api/chat_file/send"' not in html, "старый бот-copy путь остался"
+        assert 'api("/api/chat_file/send"' not in html, "старый bot-copy путь остался"
         assert "выберите контакт" not in html, "мусорный тост «файл уже в боте» остался"
-        assert "tg.downloadFile" in html and "t.me/share/url" in html
-        ok("фронт: shareMessage (файл) → запасной t.me/share/url; тоста «файл уже в боте» нет; downloadFile на месте")
+        assert "tg.downloadFile" in html, "нет tg.downloadFile"
+        # баг 1: t.me/share/url и navigator.share({url}) отправляли подписную ссылку вместо файла — вырезаны полностью
+        assert "t.me/share/url" not in html and "chShLink" not in html, \
+            "ссылочный шаринг остался — получатель снова получит ссылку вместо файла"
+        assert "navigator.share({title" not in html, "шаринг URL вместо файла остался"
+        assert "navigator.share({files" in html, "нет шаринга самим файлом (Web Share API)"
+        assert "A.openFile" in html, "нет Android.openFile — «Скачать»/тап не открывают файл"
+        ok("фронт: шарится только файл (Android.shareFile / tg.shareMessage / navigator.share({files})); ссылочных путей нет")
+
+        # --- 6. баги 2+3: «Скачать» и тап по файлу/стикеру сходятся в одну функцию «скачать и открыть» ---
+        assert re.search(r"function chDl\(i,j\)\{chOpen\(i,j\)\}", html), "кнопка «Скачать» не зовёт chOpen"
+        assert re.search(r"const chFileTap=\(i,j,e\)=>\{[^}]*chOpen\(i,j\)", html), "тап по файлу/стикеру не зовёт chOpen"
+        assert "return chFileTap(" in html, "стикер и карточка документа должны быть кликабельными"
+        ok("фронт: «Скачать» и тап по файлу/стикеру — одна функция chOpen (скачать + открыть)")
+
+
 
         from aiogram.exceptions import TelegramBadRequest
         fb.fail = TelegramBadRequest(method=None, message="bad")
         r = await c.post("/api/chat_file/prepare", json={"tok": tok}, headers=H)
         assert r.status == 502 and (await r.json())["error"] == "prepare_failed", r.status
-        ok("Telegram отказал → 502 prepare_failed (фронт уходит на запасной путь со ссылкой)")
+        ok("Telegram отказал → 502 prepare_failed (фронт переходит к скачиванию файла — без ссылок)")
 print("test_chat_share: OK")
 asyncio.run(main())

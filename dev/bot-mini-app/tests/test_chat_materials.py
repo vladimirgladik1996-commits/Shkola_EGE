@@ -144,9 +144,9 @@ asyncio.run(main())
 
 # --- 4. фронт: чип файла кликабельный, Вишенка открывает материалы, контекст страницы виден ---
 html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
-assert "chFileTap" in html and "shareFile" in html and "tg.openLink" in html
+assert "chFileTap" in html and "A.openFile" in html and "A.shareFile" in html
 assert 'x.u?`<a class="aif"' in html
-ok("фронт: файл в чате — кликабельная ссылка (скачать) + пересылка (APK: shareFile, Telegram: openLink)")
+ok("фронт: файл в чате — кликабельный: тап = скачать и открыть (APK: openFile, Telegram: downloadFile)")
 assert "voiceOpen(" in html and "r.open" in html and "matOpen(ci,o.n)" in html
 assert "c.mat={cat:matCur.cat" in html and 'matCur=typeof part=="number"' in html
 ok("фронт: Вишенка открывает найденный вариант и видит, какой материал сейчас на экране")
