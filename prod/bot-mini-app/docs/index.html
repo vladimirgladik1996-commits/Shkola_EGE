@@ -2127,22 +2127,22 @@ function chDl(i,j){const x=chDocAt(i,j);if(!x){toast("Файл устарел �
     const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();toast("Файл скачивается")
   }catch(e){toast("Не получилось скачать файл")}}
 let chShBusy=false;
+const chShLink=(u,x)=>{const l="https://t.me/share/url?url="+encodeURIComponent(u)+"&text="+encodeURIComponent("Word-документ: "+x.n);   // родное окно Telegram «Отправить в…» — выбор чата/контакта
+  try{tg.openTelegramLink(l)}catch(e){window.open(l,"_blank")}};
 async function chShare(i,j){const x=chDocAt(i,j);if(!x){toast("Файл устарел — попросите ответ ещё раз");return}
   if(chShBusy)return;chShBusy=true;
   const u=chAbs(x),A=window.Android||{},mime=x.m||CH_DOCX;
   try{
-    if(A.shareFile){A.shareFile(u,x.n,mime);return}   // APK: системное окно «Переслать» (Telegram и другие контакты)
-    if(navigator.share&&navigator.canShare){   // браузер / клиент с Web Share API: сам файл, не ссылка
-      try{const r=await fetch(u);if(r.ok){const f=new File([await r.blob()],x.n,{type:mime});if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:x.n});return}}}
-      catch(e){if(e&&e.name=="AbortError")return}}
-    if(!APP&&tg.initData){   // Telegram: файл нельзя приложить к системному шаре — бот присылает копию
-      // в чат (как «Поделиться PDF»), оттуда она пересылается любому контакту (⋮ над файлом → «Переслать»)
+    if(A.shareFile){A.shareFile(u,x.n,mime);return}   // APK: системное окно шаринга с файлом
+    if(!APP&&tg.initData&&tg.shareMessage&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){   // Telegram 8.0+: родное окно «Отправить в…», контакт получает САМ ФАЙЛ
       const tok=(x.u.match(/\/api\/chat_file\/([^/?]+)/)||[])[1];
-      if(tok){const r=await api("/api/chat_file/send",{tok});
-        if(r){toast("Файл уже в чате с ботом. Нажмите на него → в правом верхнем углу «Поделиться» → выберите контакт");return}}
-      const l="https://t.me/share/url?url="+encodeURIComponent(u)+"&text="+encodeURIComponent("Word-документ: "+x.n);   // запасной путь — ссылкой
-      try{tg.openTelegramLink(l)}catch(e){window.open(l,"_blank")}
-      return}
+      if(tok){const r=await api("/api/chat_file/prepare",{tok});
+        if(r&&typeof r.id=="string"&&r.id){tg.shareMessage(r.id,s=>{if(!s)chShLink(u,x)});return}}
+      chShLink(u,x);return}
+    if(navigator.canShare){   // браузер: системное окно шаринга с самим файлом
+      try{const r=await fetch(u);if(r.ok){const f=new File([await r.blob()],x.n,{type:mime});if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:x.n});return}}
+      }catch(e){if(e&&e.name=="AbortError")return}}
+    if(!APP&&tg.initData){chShLink(u,x);return}   // Telegram без shareMessage — всё равно родное окно «Отправить в…»
     if(navigator.share){await navigator.share({title:x.n,url:u});return}
     await navigator.clipboard.writeText(u);toast("Ссылка на файл скопирована — действует полчаса")
   }catch(e){if(!e||e.name!="AbortError")toast("Не получилось поделиться файлом")}
