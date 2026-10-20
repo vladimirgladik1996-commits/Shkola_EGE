@@ -62,6 +62,35 @@ async def main():
         assert "amount=2000" in rows[2][2] and f"student_id={sid}" in rows[1][2] and "day=2026-10-12" in rows[1][2]
         ok("журнал действий: кто (tg_id), что и над чем (id, день, сумма); имён/фото нет; неудачные запросы не пишутся")
 
+        # ---- полное (физическое) удаление ученика: из БД вычёркивается всё ----
+        r = await post("/api/student/add", {"name": "Пётр Сидоров", "price": 1500}); assert r.status == 200
+        ps = mem.execute("select id from students where name='Пётр Сидоров'").fetchone()[0]
+        await post("/api/lesson/add", {"student_id": ps, "day": "2026-11-02", "time": "12:00"})
+        await post("/api/lesson/add", {"student_id": ps, "day": "2025-11-02", "time": "12:00"})   # прошлое
+        await post("/api/payment/add", {"student_id": ps, "amount": 3000})
+        first_lid = mem.execute("select id from lessons where student_id=? limit 1", (ps,)).fetchone()[0]
+        await post("/api/lesson/regular", {"id": first_lid})                                    # регулярная серия
+        assert mem.execute("select count(*) from lessons where student_id=?", (ps,)).fetchone()[0] >= 2
+        rid = mem.execute("select id from regular where student_id=?", (ps,)).fetchone()[0]; assert rid
+        assert (await post("/api/student/delete", {"id": ps})).status == 200
+        for tbl in ("lessons", "payments", "regular"):
+            assert mem.execute(f"select count(*) from {tbl} where student_id=?", (ps,)).fetchone()[0] == 0, tbl
+        assert mem.execute("select count(*) from skips where regular_id=?", (rid,)).fetchone()[0] == 0
+        assert mem.execute("select count(*) from students where id=?", (ps,)).fetchone()[0] == 0
+        ok("удаление ученика: физически удаляется всё — занятия (прошлые и будущие), оплаты, серии, пропуски, сам ученик")
+
+        # ---- дыры закрыты: удалённому нельзя поставить оплату/занятие/серии ----
+        mem.execute("insert into students(id,name,price,deleted) values(999,'Призрак',1000,1)"); mem.commit()
+        assert (await post("/api/payment/add", {"student_id": 999, "amount": 500})).status == 404
+        assert (await post("/api/lesson/add", {"student_id": 999, "day": "2026-11-03", "time": "13:00"})).status == 404
+        gl = mem.execute("insert into lessons(student_id,day,time) values(999,'2025-06-01','10:00')"); mem.commit()
+        rr = await post("/api/lesson/regular", {"id": gl.lastrowid}); assert rr.status == 200
+        assert mem.execute("select count(*) from regular where student_id=999").fetchone()[0] == 0
+        assert mem.execute("select count(*) from lessons where student_id=999 and day>'2026-01-01'").fetchone()[0] == 0
+        assert mem.execute("select count(*) from payments where student_id=999").fetchone()[0] == 0
+        ok("дыры закрыты: оплата/занятие удалённому → 404; «сделать регулярным» не воскрешает будущие занятия")
+        mem.execute("delete from lessons where student_id=999"); mem.execute("delete from students where id=999"); mem.commit()
+
         # 500: непредвиденная ошибка → общий JSON без деталей, в лог (не наружу)
         async def boom(request): raise sqlite3.OperationalError("database is locked: secret-detail")
         g = bot.guarded(boom)

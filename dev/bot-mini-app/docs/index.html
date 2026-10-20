@@ -1762,7 +1762,7 @@ function card(id,ed,fo){
   <h2>Последние платежи</h2>${last.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Платежей ещё не было.</p>'}${s.deleted?'<p class="note">Ученик удалён. История занятий и оплат сохранена.</p>':`<div class="btns" style="margin-top:18px"><button class="btn dng" onclick="studDel(${id})">Удалить ученика</button></div>`}`);
 }
 function studDel(id){const s=S.find(x=>x.id==id);
-  tg.showConfirm(`Удалить ученика «${s.name}»? Прошлые занятия и оплаты останутся в истории, будущие занятия будут убраны.`,async ok=>{if(ok&&await api("/api/student/delete",{id})){close_();await load();toast("Ученик удалён")}})}
+  tg.showConfirm(`Удалить ученика «${s.name}»? Будут удалены все его занятия, оплаты и регулярные серии — без возможности восстановления.`,async ok=>{if(ok&&await api("/api/student/delete",{id})){close_();await load();toast("Ученик удалён")}})}
 function balPop(id){
   const s=S.find(x=>x.id==id),pays=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at).slice(0,8),ds=debtEntries().filter(e=>e.sid==id).sort((a,b)=>b.at-a.at);
   open(`<button class="pen" aria-label="Назад" onclick="card(${id})">‹</button><h3>Оплаты и долги</h3><p class="sub">${esc(s.name)}</p>

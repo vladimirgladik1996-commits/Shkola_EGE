@@ -77,6 +77,14 @@ MIGRATIONS = [
         "create index if not exists ix_payments_student on payments(student_id)",
         "create index if not exists ix_regular_student on regular(student_id)",
     ],
+    [   # v3: полное удаление учеников. Зачищаем «мягко» удалённых (deleted=1) из прошлых версий
+        # вместе со всеми их данными — в БД не должно оставаться ни ученика, ни его занятий/оплат/серий.
+        "delete from skips where regular_id in (select id from regular where student_id in (select id from students where coalesce(deleted,0)=1))",
+        "delete from lessons where student_id in (select id from students where coalesce(deleted,0)=1)",
+        "delete from regular where student_id in (select id from students where coalesce(deleted,0)=1)",
+        "delete from payments where student_id in (select id from students where coalesce(deleted,0)=1)",
+        "delete from students where coalesce(deleted,0)=1",
+    ],
 ]
 
 def migrate(conn):
@@ -142,7 +150,7 @@ def fill_regular():
     today = date.today()
     end = today + timedelta(weeks=WEEKS_AHEAD)
     skipped = 0
-    for g in q("select * from regular"):
+    for g in q("select r.* from regular r join students s on s.id=r.student_id where coalesce(s.deleted,0)=0"):
         d = max(date.fromisoformat(g["start"]), today)
         d += timedelta(days=(g["weekday"] - d.weekday()) % 7)
         while d <= end:
@@ -163,13 +171,17 @@ def make_regular(lid):
     l = q("select * from lessons where id=?", lid)[0]
     if l["regular_id"]:
         return 0
+    if not q("select 1 from students where id=? and coalesce(deleted,0)=0", l["student_id"]):
+        return 0   # ученик удалён — серию не создаём и будущие занятия не воскрешаем
     rid = run("insert into regular(student_id,weekday,time,start,dur) values(?,?,?,?,?)",
               l["student_id"], date.fromisoformat(l["day"]).weekday(), l["time"], l["day"], l["dur"] or 60)
     run("update lessons set regular_id=? where id=?", rid, lid)
     return fill_regular()
 
 def add_lesson(sid, day, t, regular=False, dur=60):
-    """Возвращает (id, пропущено) или None, если время занято."""
+    """Возвращает (id, пропущено) или None, если время занято или ученик удалён."""
+    if not q("select 1 from students where id=? and coalesce(deleted,0)=0", sid):
+        return None   # удалённому (или несуществующему) занятие не ставим
     if conflict(day, t, dur):
         return None
     try:
@@ -180,6 +192,8 @@ def add_lesson(sid, day, t, regular=False, dur=60):
 
 def move_lesson(lid, day, t, dur=None):
     l = q("select * from lessons where id=?", lid)[0]
+    if not q("select 1 from students where id=? and coalesce(deleted,0)=0", l["student_id"]):
+        return False   # ученик удалён — не двигаем
     dur = dur or l["dur"] or 60
     if conflict(day, t, dur, lid):
         return False
@@ -265,6 +279,16 @@ def update_payment(pid, amount):
 
 def delete_payment(pid):
     db.execute("delete from payments where id=?", (pid,))
+    db.commit()
+
+def delete_student(sid):
+    """Полное (физическое) удаление ученика и ВСЕХ его данных: занятия (прошлые и будущие),
+    оплаты, регулярные серии и пропуски. Из БД вычёркивается всё — никаких остатков и истории."""
+    db.execute("delete from skips where regular_id in (select id from regular where student_id=?)", (sid,))
+    db.execute("delete from lessons where student_id=?", (sid,))
+    db.execute("delete from regular where student_id=?", (sid,))
+    db.execute("delete from payments where student_id=?", (sid,))
+    db.execute("delete from students where id=?", (sid,))
     db.commit()
 
 # ---------- оплаты по занятиям ----------
@@ -1780,14 +1804,9 @@ async def api_student_add(request):
 
 @guarded
 async def api_student_delete(request):
-    """«Мягкое» удаление: ученик пропадает из списков, прошлые занятия и оплаты остаются в истории,
-    будущие занятия и регулярные серии убираются."""
-    sid = int((await request.json())["id"])
-    db.execute("update students set deleted=1 where id=?", (sid,))
-    db.execute(f"delete from lessons where student_id=? and datetime(day||' '||time) > datetime('now','localtime')", (sid,))
-    db.execute("delete from skips where regular_id in (select id from regular where student_id=?)", (sid,))
-    db.execute("delete from regular where student_id=?", (sid,))
-    db.commit()
+    """Полное (физическое) удаление: ученик и все его данные — занятия (прошлые и будущие),
+    оплаты, регулярные серии и пропуски — вычёркиваются из БД целиком, без возможности восстановления."""
+    delete_student(int((await request.json())["id"]))
     return web.json_response({"ok": True})
 
 @guarded
@@ -1795,8 +1814,8 @@ async def api_payment_add(request):
     """Новая оплата из мини-аппа — в ту же таблицу payments, что и из бота (record_payment)."""
     j = await request.json()
     sid, amount = int(j["student_id"]), money_val(j["amount"], 1)
-    if not q("select 1 from students where id=?", sid):
-        return web.json_response({"error": "no_student"}, status=404)
+    if not q("select 1 from students where id=? and coalesce(deleted,0)=0", sid):
+        return web.json_response({"error": "no_student"}, status=404)   # оплату удалённому/несуществующему не ставим
     pid = run("insert into payments(student_id,amount) values(?,?)", sid, amount)
     return web.json_response({"ok": True, "id": pid})
 
