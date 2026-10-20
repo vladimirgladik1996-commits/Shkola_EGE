@@ -972,12 +972,16 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes aicFlash{0%{background:color-mix(in srgb,var(--gold1) 55%,transparent)}100%{background:transparent}}
 @media (prefers-reduced-motion:reduce){.aic-bar i,.aic-bar i::before,.aic-box.proc .aic-rd::after,#aic-in.flash{animation:none!important}.aic-mid>*{transition:none!important}}
 
-/* ===== Картинка Вишенки сворачивается в первое сообщение ===== */
-.aic-ghost{position:fixed;z-index:30;margin:0;pointer-events:none;object-fit:contain;transform-origin:50% 50%;will-change:transform,opacity;filter:drop-shadow(0 14px 22px rgba(15,46,110,.28))}
+/* ===== Картинка Вишенки рассыпается на частицы и собирается в первое сообщение ===== */
+.aic-fx{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:30;pointer-events:none}
 .aim.hw{opacity:0;animation:none}
-.aim.hp{animation:aicHeroPop .7s var(--aicsp) both}
-@keyframes aicHeroPop{0%{opacity:0;clip-path:inset(30% 40% 30% 40% round 26px);transform:scale(.72)}30%{opacity:1}100%{opacity:1;clip-path:inset(-40px round 60px);transform:none}}
-@media (prefers-reduced-motion:reduce){.aic-ghost{display:none}.aim.hw{opacity:1}.aim.hp{animation:none}}
+.aim.hp{position:relative;overflow:hidden;animation:aicHeroPop .85s cubic-bezier(.2,1.1,.3,1) both}
+.aim.hp::before{content:"";position:absolute;top:0;bottom:0;left:-45%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-18deg);animation:aicHeroShine .9s ease-out .3s both;pointer-events:none}
+@keyframes aicHeroPop{0%{opacity:0;clip-path:inset(32% 46% 32% 46% round 26px);filter:brightness(1.7) saturate(1.5);box-shadow:0 10px 22px -12px var(--cgl),0 0 0 0 rgba(255,201,60,.85);transform:scale(.8)}
+  35%{opacity:1;filter:brightness(1.25) saturate(1.3)}
+  100%{opacity:1;clip-path:inset(-40px round 60px);filter:none;box-shadow:0 10px 22px -12px var(--cgl),0 0 0 22px rgba(255,201,60,0);transform:none}}
+@keyframes aicHeroShine{from{left:-45%}to{left:130%}}
+@media (prefers-reduced-motion:reduce){.aic-fx{display:none}.aim.hw{opacity:1}.aim.hp,.aim.hp::before{animation:none}}
 @media (prefers-reduced-motion:reduce){.aipul{animation:none!important}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
@@ -2293,8 +2297,8 @@ function chShareSave(x){const u=chAbs(x),A=window.Android||{},mime=chMime(x);
 function chAttHtml(){return chAtt.map((a,i)=>`<div class="aic-chip">${a.img?`<img src="${a.img}" alt="">`:`${CH_IC.file}<span>${esc(a.n)}</span>`}<button type="button" class="x" aria-label="Убрать вложение" onclick="chDel(${i})"><i>×</i></button></div>`).join("")}
 let chDots=false,chHeroMsg=null,chHeroLag=0;
 function chList(){
-  let nk=0;const nw=m=>m._s?"":(m._s=1,m===chHeroMsg?"":` new" style="--d:${Math.min(nk++,6)*60+chHeroLag}ms`);   // класс new — только при первом показе сообщения
-  if(!CH.length&&!chBusy)return `<div class="aic-e"><img class="aic-hero" src="${CH_HERO}" alt="Чат с Вишенкой — Вишенка готова помочь!" draggable="false"></div>`;
+  let nk=0;const nw=m=>m._s?"":chHeroMsg&&m!==chHeroMsg?" hw":(m._s=1,m===chHeroMsg?"":` new" style="--d:${Math.min(nk++,6)*60+chHeroLag}ms`);   // пока летит картинка: шаги и ответ скрыты, появятся сразу после прилёта   // класс new — только при первом показе сообщения
+  if(!CH.length&&!chBusy)return `<div class="aic-e"><img class="aic-hero" src="${CH_HERO}" alt="Чат с Вишенкой — Вишенка готова помочь!" draggable="false" onload="setTimeout(chHeroPrep,700)"></div>`;
   return CH.map((m,i)=>m.r=="u"?`<div class="aim u${nw(m)}${m===chHeroMsg?" hw":""}">${chAtts(m.a,i)}${esc(m.t)}</div>`
     :m.err?`<div class="aim e${nw(m)}">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">${CH_IC.retry}Повторить</button></div></div>`
     :m.a&&m.a.some(chIsDoc)?chFc(m,i,nw(m),i==CH.length-1)
@@ -2579,31 +2583,82 @@ function chCopy(i,btn){const t=(CH[i]||{}).t||"";
 function chFly(){const b=$("#aic-s");if(!b)return;b.classList.remove("fly");void b.offsetWidth;b.classList.add("fly");setTimeout(()=>b.classList.remove("fly"),700)}
 function chRetry(){if(chBusy)return;if(CH.length&&CH[CH.length-1].err)CH.pop();
   let u=-1;CH.forEach((m,i)=>{if(m.r=="u")u=i});CH=CH.filter((m,i)=>!m.step||i<u);chAsk()}   // шаги неудачной попытки убираем — ответ готовится заново
-function chHeroGhost(){   // «призрак» картинки Вишенки: с него начинается полёт в первое сообщение
+let chHeroC=null;
+function chHeroPrep(){   // тяжёлая часть (снимок картинки и средние цвета плиток) делаем заранее, в простое, а не в момент нажатия «Отправить»
+  const h=$(".aic-hero");if(!h||!h.naturalWidth)return null;const r=h.getBoundingClientRect();if(!r.width||!r.height)return null;
+  const dpr=Math.min(2,window.devicePixelRatio||1),T=9,key=r.width.toFixed(1)+"x"+r.height.toFixed(1)+"@"+dpr;if(chHeroC&&chHeroC.key===key)return chHeroC;
+  const bw=Math.round(r.width*dpr),bh=Math.round(r.height*dpr),base=document.createElement("canvas");base.width=bw;base.height=bh;const bg=base.getContext("2d");
+  let px;try{bg.drawImage(h,0,0,bw,bh);px=bg.getImageData(0,0,bw,bh).data}catch(e){return null}
+  const P=[],cols=Math.ceil(r.width/T),rows=Math.ceil(r.height/T),st=T*dpr;
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){   // средний цвет плитки по сетке 3×3
+    let R=0,G=0,B=0,A=0,n=0;for(let j=0;j<3;j++)for(let i=0;i<3;i++){const X=Math.min(bw-1,Math.round((x+(i+.5)/3)*st)),Y=Math.min(bh-1,Math.round((y+(j+.5)/3)*st)),k=(Y*bw+X)*4,al=px[k+3];R+=px[k]*al;G+=px[k+1]*al;B+=px[k+2]*al;A+=al;n++}
+    if(A/n<28)continue;P.push({ox:x*T+T/2,oy:y*T+T/2,tx:x*T,ty:y*T,c:[R/A,G/A,B/A]})}
+  return chHeroC={key,base,P,T,dpr}}
+function chHeroGhost(){   // картинка Вишенки рассыпается на конфетти: готовим холст поверх экрана
   const h=$(".aic-hero");if(!h||matchMedia("(prefers-reduced-motion:reduce)").matches)return null;
-  const r=h.getBoundingClientRect();if(!r.width||!r.height)return null;
-  const g=document.createElement("img");g.className="aic-ghost";g.src=h.src;g.alt="";g.draggable=false;
-  g.style.cssText=`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;document.body.appendChild(g);return {g,r}}
-function chHeroFly(G){   // картинка сворачивается по дуге и «впитывается» в первое сообщение, пузырь раскрывается из точки прилёта
-  if(!G)return;const end=()=>{G.g.remove();chHeroMsg=null;chHeroLag=0};
+  const C=chHeroPrep();if(!C)return null;const r=h.getBoundingClientRect(),dpr=C.dpr;
+  const base=document.createElement("canvas");base.width=C.base.width;base.height=C.base.height;const bg=base.getContext("2d");bg.drawImage(C.base,0,0);   // свежая копия: плитки будут стираться
+  const P=C.P.map(q=>({x:r.left+q.ox,y:r.top+q.oy,tx:q.tx,ty:q.ty,c:q.c}));
+  const cv=document.createElement("canvas");cv.className="aic-fx";cv.width=Math.round(innerWidth*dpr);cv.height=Math.round(innerHeight*dpr);document.body.appendChild(cv);
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.drawImage(base,r.left,r.top,r.width,r.height);   // первый кадр = картинка на прежнем месте, без мигания
+  return {cv,g,base,bg,P,r,T:C.T,dpr}}
+function chHeroFly(G){   // кусочки кувыркаются и переливаются, собираются в пузырь; на прилёте — салют из конфетти
+  if(!G)return;const end=()=>{try{G.cv.remove()}catch(e){}chHeroMsg=null;chHeroLag=0};
   requestAnimationFrame(()=>{
-    const b=$("#aic-l .aim.u.hw");if(!b||!G.g.animate){end();return}
-    const r0=G.r,r1=b.getBoundingClientRect(),dx=r1.left+r1.width/2-(r0.left+r0.width/2),dy=r1.top+r1.height/2-(r0.top+r0.height/2),sc=Math.max(.07,Math.min(.2,r1.height/r0.height)),D=950;
-    const an=G.g.animate([
-      {transform:"translate(0,0) scale(1) rotate(0deg)",opacity:1,offset:0},
-      {transform:`translate(${dx*.3}px,${dy*.16-30}px) scale(.64) rotate(-7deg)`,opacity:1,offset:.36},
-      {transform:`translate(${dx*.84}px,${dy*.9}px) scale(${sc*1.9}) rotate(3deg)`,opacity:.95,offset:.76},
-      {transform:`translate(${dx}px,${dy}px) scale(${sc}) rotate(0deg)`,opacity:0,offset:1}],
-      {duration:D,easing:"cubic-bezier(.55,.05,.25,1)",fill:"forwards"});
-    setTimeout(()=>{chHeroMsg=null;const el=$("#aic-l .aim.u");if(el){el.classList.remove("hw");el.classList.add("hp")}},D*.64);
-    an.onfinish=end;setTimeout(end,D+500)})}
+    const bub=$("#aic-l .aim.u.hw");if(!bub){end();return}
+    const {cv,g,base,bg,P,r,T,dpr}=G,R=bub.getBoundingClientRect(),rnd=Math.random,TAU=Math.PI*2,W=innerWidth,H=innerHeight,cx0=r.left+r.width/2,cy0=r.top+r.height/2,bx=R.left+R.width/2,by=R.top+R.height/2,REV=1100,GOLD=[255,201,60];
+    const PAL=[[255,201,60],[255,201,60],[37,86,184],[255,107,107],[74,222,156],[139,108,255],[76,195,255],[255,255,255]];   // золото, синий, коралл, мята, фиолет, небо
+    const mix=(a,b,k)=>[a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k],css=c=>`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`,dk=c=>css(mix(c,[16,26,70],.34));   // dk — «изнанка» конфетти
+    const PC=PAL.map(c=>[css(c),dk(c)]);   // цвета салюта считаем один раз
+    const brush=(()=>{const n=Math.round(T*dpr*2.6),c=document.createElement("canvas");c.width=c.height=n;const x=c.getContext("2d"),gr=x.createRadialGradient(n/2,n/2,0,n/2,n/2,n/2);gr.addColorStop(0,"rgba(0,0,0,1)");gr.addColorStop(.55,"rgba(0,0,0,.95)");gr.addColorStop(1,"rgba(0,0,0,0)");x.fillStyle=gr;x.fillRect(0,0,n,n);return c})();
+    P.forEach((p,i)=>{p.d=(r.height-p.ty)/r.height*380+p.tx/r.width*90+rnd()*150;p.f=820+rnd()*260;p.sp=rnd()<.1;p.o=i&1;p.tr=i%3===0;p.on=0});   // снизу вверх, с лёгким диагональным фронтом
+    const initP=p=>{   // остальное считаем лениво, когда плитка улетает, — нет «заминки» на первом кадре
+      p.X=R.left+R.width*(.05+.9*rnd());p.Y=R.top+R.height*(.18+.64*rnd());
+      const dx=p.X-p.x,dy=p.Y-p.y,L=Math.hypot(dx,dy)||1,k=(rnd()-.5)*L*.95;
+      p.cx=(p.x+p.X)/2+(-dy/L)*k;p.cy=(p.y+p.Y)/2+(dx/L)*k-rnd()*50;
+      const ox=p.x-cx0,oy=p.y-cy0,ol=Math.hypot(ox,oy)||1,os=14+rnd()*30;p.bx=ox/ol*os;p.by=oy/ol*os;
+      p.w=(rnd()-.5)*TAU*1.7;p.fl=TAU*(1.1+rnd()*1.7)*(rnd()>.5?1:-1);
+      const pc=PAL[(rnd()*PAL.length)|0],ec=mix([37,86,184],[15,46,110],rnd()),f=p.sp?[mix(p.c,[255,255,255],.5),[255,244,190],[255,255,255],[255,226,120],[190,215,255],[255,255,255]]:[p.c,mix(p.c,pc,.55),pc,pc,mix(pc,ec,.55),ec];
+      p.col=f.map(css);p.bk=f.map(dk)};
+    const PO=[0,0],ease=q=>q*q*(3-2*q),pos=(p,q)=>{const u=ease(q),m=1-u,s=Math.sin(Math.PI*u);PO[0]=m*m*p.x+2*m*u*p.cx+u*u*p.X+p.bx*s;PO[1]=m*m*p.y+2*m*u*p.cy+u*u*p.Y+p.by*s;return PO};   // без выделения памяти на каждый вызов
+    const SP=["rgb(255,201,60)","rgb(255,255,255)","rgb(255,160,60)","rgb(120,170,255)"],sparks=[],cf=[];
+    const star=(x,y,s,a,rot)=>{g.save();g.translate(x,y);g.rotate(rot);if(a!==1)g.globalAlpha=a;g.beginPath();g.moveTo(0,-s);g.quadraticCurveTo(0,0,s,0);g.quadraticCurveTo(0,0,0,s);g.quadraticCurveTo(0,0,-s,0);g.quadraticCurveTo(0,0,0,-s);g.fill();g.restore()};
+    const piece=(x,y,w,h,th,fl)=>{const cs=Math.cos(th),sn=Math.sin(th);g.setTransform(dpr*cs,dpr*sn,-dpr*sn*fl,dpr*cs*fl,dpr*x,dpr*y);g.fillRect(-w/2,-h/2,w,h)};   // прямоугольник с поворотом и переворотом
+    const t0=performance.now();let rev=0,last=t0,nf=0,litT=-1;
+    const frame=now=>{const t=now-t0;if(!cv.isConnected)return;if(tab!="ch"){end();return}nf++;if(litT<0&&t>300&&nf/(t/1000)<38)litT=t;   // слабый телефон: половина частиц плавно гаснет, хвосты отключаются
+      const lite=litT>=0,lk=lite?Math.min(1,(t-litT)/260):0,dt=Math.min(.05,(now-last)/1000);last=now;
+      g.setTransform(dpr,0,0,dpr,0,0);g.globalAlpha=1;g.clearRect(0,0,W,H);
+      let alive=0;
+      bg.globalCompositeOperation="destination-out";for(const p of P)if(!p.on&&t>=p.d){p.on=1;initP(p);const n=brush.width;bg.drawImage(brush,(p.tx+T/2)*dpr-n/2,(p.ty+T/2)*dpr-n/2)}bg.globalCompositeOperation="source-over";   // картинка тает мягко
+      g.globalAlpha=Math.max(0,Math.min(1,1-(t-700)/200));if(g.globalAlpha>0)g.drawImage(base,r.left,r.top,r.width,r.height);
+      for(const p of P){if(!p.on)continue;const q=(t-p.d)/p.f;if(q>=1)continue;alive++;const dim=lite&&p.o&&!p.sp?1-lk:1;if(dim<=0)continue;
+        const [x,y]=pos(p,q),u=ease(q),sz=T*(1-.5*u)+Math.sin(Math.PI*u)*2.4,ci=Math.min(5,(u*5.99)|0),fl=Math.cos(p.fl*u),al=(q>.9?(1-q)/.1:1)*dim;
+        if(p.sp){g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=p.col[ci];g.globalAlpha=al*(.6+.4*Math.sin(t/55+p.tx));star(x,y,sz*1.1+2,1,u*5+p.ty);continue}   // блёстки-звёздочки
+        if(p.tr&&!lite){g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=p.col[ci];const [x2,y2]=pos(p,Math.max(0,q-.06));g.globalAlpha=.3*al;g.fillRect(x2-sz*.3,y2-sz*.3,sz*.6,sz*.6)}   // лёгкий хвост у каждой третьей
+        g.fillStyle=fl>=0?p.col[ci]:p.bk[ci];g.globalAlpha=al;piece(x,y,sz*(1+.55*u),sz*(1-.15*u),p.w*u,fl)}
+      g.setTransform(dpr,0,0,dpr,0,0);
+      // кульминация: салют из конфетти, мягкая золотая вспышка и кольцо
+      if(!rev&&t>=REV){rev=1;chHeroMsg=null;chHeroLag=380;if(tab=="ch")chUpd();const el=$("#aic-l .aim.u");if(el){el.classList.remove("hw");el.classList.add("hp")}
+        const nC=lite?46:90;for(let i=0;i<nC;i++){const a=-Math.PI/2+(rnd()-.5)*2.6,sp=240+rnd()*420,pc=PC[(rnd()*PC.length)|0];
+          cf.push({x:R.left+R.width*(.15+.7*rnd()),y:R.top+R.height*(.3+.4*rnd()),vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,w:5+rnd()*6,h:3+rnd()*3.5,th:rnd()*TAU,vt:(rnd()-.5)*16,fp:rnd()*TAU,vf:6+rnd()*10,life:850+rnd()*650,t:t,c:pc[0],b:pc[1]})}
+        for(let i=0;i<26;i++){const a=rnd()*TAU,sp=50+rnd()*150;sparks.push({x:R.left+R.width*rnd(),y:R.top+R.height*rnd(),vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-30,s:4+rnd()*6,life:520+rnd()*480,c:SP[(rnd()*SP.length)|0],r:rnd()*3,t:t})}}
+      if(rev){const age=t-REV;
+        if(age<420){const f=age/420,rad=60+150*(1-Math.pow(1-f,3)),fl=g.createRadialGradient(bx,by,0,bx,by,rad);fl.addColorStop(0,`rgba(255,236,170,${.7*(1-f)})`);fl.addColorStop(.5,`rgba(255,201,60,${.35*(1-f)})`);fl.addColorStop(1,"rgba(255,201,60,0)");g.globalAlpha=1;g.fillStyle=fl;g.fillRect(bx-rad,by-rad,rad*2,rad*2)}
+        if(age<650){const f=age/650;g.globalAlpha=(1-f)*.85;g.lineWidth=5*(1-f)+1;g.strokeStyle="rgb(255,201,60)";g.beginPath();g.ellipse(bx,by,R.width*.5*(1+f*.5)+8,R.height*.5*(1+f*.9)+8,0,0,TAU);g.stroke()}}
+      for(const k of cf){const age=t-k.t;if(age>=k.life)continue;alive++;k.vx*=1-1.5*dt;k.vy=k.vy*(1-1.1*dt)+520*dt;k.x+=k.vx*dt;k.y+=k.vy*dt;k.th+=k.vt*dt;k.fp+=k.vf*dt;
+        const fl=Math.cos(k.fp),f=age/k.life;g.fillStyle=fl>=0?k.c:k.b;g.globalAlpha=f<.7?1:(1-f)/.3;piece(k.x,k.y,k.w,k.h,k.th,fl)}
+      g.setTransform(dpr,0,0,dpr,0,0);
+      for(const k of sparks){const age=t-k.t;if(age>=k.life)continue;alive++;k.x+=k.vx*dt;k.y+=k.vy*dt;k.vy+=60*dt;const f=age/k.life;g.fillStyle=k.c;star(k.x,k.y,k.s*(1-f*.5),1-f,k.r+f*2)}
+      g.globalAlpha=1;
+      if(t<REV||alive||t<REV+700)requestAnimationFrame(frame);else end()};
+    requestAnimationFrame(frame);setTimeout(end,4500)})}
 async function chSend(){
   if(chBusy)return;const el=$("#aic-in");if(!el)return;const t=el.value.trim();if(!t&&!chAtt.length)return;
   if(chBytes(chAtt)>CH_BYTES){toast("Вложения больше 8 МБ в сумме — прикрепите меньше");return}
   if(chRec&&!chRec.sr){await chSendRec();return}   // запись ещё идёт — останавливаем, распознаём и отправляем (chSendRec сам зовёт chSend)
   chStop();chMenu();chFly();
   CH.forEach(m=>(m.a||[]).forEach(x=>{delete x.d}));            // сырые данные нужны только последней реплике
-  const G=CH.length?null:chHeroGhost(),um={r:"u",t,a:chAtt.length?chAtt:undefined};CH.push(um);if(G){chHeroMsg=um;chHeroLag=720}   // первое сообщение: картинка летит в пузырь
+  const G=CH.length?null:chHeroGhost(),um={r:"u",t,a:chAtt.length?chAtt:undefined};CH.push(um);if(G){chHeroMsg=um;chHeroLag=1150}   // первое сообщение: картинка летит в пузырь
   chAtt=[];chAttUi();el.value="";chGrow(el);chAsk();chHeroFly(G)}
 async function chAsk(){
   chBusy=true;chSave();chUpd(true);
