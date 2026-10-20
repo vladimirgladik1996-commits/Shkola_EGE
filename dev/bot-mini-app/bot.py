@@ -1380,13 +1380,13 @@ async def tg_chat_file(fmt, src, task):
         except Exception as e:
             log.warning("bot chat file: не собрался (%s, попытка %s): %r", fmt, attempt, e)
             return None
-        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.render_shots, fmt, data)
+        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.review_shots, fmt, data, src, None)
         ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет готовый файл
         if ok:
             return data, name, title, warn
         warn = problems
         log.warning("bot chat file: огрехи (%s, попытка %s): %s", fmt, attempt, problems)
-        fixed = await assist.fix_html(task, src, problems) if attempt == 1 and fmt in ("pdf", "image") else None
+        fixed = await assist.fix_source(task, src, problems, fmt) if attempt == 1 and assist.is_fixable(fmt) else None
         if not fixed:
             return data, name, title, warn
         src = fixed
@@ -2414,13 +2414,13 @@ async def api_chat(request):
             data = None
             break
         await send({"t": "status", "v": "check"})
-        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.render_shots, fmt, data)
+        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.review_shots, fmt, data, src, attach)
         ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет: не поехала ли вёрстка
         if ok:
             break
         warn = problems
         log.warning("chat file: проверка нашла огрехи (%s, попытка %s): %s", fmt, attempt, problems)
-        fixed = await assist.fix_html(task, src, problems) if attempt == 1 and fmt in ("pdf", "image") else None
+        fixed = await assist.fix_source(task, src, problems, fmt) if attempt == 1 and assist.is_fixable(fmt) else None
         if not fixed:
             break
         src = fixed

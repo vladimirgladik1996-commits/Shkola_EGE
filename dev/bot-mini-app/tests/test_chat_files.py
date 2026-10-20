@@ -7,8 +7,16 @@ def ok(c): print("  ✓", c)
 b64 = lambda b: base64.b64encode(b).decode()
 
 title, blocks = cf.parse_doc("# План урока\nВведение\n## Разминка\n- 5 минут\n1. Теория\n**Итог**: всё")
-assert title == "План урока" and blocks[1] == ("h", "Разминка") and blocks[2] == ("li", "•", "5 минут") and blocks[3] == ("li", "1.", "Теория") and blocks[4] == ("p", "Итог: всё"); ok("ответ модели разбирается в заголовок, разделы, списки")
+assert title == "План урока" and blocks[1] == ("h", [("Разминка", {})]) and blocks[2] == ("li", "•", [("5 минут", {})]) and blocks[3] == ("li", "1.", [("Теория", {})]) and blocks[4] == ("p", [("Итог", {"b": 1}), (": всё", {})]); ok("ответ модели разбирается в заголовок, разделы, списки и выделение (раны)")
 assert cf.parse_doc("- один\n- два")[0] == "Ответ"; ok("ответ без заголовка получает «Ответ»")
+
+# --- пропуски (подчёркивания) и таблицы не срезаются, а доходят до файла ---
+bl = cf.parse_doc("# Т\nЗаполни: _____ тут.")[1][0][1]
+assert any(st.get("blank") and st.get("u") for _, st in bl), bl; ok("пропуск «_____» сохраняется как подчёркнутое пустое поле (не срезается)")
+tb = cf.parse_doc("| Слово | Значение |\n|---|---|\n| дом | жилище |")[1][0]
+assert tb[0] == "table" and len(tb[1]) == 2 and [t for t, _ in tb[1][0][0]] == ["Слово"]; ok("таблица «| … |» разбирается в строки-ячейки")
+diag = cf.parse_doc("Схема:\n```html\n<html><head><title>Кв</title></head><body><h1>Квадрат</h1></body></html>\n```")[1]
+assert diag[0][0] == "img" and diag[0][1][:8] == b"\x89PNG\r\n\x1a\n"; ok("```html```-схема превращается в PNG-картинку для вставки в файл")
 
 d = cf.docx_bytes(title, blocks)
 assert zipfile.ZipFile(io.BytesIO(d)).testzip() is None and "Теория" in cf.docx_text(d); ok("Word-файл собирается и читается обратно")
@@ -78,4 +86,19 @@ im = Image.open(io.BytesIO(base64.b64decode(cf.render_shots("pdf", p3)[0]))).con
 red = sum(1 for y in range(0, im.height, 6) for x in range(0, im.width, 6)
           if im.getpixel((x, y))[0] > 120 and im.getpixel((x, y))[0] > im.getpixel((x, y))[1] + 60)
 assert red > 20; ok("PDF собирается с картинкой из вложения — она реально видна на странице")
+
+# --- Word содержит подчёркнутые пропуски, таблицы и схемы-картинки; Кими реально видит документ на проверке ---
+rich = ("# Т\n1. Пропуск _____ тут.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n"
+        "```html\n<html><head><title>С</title></head><body><h1>Схема</h1></body></html>\n```")
+wd, wn, wt = cf.build("docx", rich)
+z = zipfile.ZipFile(io.BytesIO(wd)); doc = z.read("word/document.xml").decode("utf-8", "replace")
+assert "<w:u " in doc and "\u00a0" in doc, "пропуск не подчёркнут в Word"
+assert "<w:tbl>" in doc, "таблицы нет в Word"
+assert "<w:drawing>" in doc and any(n.startswith("word/media/") for n in z.namelist()) and "word/_rels/document.xml.rels" in z.namelist(), "схема не встроена картинкой"
+import xml.etree.ElementTree as ET
+for part in ("word/document.xml", "[Content_Types].xml", "_rels/.rels", "word/_rels/document.xml.rels"):
+    ET.fromstring(z.read(part))
+ok("Word: пропуски подчёркнуты, таблицы на месте, схема встроена картинкой, все части валидны")
+assert cf.review_shots("docx", wd, rich), "Кими не видит Word-документ на проверке (0 картинок)"
+ok("Кими реально отсматривает Word-документ: review_shots даёт картинки для check_render")
 print("test_chat_files: OK")
