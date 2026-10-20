@@ -2119,8 +2119,8 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose(
 /* ---------- Чат с ИИ (раздел «ch») ---------- */
 let CH=[],chDeep=false,chFmt=0,chAtt=[],chBusy=false,chRec=null,chProc=null;
 const CH_MAX=5,CH_BYTES=8*1024*1024,CH_EXT=["pdf","docx","txt","md","csv"],CH_FMT=["text","docx","pdf","image"];
-try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40).map(m=>({r:m.r,t:m.t,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k,u:typeof x.u=="string"?x.u:undefined,m:typeof x.m=="string"?x.m:undefined})):undefined}))}catch(e){}
-const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err&&!m.live&&!m.step).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k,u:x.u,m:x.m}));return c}))}catch(e){}};   // в память телефона — текст, имена файлов и ссылки на скачивание (шаги работы — нет)
+try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40).map(m=>({r:m.r,t:m.t,src:typeof m.src=="string"?m.src:undefined,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k,u:typeof x.u=="string"?x.u:undefined,m:typeof x.m=="string"?x.m:undefined})):undefined}))}catch(e){}
+const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err&&!m.live&&!m.step).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.src)c.src=String(m.src).slice(0,60000);if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k,u:x.u,m:x.m}));return c}))}catch(e){}};   // в память телефона — текст, источник файла и ссылки на скачивание (шаги работы — нет)
 const CH_SVG=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const CH_DOC=l=>CH_SVG('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'+(l?`<text x="12" y="17" font-size="6" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700" font-family="sans-serif">${l}</text>`:""));
 const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect class="mf" x="8.4" y="2.4" width="7.2" height="12.4" rx="3.6"/><path class="mg" d="M10.7 6.6h2.6M10.7 9.4h2.6"/><path d="M5 11.2a7 7 0 0014 0M12 18.3v3M8.6 21.3h6.8"/>'),x:CH_SVG('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>'),
@@ -2206,15 +2206,23 @@ function chConfetti(){
 const chMime=x=>x.m||(/\.pdf$/i.test(x.n||"")?"application/pdf":/\.png$/i.test(x.n||"")?"image/png"
   :/\.jpe?g$/i.test(x.n||"")?"image/jpeg":/\.docx$/i.test(x.n||"")?CH_DOCX:"application/octet-stream");
 /* Карточка Word-файла живёт в истории чата, а файл на сервере — в памяти и со сроком подписи:
-   чтобы кнопки работали и на СТАРЫХ карточках, файл собирается заново из текста ответа
-   (он лежит в самой карточке) и берётся свежая подписанная ссылка */
+   «Скачать»/«Поделиться» берут ЖИВУЮ копию файла — ровно ту, что ушла в Telegram-бота;
+   чтобы кнопки работали и на СТАРЫХ карточках (файл истёк), он собирается заново из src —
+   исходного текста ответа модели, который лежит в самой карточке — и берётся свежая ссылка */
 async function chFresh(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u||!chIsDoc(x))return x;
-  const t=((CH[i]||{}).t||"").trim();if(!t)return x;
+  /* tok — идентификатор ЖИВОГО файла из ссылки карточки: он ушёл в Telegram теми же байтами
+     (см. api_chat: chat_file_put кладёт ту же копию, что send_document). Пока файл жив, сервер
+     отдаёт ЕГО (rebuild с tok) — скачивание и пересылка дают ровно тот же Word, что и в боте.
+     Пересборка из текста — только для СТАРЫХ карточек (файл истёк), и строго из src —
+     исходного текста ответа модели (t в карточке файла — служебная «Готово…», не сам документ). */
+  const tok=(x.u.match(/\/api\/chat_file\/([^/?]+)/)||[])[1]||"";
+  const src=String((CH[i]||{}).src||"").trim();
+  if(!tok&&!src)return x;
   try{
     const h={"Content-Type":"application/json"};if(tg&&tg.initData)h["X-Init"]=tg.initData;
     if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
     const r=await fetch(API_BASE+"/api/chat_file/rebuild",{method:"POST",headers:h,
-      body:JSON.stringify({text:t.slice(0,100000),name:x.n}),cache:"no-store"});
+      body:JSON.stringify({tok,text:src.slice(0,100000),name:x.n}),cache:"no-store"});
     if(r.ok){const d=await r.json();if(d&&d.url)return Object.assign({},x,{u:d.url})}}catch(e){}
   return x}
 async function chOpen(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
@@ -2615,7 +2623,7 @@ async function chAsk(){
       const w=CH.filter(x=>x.step&&x.st=="write").pop();
       if(w){w.step=0;w.st="";w.lbl="";w.t=text;m=w}   // шаг «пишет ответ» сам и становится ответом
       else{m={r:"a",t:text};CH.push(m)}
-    }else{m={r:"a",t:text,a:file?[file]:undefined};CH.push(m)}
+    }else{m={r:"a",t:text,a:file?[file]:undefined,src:acc||undefined};CH.push(m)}
     m.tg=0;finish();if(fmt!="text"&&file&&typeof chConfetti=="function")setTimeout(chConfetti,160)};
   try{await apiStream("/api/chat",{messages:msgs,deep,format:fmt,files},ev=>{
     if(!ev||typeof ev!="object")return;
