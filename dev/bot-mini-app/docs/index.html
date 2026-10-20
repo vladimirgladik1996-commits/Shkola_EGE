@@ -773,8 +773,9 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .fc.pdf .fc-stk::before{background:radial-gradient(closest-side,color-mix(in srgb,#E5413A 26%,transparent),transparent 74%)}
 .fc-doc.pdf{background:linear-gradient(135deg,color-mix(in srgb,#D93025 8%,var(--card)),var(--card));box-shadow:0 0 0 1px color-mix(in srgb,#D93025 26%,var(--ln))}
 .fc-doc.pdf .fc-go{color:#D93025}
-.cf{position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden}
-.cf i{position:absolute;display:block;will-change:transform,opacity}
+/* конфетти поверх экрана; класс переименован из .cf — он сталкивался с .cf состояния подтверждения голосовой команды (#cha.act.cf получал position:fixed;inset:0 и кнопки раздувались на весь экран) */
+.confetti{position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden}
+.confetti i{position:absolute;display:block;will-change:transform,opacity}
 .fc-tx{margin-top:12px;font-size:15.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .aim .aimb.fc-act{display:flex;gap:8px}
 .aim .aimb.fc-act button{flex:1 1 0;min-width:0;justify-content:center;gap:6px;padding:0 8px;font-size:13.5px;white-space:nowrap}
@@ -2187,7 +2188,7 @@ function chConfetti(){
   if(tab!="ch"||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
   const ms=document.querySelectorAll("#aic-l .aim.a"),el=ms[ms.length-1];if(!el||!el.animate)return;
   const r=(el.querySelector(".fc-stk")||el).getBoundingClientRect(),ox=r.left+r.width/2,oy=Math.max(90,Math.min(innerHeight-160,r.top+Math.min(r.height,170)/2));
-  const box=document.createElement("div");box.className="cf";box.setAttribute("aria-hidden","true");document.body.appendChild(box);
+  const box=document.createElement("div");box.className="confetti";box.setAttribute("aria-hidden","true");document.body.appendChild(box);
   const C=["#FFC93C","#F5B316","#2B7CD3","#0F2E6E","#9B51E0","#1F9A5B","#FF7A8A"],rnd=(a,b)=>a+Math.random()*(b-a);
   for(let k=0;k<46;k++){
     const p=document.createElement("i"),w=rnd(6,10),h=k%3?rnd(10,15):w;
