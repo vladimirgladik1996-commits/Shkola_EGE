@@ -2520,6 +2520,48 @@ async def api_apk(_request):
                             headers={"Content-Disposition": 'attachment; filename="kabinet-repetitora.apk"'})
 
 
+# ---------- «ИИ-проверка»: сеансы проверки (пуш 4 из PUSH-PLAN.md) ----------
+# Фото двух наборов складываются в сеанс проверки и ждут анализа (пуш 5):
+#   w = «Работа» — страницы сочинения/эссе, t = «Задание» — условие и опорный текст.
+# Нормализация та же, что у фото чата: любая картинка → JPEG ≤1600 px (chatfiles.to_jpeg_b64).
+EC_CHECKS = {}                                   # id → [uid, {"w": [jpeg_b64], "t": [jpeg_b64]}, время]
+EC_TTL = 30 * 60                                 # полчаса — как подписные ссылки файлов чата
+EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
+
+
+@guarded
+async def api_essay_check_upload(request):
+    """Приём фото для «ИИ-проверки» (пуш 4). Принимает наборы w/t [{n, d, mime}],
+    где d — base64 картинки; приводит их к JPEG и складывает в сеанс проверки.
+    Сам анализ (распознавание и оценка по критериям ФИПИ) — следующий этап (пуш 5)."""
+    try:
+        j = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad"}, status=400)
+    if not isinstance(j, dict):
+        return web.json_response({"error": "bad"}, status=400)
+    uid = user_id(request)
+    w, t = j.get("w"), j.get("t")
+    if not isinstance(uid, int) or uid <= 0 or not isinstance(w, list) or not isinstance(t, list):
+        return web.json_response({"error": "bad"}, status=400)
+    if (not w and not t) or len(w) + len(t) > EC_MAX_PHOTOS:
+        return web.json_response({"error": "bad"}, status=400)
+    out = {"w": [], "t": []}
+    try:
+        for key, lst in (("w", w), ("t", t)):
+            for f in lst:
+                raw = chatfiles._b64(f.get("d") if isinstance(f, dict) else None)
+                out[key].append(chatfiles.to_jpeg_b64(raw))
+    except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
+        return web.json_response({"error": "bad"}, status=400)
+    now = time.time()
+    for i in [i for i, r in EC_CHECKS.items() if now - r[2] > EC_TTL]:
+        EC_CHECKS.pop(i, None)
+    cid = secrets.token_urlsafe(12)
+    EC_CHECKS[cid] = [uid, out, now]
+    return web.json_response({"id": cid, "n_w": len(out["w"]), "n_t": len(out["t"])})
+
+
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=12 * 1024 * 1024, middlewares=[cors_mw])   # 12 МБ: вложения чата с ИИ (до 8 МБ в base64)
@@ -2550,7 +2592,8 @@ def make_app():
     app.router.add_get("/api/chat_file/{tok}", api_chat_file)
     app.router.add_get("/api/chat_file/{tok}/{fname}", api_chat_file)   # имя файла в пути — так документ называется у получателя
     app.router.add_post("/api/chat_file/prepare", api_chat_file_prepare)   # «Поделиться»: tg.shareMessage — файл, не ссылка
-    app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)   # оживление старых карточек: файл собирается заново из текста ответа
+    app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)
+    app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: фото работ и задания (пуш 4)   # оживление старых карточек: файл собирается заново из текста ответа
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)
