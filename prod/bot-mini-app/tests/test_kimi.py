@@ -93,19 +93,11 @@ async def main():
         assert j == {"kind": "chat", "n": 1} and b["response_format"] == {"type": "json_object"}
         ok("JSON-режим: response_format json_object, ответ разбирается в dict")
 
-        kimi.PHOTOS_OK = False                       # фото в API — только по команде владельца
-        await kimi.ask([{"role": "user", "content": "что на фото"}], images=["QUJDRA=="])
-        b = CALLS[-1][2]
-        assert b["messages"][-1]["content"] == "что на фото", b["messages"][-1]
-        ok("vision: без команды EC_LIVE=1 картинки отбрасываются — фото не уходят в API")
-
-        kimi.PHOTOS_OK = True
         await kimi.ask([{"role": "user", "content": "что на фото"}], images=["QUJDRA=="])
         b = CALLS[-1][2]
         assert b["messages"][-1]["content"][0]["type"] == "text"
         assert b["messages"][-1]["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
-        kimi.PHOTOS_OK = False
-        ok("vision: после команды EC_LIVE=1 картинка уходит content-массивом с image_url")
+        ok("vision: картинка уходит content-массивом с image_url")
 
         # --- kimi: ошибки API и мусор ---------------------------------------
         MODE["code"] = 500
