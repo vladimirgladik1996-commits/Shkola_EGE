@@ -12,6 +12,7 @@ from xml.sax.saxutils import escape
 log = logging.getLogger("tutor.chatfiles")
 
 FONTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")   # header.png / footer.png — фирменные шапка и подвал Word
 FORMATS = ("text", "docx", "pdf", "image")
 MAX_FILES, MAX_FILE_BYTES = 5, 8 * 1024 * 1024
 DOC_CHARS, DOCS_CHARS = 8000, 20000          # на файл / на все файлы вместе
@@ -308,9 +309,54 @@ def _docx_img(rid, docpr_id, cx, cy):
             f'</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>')
 
 
-def docx_bytes(title, blocks):
-    """Валидный .docx (Word / LibreOffice / Google Docs) без сторонних библиотек.
-    Раны с b/i/u/mono, пропуски-подчёркивания, таблицы и встроенные картинки-схемы."""
+_WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_RNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+
+
+def _asset(name):
+    """Байты PNG из assets/ или None (нет файла — документ собирается без фирменного оформления)."""
+    try:
+        with open(os.path.join(ASSETS, name), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _png_size(raw):
+    return int.from_bytes(raw[16:20], "big"), int.from_bytes(raw[20:24], "big")
+
+
+_DNS = ('xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"')
+
+
+def _pic(rid, name, cx, cy, anchor_y=None, did=1):
+    """Картинка: inline (шапка) или floating позади текста на странице (anchor_y — отступ сверху в EMU)."""
+    g = ('<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>'
+         f'<pic:nvPicPr><pic:cNvPr id="0" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr>'
+         f'<pic:blipFill><a:blip r:embed="{rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+         f'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+         '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>')
+    if anchor_y is None:
+        return (f'<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{cx}" cy="{cy}"/>'
+                f'<wp:docPr id="{did}" name="{name}"/><wp:cNvGraphicFramePr/>{g}</wp:inline></w:drawing></w:r>')
+    return ('<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" '
+            'behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>'
+            '<wp:positionH relativeFrom="margin"><wp:posOffset>0</wp:posOffset></wp:positionH>'
+            f'<wp:positionV relativeFrom="page"><wp:posOffset>{anchor_y}</wp:posOffset></wp:positionV>'
+            f'<wp:extent cx="{cx}" cy="{cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+            f'<wp:docPr id="2" name="{name}"/><wp:cNvGraphicFramePr/>{g}</wp:anchor></w:drawing></w:r>')
+
+
+def docx_bytes(title, blocks, footer_all=False):
+    """Валидный .docx (Word / LibreOffice / Google Docs, мобильные просмотрщики) без сторонних библиотек.
+    Раны с b/i/u/mono, пропуски-подчёркивания, таблицы и встроенные картинки-схемы.
+    Кроме document.xml кладём styles/settings/шапку/подвал/docProps: без них Word рисует
+    угловые метки границ текста, а просмотрщики показывают файл «как есть».
+    Фирменные шапка/подвал берутся из assets/ (header.png, footer.png; footer_l/footer_r
+    при footer_all) — нет картинок, документ собирается без оформления."""
     body = [_para([(title, {"b": 1})], size=36, after=200, color=_NC)]
     media, rels, img_id = [], [], 0
     for b in blocks:
@@ -340,38 +386,129 @@ def docx_bytes(title, blocks):
             body.append(f'<w:p>{_docx_img(rid, img_id, cx, cy)}</w:p>')
         else:
             body.append(_para(b[1], size=22, after=60))
-    doc = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-           '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-           ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
-           ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
-           ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
-           ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'
-           + "".join(body) + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
-           '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>'
-           '</w:body></w:document>')
-    png_ct = '<Default Extension="png" ContentType="image/png"/>' if media else ""
-    ct = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    # фирменные шапка (первая страница) и подвал (последняя страница); нет картинок — обычный документ
+    hdr_png, ftr_png = _asset("header.png"), _asset("footer.png")
+    TW, PH = 6120130, 10691630                       # ширина текста (17 см) и высота страницы A4, EMU
+    hdr_h = ftr_h = 0
+    if hdr_png:
+        w, h = _png_size(hdr_png); hdr_h = TW * h // w
+    if ftr_png:
+        w, h = _png_size(ftr_png); ftr_h = TW * h // w
+    ftr_l, ftr_r = (_asset("footer_l.png"), _asset("footer_r.png")) if footer_all else (None, None)
+    if ftr_png and not footer_all:
+        pic = _pic("rId5", "Подвал", TW, ftr_h, PH - 280800 - ftr_h)
+        if body[-1].endswith("</w:p>"):
+            body[-1] = body[-1][:-len("</w:p>")] + pic + "</w:p>"
+        else:                       # последний блок — таблица/схема: плавающая картинка идёт отдельной строкой
+            body.append('<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>' + pic + '</w:p>')
+    bottom = 1304 if ftr_png else 1134               # низ блока подвала — в зоне подвала (0,8 см от края), над ним поле 2,3 см
+    first = ('<w:headerReference w:type="first" r:id="rId6"/><w:footerReference w:type="first" r:id="rId4"/>'
+             if hdr_png else "")
+    doc = (_XML + f'<w:document xmlns:w="{_WNS}" xmlns:r="{_RNS}" {_DNS}><w:body>' + "".join(body)
+           + '<w:sectPr><w:headerReference w:type="default" r:id="rId3"/><w:footerReference w:type="default" r:id="rId4"/>'
+           + first +
+           '<w:pgSz w:w="11906" w:h="16838"/>'
+           f'<w:pgMar w:top="1134" w:right="1134" w:bottom="{bottom}" w:left="1134" w:header="567" w:footer="{454 if (footer_all and ftr_l and ftr_r) else 708}" w:gutter="0"/>'
+           '<w:cols w:space="708"/>' + ('<w:titlePg/>' if hdr_png else '') + '<w:docGrid w:linePitch="360"/></w:sectPr></w:body></w:document>')
+    header_first = (_XML + f'<w:hdr xmlns:w="{_WNS}" xmlns:r="{_RNS}" {_DNS}><w:p><w:pPr><w:spacing w:after="0"/></w:pPr>'
+                    + (_pic("rId1", "Шапка", TW, hdr_h) if hdr_png else "") + '</w:p></w:hdr>')
+    empty_p = '<w:p><w:pPr><w:pStyle w:val="Normal"/><w:spacing w:after="0"/></w:pPr></w:p>'
+    header = _XML + f'<w:hdr xmlns:w="{_WNS}" xmlns:r="{_RNS}">{empty_p}</w:hdr>'
+    RP = '<w:rPr><w:color w:val="808080"/><w:sz w:val="18"/></w:rPr>'
+    num = ('<w:r>' + RP + '<w:fldChar w:fldCharType="begin"/></w:r><w:r>' + RP + '<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+           '<w:r>' + RP + '<w:fldChar w:fldCharType="separate"/></w:r><w:r>' + RP + '<w:t>1</w:t></w:r><w:r>' + RP + '<w:fldChar w:fldCharType="end"/></w:r>')
+    if footer_all and ftr_l and ftr_r:
+        # таблица 3×1 без границ: [левая часть блока] [номер страницы по центру ячейки] [сердечко] —
+        # номер всегда на линии блока (выравнивание ячейки по центру), не зависит от разрядности и не переносится
+        K = 0.97
+        fl, fr, fh = int(TW * 1330 // 1456 * K), int(TW * 88 // 1456 * K), int(ftr_h * K)
+        L, Rw = fl // 635 + 8, fr // 635 + 8
+        M = 9638 - L - Rw
+
+        def cell(w, inner, jc="left"):
+            return (f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa"/><w:noWrap/><w:vAlign w:val="center"/></w:tcPr>'
+                    f'<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="{jc}"/></w:pPr>{inner}</w:p></w:tc>')
+        footer_body = (f'<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
+                       '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'
+                       f'<w:tblLook w:val="0000"/></w:tblPr><w:tblGrid><w:gridCol w:w="{L}"/><w:gridCol w:w="{M}"/><w:gridCol w:w="{Rw}"/></w:tblGrid><w:tr>'
+                       + cell(L, _pic("rId1", "Подвал", fl, fh, did=3)) + cell(M, num, "center") + cell(Rw, _pic("rId2", "Подвал", fr, fh, did=4), "right")
+                       + '</w:tr></w:tbl><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>')
+    else:
+        footer_body = ('<w:p><w:pPr><w:spacing w:after="0"/>' + ('<w:ind w:right="630"/><w:jc w:val="right"/>' if ftr_png and not footer_all else '<w:jc w:val="center"/>')
+                       + '</w:pPr>' + num + '</w:p>')
+    footer = _XML + f'<w:ftr xmlns:w="{_WNS}" xmlns:r="{_RNS}" {_DNS}>' + footer_body + '</w:ftr>'
+    styles = (_XML + f'<w:styles xmlns:w="{_WNS}"><w:docDefaults><w:rPrDefault><w:rPr>'
+              '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/>'
+              '<w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="ru-RU" w:eastAsia="ru-RU" w:bidi="ar-SA"/></w:rPr></w:rPrDefault>'
+              '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+              '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+              '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/></w:style>'
+              '</w:styles>')
+    settings = (_XML + f'<w:settings xmlns:w="{_WNS}"><w:zoom w:percent="100"/><w:defaultTabStop w:val="708"/>'
+                '<w:characterSpacingControl w:val="doNotCompress"/>'
+                '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>'
+                '</w:settings>')
+    core = (_XML + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+            'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
+            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            f'<dc:title>{escape(title)}</dc:title><dc:creator>Кабинет репетитора</dc:creator></cp:coreProperties>')
+    app = (_XML + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">'
+           '<Application>Microsoft Office Word</Application><AppVersion>16.0000</AppVersion></Properties>')
+    W = "application/vnd.openxmlformats-officedocument.wordprocessingml."
+    ct = (_XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-          '<Default Extension="xml" ContentType="application/xml"/>' + png_ct +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+          '<Default Extension="xml" ContentType="application/xml"/>'
+          '<Default Extension="png" ContentType="image/png"/>'
+          f'<Override PartName="/word/document.xml" ContentType="{W}document.main+xml"/>'
+          f'<Override PartName="/word/styles.xml" ContentType="{W}styles+xml"/>'
+          f'<Override PartName="/word/settings.xml" ContentType="{W}settings+xml"/>'
+          f'<Override PartName="/word/header1.xml" ContentType="{W}header+xml"/>'
+          f'<Override PartName="/word/footer1.xml" ContentType="{W}footer+xml"/>'
+          f'<Override PartName="/word/header2.xml" ContentType="{W}header+xml"/>'
+          '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+          '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
           '</Types>')
-    rels0 = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    rels0 = (_XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+             f'<Relationship Id="rId1" Type="{R}officeDocument" Target="word/document.xml"/>'
+             '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+             f'<Relationship Id="rId3" Type="{R}extended-properties" Target="docProps/app.xml"/>'
              '</Relationships>')
+    doc_rels = (_XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                f'<Relationship Id="rId1" Type="{R}styles" Target="styles.xml"/>'
+                f'<Relationship Id="rId2" Type="{R}settings" Target="settings.xml"/>'
+                f'<Relationship Id="rId3" Type="{R}header" Target="header1.xml"/>'
+                f'<Relationship Id="rId4" Type="{R}footer" Target="footer1.xml"/>'
+                + (f'<Relationship Id="rId5" Type="{R}image" Target="media/footer.png"/>' if ftr_png and not footer_all else "")
+                + (f'<Relationship Id="rId6" Type="{R}header" Target="header2.xml"/>' if hdr_png else "")
+                + "".join(rels) + '</Relationships>')          # картинки-схемы (rId100+) — rels из цикла выше
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", rels0)
         z.writestr("word/document.xml", doc)
-        if rels:
-            z.writestr("word/_rels/document.xml.rels",
-                       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                       + "".join(rels) + '</Relationships>')
+        z.writestr("word/_rels/document.xml.rels", doc_rels)
+        z.writestr("word/styles.xml", styles)
+        z.writestr("word/settings.xml", settings)
+        z.writestr("word/header1.xml", header)
+        z.writestr("word/footer1.xml", footer)
+        if hdr_png:
+            z.writestr("word/header2.xml", header_first)
+            z.writestr("word/_rels/header2.xml.rels", _XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                       f'<Relationship Id="rId1" Type="{R}image" Target="media/header.png"/></Relationships>')
+            z.writestr("word/media/header.png", hdr_png)
+        if ftr_png:
+            z.writestr("word/media/footer.png", ftr_png)
+            if footer_all and ftr_l and ftr_r:
+                z.writestr("word/_rels/footer1.xml.rels", _XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                           f'<Relationship Id="rId1" Type="{R}image" Target="media/footer_l.png"/>'
+                           f'<Relationship Id="rId2" Type="{R}image" Target="media/footer_r.png"/></Relationships>')
+                z.writestr("word/media/footer_l.png", ftr_l)
+                z.writestr("word/media/footer_r.png", ftr_r)
         for name, png in media:
             z.writestr(name, png)
+        z.writestr("docProps/core.xml", core)
+        z.writestr("docProps/app.xml", app)
     return out.getvalue()
 
 

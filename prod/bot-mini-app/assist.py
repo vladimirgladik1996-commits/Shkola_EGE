@@ -711,13 +711,15 @@ CHAT_ASK_TAIL = (" Если для выполнения задачи не хва
 
 def chat_question(reply):
     """Модель решила уточнить задачу («ВОПРОС: …») — это обычная реплика в чате, а не файл.
+    Строка с «ВОПРОС:» ловится в любом месте ответа (модель иногда пишет заголовок и разделы, а вопрос — в конце).
     Возвращает текст вопроса без префикса или None, если ответ — сам результат."""
     if not isinstance(reply, str):
         return None
-    s = reply.lstrip()
-    if s[:7].upper() != "ВОПРОС:":
-        return None
-    return (s[7:].strip() or "Уточните, пожалуйста, задачу.")[:1000]
+    for line in reply.replace("\r", "").split("\n"):
+        s = line.strip().lstrip("#*_ ").strip()
+        if s[:7].upper() == "ВОПРОС:":
+            return (s[7:].strip(" *_") or "Уточните, пожалуйста, задачу.")[:1000]
+    return None
 
 
 def chat_format(raw):
