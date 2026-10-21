@@ -1065,7 +1065,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-thi img{width:100%;height:100%;object-fit:cover}
 
 
-.ec-log{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:6px 14px;margin-bottom:12px}
+.ec-log{min-height:176px;background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:6px 14px;margin-bottom:12px}
 .ec-stage{display:flex;gap:10px;align-items:center;padding:11px 0;font-weight:700;font-size:14px}
 .ec-stage+.ec-stage{border-top:1px solid var(--ln)}
 .ec-stage.done{color:var(--tx)}
@@ -1117,6 +1117,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-st i{flex:1;height:8px;border-radius:6px;background:var(--yel);min-width:4px}
 .ec-st em{flex:none;font-style:normal;font-weight:800;min-width:18px;text-align:right}
 .ec-kc{padding:10px 0;font-size:12.5px}
+.ec-kc[role=button]{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ec-kc+.ec-kc{border-top:1px solid var(--ln)}
 .ec-kt{display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:13px}
 .ec-pp{flex:none;color:var(--acc)}
@@ -1158,6 +1159,21 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-sec p{margin:6px 0 0;font-size:13px;line-height:1.5}
 .ec-sec a{display:block;margin-top:6px;font-size:12.5px;font-weight:700;color:var(--acc)}
 .ec-mc .ec-go2{width:100%;margin-top:16px}
+/* режим фрагментов на «ФИПИ» (макет essay-check): бейджи ошибок — категории, места — «под критерий» */
+.ec-desk.mf .ec-er{background:rgba(255,201,60,.4);border-bottom-color:#d99200;color:inherit}
+.ec-desk.mf .ec-er.sel{background:rgba(217,146,0,.32)}
+.ec-desk.mf .ec-er b{min-width:17px;padding:0 5px;border-radius:99px;background:#d99200;color:#fff;font:900 9.5px/17px inherit;text-align:center}
+.ec-desk.mf .ec-ok{color:inherit;background:rgba(31,154,91,.2);border-bottom:2px solid var(--grn);border-radius:3px}
+/* модалка «Почему теряется балл» */
+.ec-fn{font:900 13px inherit;border-radius:99px;padding:3px 12px;background:#d99200;color:#fff}
+.ec-fk{font-size:11px;font-weight:800;border-radius:10px;padding:3px 10px;background:rgba(217,146,0,.18);color:#a06a00}
+.ec-lost{float:right;background:rgba(214,69,69,.14);color:var(--red);border-radius:99px;padding:1px 9px;font:900 11px/18px inherit}
+.ec-lost:empty{display:none}
+.ec-fr.kfr{background:rgba(255,201,60,.18)}
+.ec-fr.kfr mark{background:rgba(255,201,60,.55)}
+.ec-fask{width:100%;margin-top:16px;border:0;border-radius:16px;padding:13px 16px;font:900 14px inherit;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2a3550,#171e30);display:flex;align-items:center;justify-content:center;gap:8px}
+.ec-fask:active{transform:scale(.98)}
+.ec-fask svg{width:18px;height:18px;fill:none;stroke:#FFC93C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .ec-err2{color:#B3142F}
 .ec-hi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln);margin-bottom:8px;text-align:left;font:inherit;color:var(--tx)}
 .ec-hi:active{transform:scale(.98)}
@@ -2349,7 +2365,7 @@ function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===
 <button class="ec-pb b" onclick="ecStart('oge')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><span class="ec-pbt"><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>`}
 function ecStart(k){ecKind=k;ecStep=1;render();scrollTo(0,0);ecCamOpen()}
 function ecBack(){if(ecStep===1||ecStep===4){ecStep=0;ecView="";render()}}
-function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecShots={w:[],t:[]};ecStep=0;render();scrollTo(0,0)}
+function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecFragClose();ecShots={w:[],t:[]};ecStep=0;render();scrollTo(0,0)}
 /* --- ученик и история (пуш 7): привязка проверки к ученику, «Сохранить за учеником»,
    история сохранённых проверок и повторный просмотр разбора (без запуска модели) --- */
 function ecStuName(){const s=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);return s?s.name:""}
@@ -2497,7 +2513,7 @@ function ecText(r){   /* текст работы с кликабельными �
   let out="",pos=0;
   hits.forEach(h=>{out+=esc(t.slice(pos,h.a));
     out+=ecFix?`<span class="ec-ok">${esc(h.e.correct||h.e.found)}</span>`
-      :`<span class="ec-er" role="button" tabindex="0" data-i="${h.i}" onclick="ecErrShow(${h.i})" onkeydown="if(event.key==='Enter')ecErrShow(${h.i})" title="Ошибка №${h.i} — нажмите для разбора">${esc(t.slice(h.a,h.b))}<b>${h.i}</b></span>`;
+      :`<span class="ec-er" role="button" tabindex="0" data-i="${h.i}" onclick="ecErrShow(${h.i})" onkeydown="if(event.key==='Enter')ecErrShow(${h.i})" title="Ошибка №${h.i} — нажмите для разбора">${esc(t.slice(h.a,h.b))}<b>${ecTab=="f"?(EC_FTAG[h.e.type]||h.e.type):h.i}</b></span>`;
     pos=h.b});
   return out+esc(t.slice(pos))}
 function ecStats(r){
@@ -2505,8 +2521,8 @@ function ecStats(r){
   if(!r.errors.length)return `<div class="ec-note">Ошибок не найдено</div>`;
   const mx=Math.max.apply(null,EC_TYPES.map(t=>cnt[t]).concat([1]));
   return EC_TYPES.map(t=>`<div class="ec-st"><span>${t}</span><i style="width:${Math.round(cnt[t]*100/mx)}%"></i><em>${cnt[t]}</em></div>`).join("")}
-function ecErrorsView(r){return `<div class="ec-desk" id="ec-desk">${ecText(r)}</div>
-<div class="ec-blk"><h3>Статистика ошибок</h3>${ecStats(r)}</div>`}
+function ecErrorsView(r){   /* текст работы живёт над панелями (как в мокете) — здесь только статистика */
+  return `<div class="ec-blk"><h3>Статистика ошибок</h3>${ecStats(r)}</div>`}
 function ecFipiView(r){
   const kr=r.criteria.length?r.criteria.map(c=>{const pc=c.max?Math.round(c.got*100/c.max):0;
     return `<div class="ec-kc${pc>=100?"":pc>=50?" w":" r"}"><div class="ec-kt"><span>${esc(c.name)}</span><span class="ec-pp">${c.got} / ${c.max}</span></div>
@@ -2531,6 +2547,7 @@ ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
   <span class="ec-spr"></span>
   <button type="button" class="ec-round" id="ec-tg" onclick="ecFixSet(${ecFix?0:1})" title="Т — как написано учеником, П — с исправлениями" aria-label="Вид текста: как написано или с исправлениями">${ecFix?"П":"Т"}</button>
 </div>
+<div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecText(r)}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
 <div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Итоговый балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span></div></div>
@@ -2538,15 +2555,16 @@ ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 ${ecView=="hist"?`<button class="ec-go" onclick="ecHistOpen()">‹ История проверок</button>`
   :`<button class="ec-go${ecSaved?" ec-saved":""}" onclick="ecSave()">${ecSaveLabel()}</button>`}
 <button class="ec-go2" onclick="ecReset()">Новая проверка</button>`}
-function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();   /* вкладки переключаются на месте — без перерисовки экрана */
+function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вкладки переключаются на месте — без перерисовки экрана */
   const ve=$("#ec-ve"),vf=$("#ec-vf"),te=$("#ec-te"),tf=$("#ec-tf");
   if(!ve||!vf||!te||!tf){if(tab=="ai"&&ecStep===3)render();return}
   ve.classList.toggle("ec-hid",ecTab!="e");vf.classList.toggle("ec-hid",ecTab!="f");
-  te.classList.toggle("on",ecTab=="e");tf.classList.toggle("on",ecTab=="f")}
+  te.classList.toggle("on",ecTab=="e");tf.classList.toggle("on",ecTab=="f");
+  ecRelabel()   /* на «ФИПИ» бейджи становятся категориями и места горят «под критерий» */}
 function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т/П: как написано учеником / с исправлениями */
   const d=$("#ec-desk"),b=$("#ec-tg");
   if(!d||!b){if(tab=="ai"&&ecStep===3)render();return}
-  d.innerHTML=ecText(ecRes||ecNrm(null));b.textContent=ecFix?"П":"Т"}
+  d.innerHTML=ecText(ecRes||ecNrm(null));ecRelabel();b.textContent=ecFix?"П":"Т"}
 /* --- модалка ошибки: фрагмент → ошибка → обоснование → источники; Esc, ×, «Закрыть» и клик по фону --- */
 const EC_KIND={"Орфография":"Нарушение правописания","Пунктуация":"Нарушение пунктуации","Речь":"Речевая ошибка"};
 function ecModUi(){let o=$("#ec-mod");if(o)return o;
@@ -2561,6 +2579,7 @@ function ecModUi(){let o=$("#ec-mod");if(o)return o;
   o.onclick=e=>{if(e.target===o)ecErrClose()};   /* клик по фону — как у шторок кабинета */
   document.body.appendChild(o);return o}
 function ecErrShow(i){
+  const d=$("#ec-desk");if(d&&d.classList.contains("mf")){ecFragShow(i);return}   /* режим фрагментов — модалка «Почему теряется балл» */
   const r=ecRes;if(!r||!Array.isArray(r.errors))return;
   const e=r.errors.filter(x=>x&&x.i==i)[0];if(!e)return;   /* повторный тап и мусорный номер — без падений */
   document.querySelectorAll(".ec-er").forEach(s=>s.classList.toggle("sel",s.dataset.i==i));
@@ -2578,6 +2597,66 @@ function ecErrShow(i){
 function ecErrClose(){const o=$("#ec-mod");if(o&&!o.hidden)o.hidden=true;
   document.querySelectorAll(".ec-er").forEach(s=>s.classList.remove("sel"))}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")ecErrClose()});
+/* --- модалка «Почему теряется балл» (макет essay-check): фрагмент → потеря баллов →
+   обоснование критерия → «Как вернуть балл» + «Спросить у Вишенки» (вопрос в чат) --- */
+const EC_FTAG={"Орфография":"Орф","Пунктуация":"Пункт","Речь":"Речь"};   /* короткие бейджи категорий */
+function ecCritOf(r,type){   /* строка критерия ФИПИ по категории ошибки (Орф/Пункт/Речь) */
+  const s=type=="Орфография"?"орф":type=="Пунктуация"?"пункт":"реч";
+  return (r.criteria||[]).filter(c=>String(c.name||"").toLowerCase().indexOf(s)>=0)[0]}
+function ecRelabel(){   /* бейджи ошибок: номера ⇄ категории при переключении вкладок (relabel в мокете) */
+  const r=ecRes||ecNrm(null),d=$("#ec-desk");if(!d)return;
+  d.classList.toggle("ec-mf",ecTab=="f");
+  d.querySelectorAll(".ec-er").forEach(s=>{const e=(r.errors||[]).filter(x=>x&&x.i==s.dataset.i)[0],b=s.querySelector("b");
+    if(b&&e)b.textContent=ecTab=="f"?(EC_FTAG[e.type]||e.type):e.i})}
+let ecFrag=null;
+function ecFragUi(){let o=$("#ec-modf");if(o)return o;
+  o=document.createElement("div");o.id="ec-modf";o.className="ec-mod";o.hidden=true;
+  o.innerHTML=`<div class="ec-mc" role="dialog" aria-modal="true" aria-label="Почему теряется балл">
+  <div class="ec-mh"><span class="ec-fn" id="ec-fn"></span><span class="ec-fk" id="ec-fk"></span><button type="button" class="ec-x" aria-label="Закрыть" onclick="ecFragClose()">×</button></div>
+  <div class="ec-sec" id="ec-ffs"><h4>Фрагмент текста</h4><div class="ec-fr kfr" id="ec-ffr"></div></div>
+  <div class="ec-sec"><h4>Почему теряется балл <span class="ec-lost" id="ec-flost"></span></h4><p id="ec-fwhy"></p></div>
+  <div class="ec-sec"><h4>Как вернуть балл</h4><p id="ec-ftip"></p></div>
+  <button type="button" class="ec-fask" onclick="ecFAsk()"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>Спросить у Вишенки</button></div>`;
+  o.onclick=e=>{if(e.target===o)ecFragClose()};
+  document.body.appendChild(o);return o}
+function ecFragShow(key){   /* key: номер ошибки или 'c<N>' — карточка критерия ФИПИ */
+  const r=ecRes||ecNrm(null),num=String(key).charAt(0)!="c";
+  let tag="",name="",lost=0,why="",tip="",frag="",plain="";
+  if(num){
+    const e=(r.errors||[]).filter(x=>x&&x.i==key)[0];if(!e)return;
+    const c=ecCritOf(r,e.type);
+    tag=EC_FTAG[e.type]||e.type;name=e.type;
+    if(c){lost=Math.max(0,c.max-c.got);why=c.why||"";tip=c.tip||""}
+    if(!why)why=e.why||"Обоснование не пришло — попробуйте повторить проверку.";
+    if(e.found)why+=" Здесь: «"+e.found+"»"+(e.correct?" → «"+e.correct+"»":"")+".";
+    const t=String(r.text||""),k=e.found?t.indexOf(e.found):-1;
+    const a=k<0?0:Math.max(0,k-40),b=k<0?t.length:Math.min(t.length,k+e.found.length+40);
+    frag=(a>0?"…":"")+(k<0?esc(t.slice(a,b)):esc(t.slice(a,k))+"<mark>"+esc(e.found)+"</mark>"+esc(t.slice(k+e.found.length,b)))+(b<t.length?"…":"");
+    plain=(a>0?"…":"")+t.slice(a,b)+(b<t.length?"…":"");
+    document.querySelectorAll("#ec-desk .ec-er").forEach(s=>s.classList.toggle("sel",s.dataset.i==key));
+  }else{
+    const c=(r.criteria||[])[+String(key).slice(1)];if(!c)return;
+    tag=String(c.name||"").trim().split(/\s+/)[0]||"К";name=c.name;
+    lost=Math.max(0,c.max-c.got);why=c.why||"Обоснование не пришло — попробуйте повторить проверку.";tip=c.tip||"";
+    plain=name;
+    document.querySelectorAll("#ec-desk .ec-er").forEach(s=>s.classList.remove("sel"));
+  }
+  const o=ecFragUi();
+  $("#ec-fn").textContent=tag;$("#ec-fk").textContent=name;
+  const fs=$("#ec-ffs");
+  if(num&&frag){fs.hidden=false;$("#ec-ffr").innerHTML=frag}else{fs.hidden=true}
+  $("#ec-flost").textContent=lost>0?"−"+lost+" "+ecPl(lost):"";
+  $("#ec-fwhy").textContent=why;
+  $("#ec-ftip").textContent=tip||"Совет не пришёл — спросите Вишенку.";
+  ecFrag={t:String(plain||"").replace(/\s+/g," ").trim()};
+  o.hidden=false}
+function ecFragClose(){const o=$("#ec-modf");if(o&&!o.hidden)o.hidden=true}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")ecFragClose()});
+function ecFAsk(){   /* «Спросить у Вишенки»: чат открывается с готовым вопросом по фрагменту */
+  const t=ecFrag&&ecFrag.t?ecFrag.t.slice(0,220):"";
+  const q=t?"Как исправить этот фрагмент из моего сочинения: «"+t+"»":"Как исправить фрагмент из моего сочинения?";
+  ecFragClose();ecErrClose();tab="ch";render();scrollTo(0,0);
+  const el=$("#aic-in");if(el){el.value=q;chGrow(el);try{el.focus({preventScroll:true})}catch(e){}}}
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>
 <div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip"><img src="${EC_TIP}" alt=""><span>${w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</span></div></div>
