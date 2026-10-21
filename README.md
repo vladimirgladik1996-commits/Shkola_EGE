@@ -12,6 +12,7 @@ Telegram-бот + мини-апп + Android-приложение для репе
 ```
 dev/                        ← DEV: тестовая версия
 ├── bot-mini-app/           ←   бот + мини-апп (aiogram + aiohttp + docs/)
+├── mockups/                ←   макеты новых разделов (дизайн до внедрения в код)
 └── apk/                    ←   Android-приложение (WebView-обёртка кабинета)
 
 prod/                       ← PROD: рабочая версия
@@ -23,6 +24,7 @@ render.yaml                 ← Render Blueprint: два сервиса — tuto
 Dockerfile                  ← запасной (shim): собирает prod/bot-mini-app из корня,
                               пока сервису не задан Root Directory в Render
 docs/                       ← заглушка GitHub Pages: перенаправляет на сервис Render
+PUSH-PLAN.md                ← план пушей и релиза текущих задач
 .github/workflows/deploy.yml← опциональный SSH-деплой прод-версии
 ```
 
