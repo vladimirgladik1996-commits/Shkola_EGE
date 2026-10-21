@@ -27,10 +27,19 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- возврат из Telegram после «Войти через Telegram»: страница бота /app-return открывает kabinet://login;
+                 singleTask — вернуться в уже запущенное приложение, а не открывать второе окно -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kabinet" android:host="login" />
             </intent-filter>
         </activity>
         <!-- файл для снимка системной камеры: «Снять камерой» в чате с ИИ (MainActivity.onShowFileChooser → CaptureProvider) -->

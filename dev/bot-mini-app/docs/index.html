@@ -1267,9 +1267,45 @@ function loginScreen(code){document.body.textContent="";const d=document.createE
   <p style="color:#6b7785;font-size:14px">${code==403?"Сессия приложения устарела — войдите заново. ":""}Введите пароль кабинета — тот же, что в боте. Ученики, занятия и оплаты живут на том же сервере.</p>
   <label style="${lab}">Пароль</label><input id="lg_p" type="text" style="${inp}" autocomplete="current-password" maxlength="128">
   <button id="lg_b" style="width:100%;margin-top:18px;padding:13px;font:inherit;font-weight:600;color:#fff;background:#0F2E6E;border:0;border-radius:10px">Войти</button>
+  <div style="text-align:center;color:#6b7785;font-size:13px;margin:16px 0 0">или</div>
+  <button id="lg_tg" style="width:100%;margin:12px 0 0;padding:13px;font:inherit;font-weight:600;color:#fff;background:#2481cc;border:0;border-radius:10px">✈️ Войти через Telegram</button>
   <div id="lg_m" role="alert" style="min-height:20px;margin-top:12px;font-size:14px;color:#d93025"></div>`;
   document.body.appendChild(d);
   const q=id=>document.getElementById(id);
+  /* Быстрый вход через Telegram: бот подтверждает личность, приложение забирает токен опросом.
+     Заявка хранится в localStorage — после ухода в Telegram и возврата (страница могла перезагрузиться) опрос продолжается. */
+  const tgSt=()=>{try{return JSON.parse(localStorage.tgLogin||"null")}catch(e){return null}};
+  const tgMsg=(t,ok)=>{q("lg_m").textContent=t;q("lg_m").style.color=ok?"#2481cc":"#d93025"};
+  let tgBusy=false,tgTimer=0;
+  const tgStop=()=>{clearTimeout(tgTimer);localStorage.removeItem("tgLogin");q("lg_tg").disabled=false};
+  async function tgPoll(){
+    const st=tgSt();if(!st||tgBusy)return;
+    if(Date.now()>st.exp){tgStop();tgMsg("Время вышло — нажмите «Войти через Telegram» ещё раз");return}
+    tgBusy=true;
+    try{const r=await fetch(API_BASE+"/api/tglogin/poll",{method:"POST",credentials:"omit",cache:"no-store",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({poll:st.poll})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.token){localStorage.removeItem("tgLogin");localStorage.sesTok=j.token;location.reload();return}
+      if(r.status==410){tgStop();tgMsg("Заявка устарела — нажмите «Войти через Telegram» ещё раз");return}
+    }catch(e){}
+    finally{tgBusy=false}
+    clearTimeout(tgTimer);tgTimer=setTimeout(tgPoll,1500);
+  }
+  window.__tgPoll=tgPoll;                                   /* APK дёргает при возврате из Telegram (MainActivity) */
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")tgPoll()});
+  q("lg_tg").onclick=async()=>{
+    q("lg_tg").disabled=true;tgMsg("");
+    try{const r=await fetch(API_BASE+"/api/tglogin/start",{method:"POST",credentials:"omit",cache:"no-store",
+        headers:{"Content-Type":"application/json"},body:"{}"});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.tg){q("lg_tg").disabled=false;tgMsg(j.error||"Не получилось начать вход. Попробуйте ещё раз.");return}
+      localStorage.tgLogin=JSON.stringify({poll:j.poll,exp:Date.now()+(j.ttl||300)*1000});
+      tgMsg("Откройте Telegram и подтвердите вход — потом вернёмся сюда сами.",true);
+      location.href=j.tg;                                     /* tg:// — APK отдаёт системе, откроется Telegram */
+      clearTimeout(tgTimer);tgTimer=setTimeout(tgPoll,1500);
+    }catch(e){q("lg_tg").disabled=false;tgMsg("Нет связи с сервером.")}
+  };
+  if(tgSt()){q("lg_tg").disabled=true;tgMsg("Ждём подтверждения в Telegram…",true);tgPoll()}
   q("lg_b").onclick=async()=>{
     if(!q("lg_p").value){q("lg_m").textContent="Введите пароль";return}
     q("lg_b").disabled=true;q("lg_m").textContent="";
@@ -1286,7 +1322,7 @@ function loginScreen(code){document.body.textContent="";const d=document.createE
    Поэтому при возврате в кабинет (свернули-развернули, вернулись из браузера) пробуем обновиться сами —
    один раз за возврат, чтобы не зациклиться. */
 let autoRetry=false;
-const wake=()=>{if(locked&&!autoRetry&&document.visibilityState==="visible"){autoRetry=true;location.reload()}};
+const wake=()=>{if(locked&&!autoRetry&&!localStorage.tgLogin&&document.visibilityState==="visible"){autoRetry=true;location.reload()}};   /* tgLogin: ждём вход через Telegram — перезагрузка оборвёт опрос */
 document.addEventListener("visibilitychange",wake);
 if(tg.onEvent)tg.onEvent("activated",wake);
 async function api(p,b){const h={"X-Init":tg.initData,"Content-Type":"application/json"};

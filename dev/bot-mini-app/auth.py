@@ -139,6 +139,7 @@ create table if not exists auth_pins(username text primary key, tg_id integer no
 create table if not exists auth_sessions(tg_id integer primary key, exp real not null);
 create table if not exists auth_fails(tg_id integer not null, ts real not null);
 create table if not exists api_tokens(h text primary key, tg_id integer not null, exp real not null);
+create table if not exists auth_tg(code_h text primary key, poll_h text not null, exp real not null, tg_id integer);
 """)
     for stmt in ("alter table auth_sessions add column fp text",       # сессии версии 1 без отпечатка — недействительны
                  "alter table auth_links add column uname text",
@@ -314,6 +315,76 @@ async def attempt_standalone(password):
     return 200, "", uid
 
 
+# ---------- быстрый вход в APK через Telegram (без пароля) ----------
+# 1) приложение просит /api/tglogin/start → получает ссылку на бота (код) и свой секрет опроса;
+# 2) в боте человек жмёт «Подтвердить» → tg_confirm() привязывает заявку к его Telegram-ID
+#    (только если он в белом списке);
+# 3) приложение опрашивает /api/tglogin/poll по секрету и получает тот же API-токен, что и при входе по паролю.
+# Код (уходит в Telegram) и секрет опроса (остаётся в приложении) — разные значения: кто увидел ссылку, токен не получит.
+TG_TTL = 300              # заявка живёт 5 минут
+TG_MAX_PENDING = 200      # защита от заваливания таблицы
+TG_GRACE = 30             # после выдачи токена заявка живёт ещё столько секунд (потерянный ответ)
+BOT_USERNAME = os.getenv("BOT_USERNAME", "").strip().lstrip("@")   # бот заполняет сам при старте (get_me)
+APP_ENV = os.getenv("APP_ENV", "").strip().lower()
+# схема возврата в APK: dev-сборка и prod-сборка стоят на одном телефоне — схемы разные
+APK_SCHEME = os.getenv("APK_SCHEME", "").strip() or ("kabinet-dev" if APP_ENV == "dev" else "kabinet")
+TG_CODE_RE = re.compile(r"[A-Za-z0-9_-]{16,40}")
+
+def tg_start():
+    """Новая заявка → (код для ссылки бота, секрет опроса) или None, если очередь переполнена."""
+    now = time.time()
+    _db.execute("delete from auth_tg where exp<?", (now,))
+    if _db.execute("select count(*) from auth_tg").fetchone()[0] >= TG_MAX_PENDING:
+        return None
+    code, poll = secrets.token_urlsafe(16), secrets.token_urlsafe(32)
+    _db.execute("insert into auth_tg(code_h, poll_h, exp, tg_id) values(?,?,?,null)", (_h(code), _h(poll), now + TG_TTL))
+    _db.commit()
+    return code, poll
+
+def tg_confirm(code, tg_id, username=""):
+    """Бот: человек подтвердил вход. True — заявка привязана к его ID."""
+    if not isinstance(code, str) or not TG_CODE_RE.fullmatch(code) or not allowed(tg_id, username):
+        return False
+    now = time.time()
+    cur = _db.execute("update auth_tg set tg_id=? where code_h=? and exp>? and tg_id is null", (tg_id, _h(code), now))
+    if cur.rowcount != 1:
+        return False
+    _pin(tg_id, username)                                      # ник → числовой ID, как при входе по паролю
+    _db.commit()
+    log.info("tg login confirmed: tg_id=%s", tg_id)
+    return True
+
+def tg_cancel(code):
+    if isinstance(code, str) and TG_CODE_RE.fullmatch(code):
+        _db.execute("delete from auth_tg where code_h=? and tg_id is null", (_h(code),)); _db.commit()
+
+def tg_poll(poll):
+    """Приложение: (статус, токен). pending — ждём подтверждения; ok — токен выдан (один раз); gone — истекла/неизвестна."""
+    if not isinstance(poll, str) or not TOKEN_RE.fullmatch(poll):
+        return "gone", None
+    now = time.time()
+    row = _db.execute("select exp, tg_id from auth_tg where poll_h=?", (_h(poll),)).fetchone()
+    if row is None or row[0] < now:
+        if row is not None:
+            _db.execute("delete from auth_tg where poll_h=?", (_h(poll),)); _db.commit()
+        return "gone", None
+    if row[1] is None:
+        return "pending", None
+    if not allowed(row[1]):                                             # список мог измениться за это время
+        _db.execute("delete from auth_tg where poll_h=?", (_h(poll),)); _db.commit()
+        return "gone", None
+    # Заявка закрывается не сразу, а через TG_GRACE с: если страница перезагрузилась и ответ с токеном потерялся
+    # (возврат из Telegram), тот же держатель секрета опроса получит новый токен. Подтвердить заявку заново нельзя.
+    _db.execute("update auth_tg set exp=? where poll_h=?", (min(row[0], now + TG_GRACE), _h(poll)))
+    _db.commit()
+    return "ok", issue_token(row[1])
+
+def tg_link(code):
+    """(tg://-ссылка, https-ссылка) на бота с кодом заявки."""
+    return (f"tg://resolve?domain={BOT_USERNAME}&start=login_{code}",
+            f"https://t.me/{BOT_USERNAME}?start=login_{code}")
+
+
 # ---------- разбор запроса (чистая функция — легко тестировать) ----------
 TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{20,64}")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -372,6 +443,15 @@ say("✅ Вход выполнен. Вернитесь в Telegram.",true);setTi
 say(j.error||"Ошибка. Попробуйте ещё раз.");}catch(_){say("Нет связи с сервером.")}
 $("p").value="";$("b").disabled=false});})();</script></body></html>"""
 
+# Страница «вернуться в приложение»: кнопка бота открывает её, а она отдаёт управление APK по схеме kabinet://
+BACK_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Вход выполнен</title>
+<style nonce="__N__">body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:#fff;color:#17212b;font:16px/1.4 system-ui,sans-serif;text-align:center}
+a{display:block;margin-top:18px;padding:13px 22px;font-weight:600;color:#fff;background:#0F2E6E;border-radius:10px;text-decoration:none}p{color:#6b7785;font-size:14px}</style></head>
+<body><main><h1>✅ Вход подтверждён</h1><p>Возвращаемся в приложение…</p>
+<a id="a" href="__S__://login">Открыть приложение</a></main>
+<script nonce="__N__">setTimeout(()=>{location.href="__S__://login"},300)</script></body></html>"""
+
 SEC = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
        "X-Frame-Options": "DENY", "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Resource-Policy": "same-origin",
        "Permissions-Policy": "geolocation=(), camera=(), microphone=()"}
@@ -418,8 +498,43 @@ def setup(app, on_login=None, on_alert=None):
             except Exception: pass                                 # сбой уведомления не отменяет вход
         return out(code, msg, issue_token(tg_id) if code == 200 else None)
 
+    def _same_origin(request):
+        return request.headers.get("Origin") == BASE and request.headers.get("Sec-Fetch-Site", "same-origin") == "same-origin"
+
+    async def tg_start_h(request):
+        if not _same_origin(request) or not BOT_USERNAME:
+            return web.json_response({"ok": False, "error": "Запрещено"}, status=403, headers=headers)
+        r = tg_start()
+        if r is None:
+            return web.json_response({"ok": False, "error": "Слишком много входов, подождите минуту."}, status=429, headers=headers)
+        code, poll = r
+        tgl, web_l = tg_link(code)
+        return web.json_response({"ok": True, "poll": poll, "tg": tgl, "url": web_l, "ttl": TG_TTL}, headers=headers)
+
+    async def tg_poll_h(request):
+        if not _same_origin(request) or request.content_type != "application/json" or not (0 < (request.content_length or 0) <= 512):
+            return web.json_response({"ok": False, "error": "Запрещено"}, status=403, headers=headers)
+        try:
+            j = json.loads(await request.read())
+            poll = j.get("poll") if isinstance(j, dict) else None
+        except (ValueError, RecursionError):
+            poll = None
+        st, tok = tg_poll(poll)
+        return web.json_response({"ok": st == "ok", "status": st, **({"token": tok} if tok else {})},
+                                 status=200 if st != "gone" else 410, headers=headers)
+
+    async def back(request):
+        n = secrets.token_urlsafe(16)
+        csp = (f"default-src 'none'; script-src 'nonce-{n}'; style-src 'nonce-{n}'; base-uri 'none'; "
+               "form-action 'none'; frame-ancestors 'none'")
+        return web.Response(text=BACK_PAGE.replace("__N__", n).replace("__S__", APK_SCHEME), content_type="text/html",
+                            charset="utf-8", headers={**headers, "Content-Security-Policy": csp})
+
     app.router.add_get("/login", page)
     app.router.add_post("/api/login", login)
+    app.router.add_post("/api/tglogin/start", tg_start_h)
+    app.router.add_post("/api/tglogin/poll", tg_poll_h)
+    app.router.add_get("/app-return", back)
 
 
 # ---------- генератор хэша ----------

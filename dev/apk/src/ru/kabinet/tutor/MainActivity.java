@@ -700,7 +700,21 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         webPaused = false;
-        if (web != null) web.onResume();
+        if (web != null) { web.onResume(); pollTelegramLogin(); }
+    }
+
+    /** Возврат из Telegram по ссылке SCHEME://login (страница бота /app-return): singleTask доставляет её сюда. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pollTelegramLogin();
+    }
+
+    /** «Войти через Telegram»: пока приложение было в фоне, таймеры страницы спали — просим забрать токен сразу. */
+    private void pollTelegramLogin() {
+        if (web == null) return;
+        try { web.evaluateJavascript("window.__tgPoll&&window.__tgPoll()", null); } catch (Exception ignored) {}
     }
 
     @Override

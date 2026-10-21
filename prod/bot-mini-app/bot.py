@@ -6,7 +6,7 @@ from urllib.parse import parse_qsl, quote
 from aiohttp import web
 import assist, auth, chatfiles, essaycheck, kimi, matlib, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramAPIError
@@ -810,14 +810,34 @@ async def student_done(m: Message, state: FSMContext, name, price, grade="", sub
 
 # ---------- меню ----------
 @pub.message(CommandStart())
-async def start(m: Message, state: FSMContext):
+async def start(m: Message, state: FSMContext, command: CommandObject):
     await state.clear()
+    arg = command.args or ""
+    if arg.startswith("login_"):                                   # быстрый вход в приложение (APK): /start login_<код> — без вопросов
+        if not auth.tg_confirm(arg[6:], m.from_user.id, m.from_user.username or ""):
+            await m.answer("Ссылка устарела. Нажмите «Войти через Telegram» в приложении ещё раз.")
+            return
+        rows = [[InlineKeyboardButton(text="🚫 Это не я — отозвать вход", callback_data="tgl:r")]]
+        if auth.BASE.startswith("https://"):                       # Telegram не принимает кнопку-ссылку без https-адреса
+            rows.insert(0, [InlineKeyboardButton(text="↩️ Вернуться в приложение", url=f"{auth.BASE}/app-return")])
+        kb = InlineKeyboardMarkup(inline_keyboard=rows)
+        await m.answer("✅ Вход в приложение выполнен" + ENV_TAG + ". Вернитесь в приложение.", reply_markup=kb)
+        return
     if auth.is_authorized(m.from_user.id):
         await m.answer("Готово к работе. Выберите действие в меню." + ENV_TAG, reply_markup=menu_kb())
         return
     await m.answer("🔐 Для работы нужно войти." + ENV_TAG, reply_markup=ReplyKeyboardRemove())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Войти", url=auth.new_link(m.from_user.id, m.from_user.username or ""))]])
     await m.answer("Нажмите кнопку и введите пароль. Ссылка одноразовая, действует 10 минут.", reply_markup=kb)
+
+@pub.callback_query(F.data.startswith("tgl:"))
+async def tg_login_revoke(c: CallbackQuery):
+    """«Это не я»: закрываем все входы этого Telegram-ID (сессии бота и токены приложения). Вход снова — через /start."""
+    if auth.allowed(c.from_user.id, c.from_user.username or ""):
+        auth.logout(c.from_user.id)
+    if c.message:
+        await c.message.edit_text("🚫 Вход отозван, все устройства вышли. Если это были не вы — смените пароль на сервере.")
+    await c.answer()
 
 @r.message(Command("logout"))
 async def logout(m: Message, state: FSMContext):
@@ -2797,6 +2817,9 @@ async def main():
     auth.require_config()
     fill_regular()
     bot = Bot(TOKEN)
+    if not auth.BOT_USERNAME:                       # имя бота нужно ссылке «Войти через Telegram» в приложении
+        try: auth.BOT_USERNAME = (await bot.get_me()).username or ""
+        except Exception: log.warning("get_me не удался: вход через Telegram недоступен — задайте BOT_USERNAME")
     dp = Dispatcher()
     dp.include_router(pub)
     dp.include_router(r)

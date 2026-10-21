@@ -19,7 +19,9 @@ def routers(n):
         if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and isinstance(d.func.value, ast.Name) and d.func.attr in ("message", "callback_query"):
             yield d.func.value.id
 fns = [n for n in tree.body if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef))]
-assert [n.name for n in fns if "pub" in set(routers(n))] == ["start"]
+# tg_login_revoke в pub намеренно: кнопка «🚫 Это не я» показывается ДО входа (владелец не авторизован),
+# хендлер безопасен — logout только своего Telegram-ID и только для белого списка (auth.allowed).
+assert [n.name for n in fns if "pub" in set(routers(n))] == ["start", "tg_login_revoke"]
 assert {x for n in fns for x in routers(n)} == {"pub", "r"}
 assert "r.message.outer_middleware(AuthMW())" in src and "r.callback_query.outer_middleware(AuthMW())" in src and "dp.include_router(pub)" in src
 print("✓ без входа доступен только /start; остальные обработчики бота — за AuthMW")
