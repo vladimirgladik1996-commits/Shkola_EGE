@@ -39,6 +39,10 @@ log = logging.getLogger("tutor.kimi")
 
 BASE = (os.getenv("KIMI_BASE_URL", "").strip() or "https://api.moonshot.ai/v1").rstrip("/")  # пустое значение = дефолт
 API_KEY = os.getenv("KIMI_API_KEY", "").strip()
+# ФОТО В API — ТОЛЬКО по явной команде владельца (EC_LIVE=1). Пока команда не дана,
+# ни одна картинка не уходит в API ни из одного места программы («ИИ-проверка»
+# в демо-режиме не ходит в API вообще — см. essaycheck.DEMO).
+PHOTOS_OK = os.getenv("EC_LIVE", "").strip() == "1"
 MODEL = (os.getenv("KIMI_MODEL", "") or "kimi-k2.6").strip()
 FAST_MODEL = (os.getenv("KIMI_MODEL_FAST", "") or "kimi-k2.6").strip()
 DEEP_MODEL = (os.getenv("KIMI_MODEL_DEEP", "") or "kimi-k3").strip()
@@ -173,6 +177,9 @@ def build_payload(messages, model=None, deep=False, json_mode=False, images=None
       всегда включено и управляется reasoning_effort (режим K3), поле thinking K3 не принимает.
     • json_mode — ответ строго в JSON (response_format json_object): используется для разбора задач.
     • images — список base64/jpeg|png|webp: подмешиваются в последнее сообщение (vision)."""
+    if images and not PHOTOS_OK:
+        log.warning("kimi: фото не отправляются в API (демо-режим: EC_LIVE != 1)")
+        images = None
     m = resolve_model(model, deep)
     content = messages[-1]["content"]
     if images:

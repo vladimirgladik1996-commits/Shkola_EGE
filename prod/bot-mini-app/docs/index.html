@@ -1112,6 +1112,14 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-er{border-bottom:2px solid #E8294F;color:#B3142F;font-weight:700;cursor:pointer}
 .ec-er b{font-size:9px;vertical-align:super;color:#E8294F;margin-left:1px}
 .ec-er.sel{background:rgba(232,41,79,.14);border-radius:4px}
+.ec-page{position:relative;margin:0 0 10px;border-radius:12px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.22)}
+.ec-page img{display:block;width:100%;height:auto}
+.ec-ovl{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;padding:0;margin:0;border:2px solid #fff;border-radius:50%;background:#E8294F;color:#fff;font-weight:900;text-align:center;line-height:26px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+.ec-ovl b{color:#fff;font-size:11px;line-height:26px;vertical-align:baseline;margin:0}
+.ec-ovl.sel{outline:3px solid rgba(232,41,79,.45);background:#B3142F}
+.ec-desk.mf .ec-ovl{background:#d99200;color:#fff}
+.ec-desk.mf .ec-ovl b{background:none;padding:0;min-width:0;border-radius:0;font-size:10px;color:#fff}
+.ec-desk.mf .ec-ovl.sel{background:#b57c00}
 .ec-ok{color:var(--grn);font-weight:700}
 .ec-blk{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:12px 14px;margin-top:12px}
 .ec-blk h3{font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
@@ -2498,8 +2506,12 @@ function ecOff(){ecState="off";if(tab=="ai"&&ecStep===2)render()}
 function ecLevel(p){return p>=85?"Отлично":p>=70?"Хорошо":p>=50?"Удовлетворительно":"Нужно доработать"}
 function ecNrm(r){const s=r&&typeof r=="object"?r:{};
   const errs=(Array.isArray(s.errors)?s.errors:[]).filter(e=>e&&typeof e=="object"&&String(e.found||"").trim())
-    .map((e,k)=>({i:k+1,type:EC_TYPES.indexOf(e.type)>=0?e.type:"Речь",found:String(e.found).trim(),
-      correct:String(e.correct||"").trim(),why:String(e.why||"").trim(),src:String(e.src||"").trim()}));
+    .map((e,k)=>{const o={i:k+1,type:EC_TYPES.indexOf(e.type)>=0?e.type:"Речь",found:String(e.found).trim(),
+      correct:String(e.correct||"").trim(),why:String(e.why||"").trim(),src:String(e.src||"").trim()};
+      const num=v=>typeof v=="number"&&isFinite(v);
+      if(num(e.x)&&num(e.y)){o.x=Math.max(0,Math.min(100,e.x));o.y=Math.max(0,Math.min(100,e.y));
+        o.page=num(e.page)?Math.max(0,Math.floor(e.page)):0}   /* демо-оверлей: координаты ошибки на фото */
+      return o});
   const crit=(Array.isArray(s.criteria)?s.criteria:[]).filter(c=>c&&typeof c=="object"&&String(c.name||"").trim())
     .map(c=>{const mx=Math.max(1,parseInt(c.max,10)||1),got=Math.max(0,Math.min(mx,parseInt(c.got,10)||0));
       return{name:String(c.name).trim(),got:got,max:mx,why:String(c.why||"").trim(),tip:String(c.tip||"").trim()}});
@@ -2527,6 +2539,15 @@ function ecText(r){   /* текст работы с кликабельными �
       :`<span class="ec-er" role="button" tabindex="0" data-i="${h.i}" onclick="ecErrShow(${h.i})" onkeydown="if(event.key==='Enter')ecErrShow(${h.i})" title="Ошибка №${h.i} — нажмите для разбора">${esc(t.slice(h.a,h.b))}<b>${ecTab=="f"?(EC_FTAG[h.e.type]||h.e.type):h.i}</b></span>`;
     pos=h.b});
   return out+esc(t.slice(pos))}
+function ecPhotoMode(){const r=ecRes||ecNrm(null);   /* демо-режим: тестовые ошибки поверх реальных фото ученика */
+  return !!(ecShots.w.length&&r.errors.length&&r.errors.every(e=>typeof e.x=="number"&&typeof e.y=="number"))}
+function ecPhotoDesk(r){   /* страницы-фото с маркерами ошибок поверх (x/y — проценты от фото) */
+  const L=ecShots.w,out=[];
+  for(let p=0;p<L.length;p++)out.push('<div class="ec-page"><img src="'+L[p]+'" alt="Страница '+(p+1)+'">'
+    +r.errors.filter(e=>(e.page||0)%L.length===p).map(e=>'<span class="ec-er ec-ovl" role="button" tabindex="0" data-i="'+e.i+'" style="left:'+e.x+'%;top:'+e.y+'%" onclick="ecErrShow('+e.i+')" onkeydown="if(event.key===\'Enter\')ecErrShow('+e.i+')" title="Ошибка №'+e.i+' — нажмите для разбора"><b>'+(ecTab=="f"?(EC_FTAG[e.type]||e.type):e.i)+'</b></span>').join('')+'</div>');
+  return out.join("")}
+function ecDeskHtml(){const r=ecRes||ecNrm(null);
+  return (ecPhotoMode()&&!ecFix)?ecPhotoDesk(r):ecText(r)}
 function ecStats(r){
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
   if(!r.errors.length)return `<div class="ec-note">Ошибок не найдено</div>`;
@@ -2556,9 +2577,9 @@ ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
   <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки · ${r.errors.length}</button>
   <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
   <span class="ec-spr"></span>
-  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixSet(${ecFix?0:1})" title="Т — как написано учеником, П — с исправлениями" aria-label="Вид текста: как написано или с исправлениями">${ecFix?"П":"Т"}</button>
+  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixSet(${ecFix?0:1})" title="Т — как есть (фото работы), П — с исправлениями" aria-label="Вид текста: как есть или с исправлениями">${ecFix?"П":"Т"}</button>
 </div>
-<div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecText(r)}</div>
+<div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
 <div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Итоговый балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span></div></div>
@@ -2575,7 +2596,7 @@ function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вк�
 function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т/П: как написано учеником / с исправлениями */
   const d=$("#ec-desk"),b=$("#ec-tg");
   if(!d||!b){if(tab=="ai"&&ecStep===3)render();return}
-  d.innerHTML=ecText(ecRes||ecNrm(null));ecRelabel();b.textContent=ecFix?"П":"Т"}
+  d.innerHTML=ecDeskHtml();ecRelabel();b.textContent=ecFix?"П":"Т"}
 /* --- модалка ошибки: фрагмент → ошибка → обоснование → источники; Esc, ×, «Закрыть» и клик по фону --- */
 const EC_KIND={"Орфография":"Нарушение правописания","Пунктуация":"Нарушение пунктуации","Речь":"Речевая ошибка"};
 function ecModUi(){let o=$("#ec-mod");if(o)return o;

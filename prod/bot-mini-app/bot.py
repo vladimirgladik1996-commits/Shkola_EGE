@@ -2615,7 +2615,7 @@ async def api_essay_check_run(request):
     async def send(ev):
         await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
 
-    if not kimi.enabled():
+    if not kimi.enabled() and not essaycheck.DEMO:   # демо-режиму ключ API не нужен — фото никуда не уходят
         await send({"t": "off"})
         await resp.write_eof()
         return resp
