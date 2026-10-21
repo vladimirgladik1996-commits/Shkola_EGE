@@ -85,6 +85,13 @@ MIGRATIONS = [
         "delete from payments where student_id in (select id from students where coalesce(deleted,0)=1)",
         "delete from students where coalesce(deleted,0)=1",
     ],
+    [   # v4: «ИИ-проверка» — постоянная история проверок (пуш 7): сохранённые разборы с привязкой
+        # к ученику, датой и типом работы (ЕГЭ/ОГЭ). В отличие от сеансов EC_CHECKS (TTL 30 минут)
+        # эти записи живут постоянно и переживают перезапуск сервиса.
+        "create table if not exists essay_checks(id integer primary key, tg_id integer not null, "
+        "student_id integer, kind text not null, result text not null, created text default (datetime('now','localtime')))",
+        "create index if not exists ix_essay_checks_student on essay_checks(student_id)",
+    ],
 ]
 
 def migrate(conn):
@@ -283,11 +290,13 @@ def delete_payment(pid):
 
 def delete_student(sid):
     """Полное (физическое) удаление ученика и ВСЕХ его данных: занятия (прошлые и будущие),
-    оплаты, регулярные серии и пропуски. Из БД вычёркивается всё — никаких остатков и истории."""
+    оплаты, регулярные серии, пропуски и сохранённые проверки «ИИ-проверки».
+    Из БД вычёркивается всё — никаких остатков и истории."""
     db.execute("delete from skips where regular_id in (select id from regular where student_id=?)", (sid,))
     db.execute("delete from lessons where student_id=?", (sid,))
     db.execute("delete from regular where student_id=?", (sid,))
     db.execute("delete from payments where student_id=?", (sid,))
+    db.execute("delete from essay_checks where student_id=?", (sid,))
     db.execute("delete from students where id=?", (sid,))
     db.commit()
 
@@ -2606,6 +2615,114 @@ async def api_essay_check_run(request):
     return resp
 
 
+# ---------- «ИИ-проверка»: сохранение и история (пуш 7 из PUSH-PLAN.md) ----------
+# Готовый разбор сохраняется ПОСТОЯННО (таблица essay_checks) с привязкой к ученику,
+# датой и типом работы (ЕГЭ/ОГЭ) — в отличие от сеансов EC_CHECKS с TTL. Сохранение,
+# история и повторный просмотр модели не требуют: разбор уже готов, ИИ-провайдер не нужен.
+EC_MAX_SAVED = 200          # сохранённых проверок на аккаунт: при переполнении самая старая уходит из истории
+EC_MAX_RESULT = 300_000     # байт JSON разбора — страховка от мусорных «результатов»
+EC_KINDS = ("ege", "oge")   # типы работы: сочинение ЕГЭ / эссе ОГЭ — как essaycheck.WHAT
+
+
+def ec_result(raw):
+    """Разбор от клиента → нормализованная запись истории: та же нормализация, что у essaycheck._result
+    (типы ошибок из закрытого списка, номера подряд, баллы в рамках критериев, итог — сумма критериев).
+    Мусор или пустой разбор — ValueError (→ 400)."""
+    if not isinstance(raw, dict) or len(json.dumps(raw, ensure_ascii=False)) > EC_MAX_RESULT:
+        raise ValueError
+    r = essaycheck._result(raw, raw.get("text") if isinstance(raw.get("text"), str) else "",
+                           raw.get("task") if isinstance(raw.get("task"), str) else "")
+    if not (r["errors"] or r["criteria"]):
+        raise ValueError
+    return r
+
+
+def ec_uid(request):
+    """Кто работает с историей: тот же идентификатор, что у user_id, но без требования «только Telegram» —
+    сохранение и история доступны и standalone-входу (uid 0). Без входа сюда не попасть: guarded → 403."""
+    uid = user_id(request)
+    if not isinstance(uid, int) or uid < 0:
+        raise ValueError
+    return uid
+
+
+@guarded
+async def api_essay_check_save(request):
+    """«Сохранить за учеником» (пуш 7): разбор (текст, ошибки, критерии ФИПИ, рекомендации, итог)
+    кладётся в постоянную историю с привязкой к ученику и типом работы (kind: ege/oge).
+    student_id можно опустить — проверка сохранится без ученика. Лимит EC_MAX_SAVED на аккаунт."""
+    j = await request.json()
+    uid = ec_uid(request)
+    if not isinstance(j, dict):
+        raise ValueError
+    kind = j.get("kind")
+    if kind not in EC_KINDS:
+        raise ValueError
+    sid = j.get("student_id")
+    if sid is not None:
+        if isinstance(sid, bool) or not isinstance(sid, int):
+            raise ValueError
+        if not q("select 1 from students where id=? and coalesce(deleted,0)=0", sid):
+            return web.json_response({"error": "no_student"}, status=400)   # привязка — только к живому ученику
+    r = ec_result(j.get("result"))
+    n = q("select count(*) c from essay_checks where tg_id=?", uid)[0]["c"]
+    for row in q("select id from essay_checks where tg_id=? order by id limit ?", uid, max(0, n - EC_MAX_SAVED + 1)):
+        run("delete from essay_checks where id=?", row["id"])                # лимит истории: старые записи уходят первыми
+    new_id = run("insert into essay_checks(tg_id,student_id,kind,result) values(?,?,?,?)",
+                 uid, sid, kind, json.dumps(r, ensure_ascii=False))
+    return web.json_response({"ok": True, "id": new_id})
+
+
+@guarded
+async def api_essay_check_history(request):
+    """История сохранённых проверок (пуш 7): список с датой, типом работы, учеником и итоговым
+    баллом (для списка хватает шапки разбора — полный разбор отдаёт /api/essay_check/load).
+    student_id в теле — фильтр по ученику; без него — вся история."""
+    j = await request.json()
+    uid = ec_uid(request)
+    if not isinstance(j, dict):
+        raise ValueError
+    where, args = "where c.tg_id=?", [uid]
+    sid = j.get("student_id")
+    if sid is not None:
+        if isinstance(sid, bool) or not isinstance(sid, int):
+            raise ValueError
+        where += " and c.student_id=?"
+        args.append(sid)
+    out = []
+    for row in q(f"select c.id, c.kind, c.created, c.student_id, s.name student_name, c.result from essay_checks c "
+                 f"left join students s on s.id=c.student_id {where} order by c.id desc limit 300", *args):
+        sc = (json.loads(row["result"]).get("score") or {})   # сохранённый разбор уже нормализован — score можно доверять
+        out.append({"id": row["id"], "kind": row["kind"], "created": row["created"],
+                    "student_id": row["student_id"], "student_name": row["student_name"],
+                    "got": sc.get("got", 0), "max": sc.get("max", 0),
+                    "percent": sc.get("percent", 0), "level": sc.get("level", "")})
+    return web.json_response({"checks": out})
+
+
+@guarded
+async def api_essay_check_load(request):
+    """Повторный просмотр сохранённой проверки (пуш 7): полный разбор из истории — экран
+    результата рендерится из этих данных, модель заново не запускается."""
+    j = await request.json()
+    uid = ec_uid(request)
+    if not isinstance(j, dict):
+        raise ValueError
+    cid = j.get("id")
+    if isinstance(cid, bool) or not isinstance(cid, int):
+        raise ValueError
+    rows = q("select c.id, c.tg_id, c.kind, c.created, c.student_id, s.name student_name, c.result "
+             "from essay_checks c left join students s on s.id=c.student_id where c.id=?", cid)
+    if not rows:
+        raise ValueError                                     # нет такой проверки → 400, как у неизвестного сеанса run
+    r = rows[0]
+    if r["tg_id"] != uid:
+        return web.json_response({"error": "forbidden"}, status=403)   # чужая история не читается
+    return web.json_response({"id": r["id"], "kind": r["kind"], "created": r["created"],
+                              "student_id": r["student_id"], "student_name": r["student_name"],
+                              "result": json.loads(r["result"])})
+
+
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=12 * 1024 * 1024, middlewares=[cors_mw])   # 12 МБ: вложения чата с ИИ (до 8 МБ в base64)
@@ -2639,6 +2756,9 @@ def make_app():
     app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)
     app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: фото работ и задания (пуш 4)
     app.router.add_post("/api/essay_check/run", api_essay_check_run)           # «ИИ-проверка»: запуск проверки, стрим стадий и результата (пуш 5)   # оживление старых карточек: файл собирается заново из текста ответа
+    app.router.add_post("/api/essay_check/save", api_essay_check_save)         # «ИИ-проверка»: сохранение проверки за учеником (пуш 7)
+    app.router.add_post("/api/essay_check/history", api_essay_check_history)   # «ИИ-проверка»: история сохранённых проверок (пуш 7)
+    app.router.add_post("/api/essay_check/load", api_essay_check_load)         # «ИИ-проверка»: повторный просмотр сохранённого разбора (пуш 7)
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)

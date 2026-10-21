@@ -1131,6 +1131,16 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-sec a{display:block;margin-top:6px;font-size:12.5px;font-weight:700;color:var(--acc)}
 .ec-mc .ec-go2{width:100%;margin-top:16px}
 .ec-err2{color:#B3142F}
+.ec-hi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln);margin-bottom:8px;text-align:left;font:inherit;color:var(--tx)}
+.ec-hi:active{transform:scale(.98)}
+.ec-hsc{flex:none;width:46px;height:46px;border-radius:14px;background:var(--yel);display:grid;place-items:center;line-height:1.1}
+.ec-hsc b{font-size:17px}
+.ec-hsc small{display:block;font-size:9.5px;font-weight:700;opacity:.75}
+.ec-hin{flex:1;min-width:0}
+.ec-hin b{display:block;font-size:13.5px}
+.ec-hin small{display:block;color:var(--hint);font-weight:600;font-size:11.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ec-hlv{flex:none;font-size:10.5px;font-weight:800;color:var(--acc);background:rgba(255,201,60,.22);border-radius:8px;padding:3px 8px;max-width:104px}
+.ec-saved{background:var(--grn);color:#fff}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -2203,14 +2213,75 @@ const EC_STAGES=["Распознан рукописный текст","Проч�
 const EC_TYPES=["Орфография","Пунктуация","Речь"];   /* закрытый список типов ошибок — как в essaycheck._result */
 let ecStep=0,ecKind="ege",ecSet="w",ecShots={w:[],t:[]},ecCamS=[],ecBusy=false;
 let ecSess="",ecState="run",ecWhy="",ecLive=[],ecWait=[],ecRes=null,ecTab="e",ecFix=false,ecRunId=0;
-function aiCheck(){return ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
+let ecSid=null,ecSaved=0,ecView="",ecViewInfo="",ecHist={sid:"all",list:null,busy:false};   /* ученик, «сохранено», просмотр из истории (пуш 7) */
+function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
 <div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки, объяснит их и оценит по критериям ФИПИ</div></div>
+<button class="ec-big" onclick="ecStuPick('start')"><span class="ec-ic">👤</span><span><b>Ученик${ecStuName()?" · "+esc(ecStuName()):""}</b><small>${ecStuName()?"проверка сохранится за ним":"кто написал работу — можно пропустить"}</small></span></button>
 <button class="ec-big" onclick="ecStart('ege')"><span class="ec-ic">✍️</span><span><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span></button>
 <button class="ec-big" onclick="ecStart('oge')"><span class="ec-ic">📝</span><span><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span></button>
+<button class="ec-big" onclick="ecHistOpen()"><span class="ec-ic">🗂</span><span><b>История проверок</b><small>сохранённые разборы и отчёт по критериям ФИПИ</small></span></button>
 <div class="ec-note">Снимите страницы работы и задание — получите разбор ошибок и баллы по критериям ФИПИ</div>`}
 function ecStart(k){ecKind=k;ecStep=1;render();scrollTo(0,0)}
-function ecBack(){if(ecStep===1){ecStep=0;render()}}
-function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecErrClose();ecShots={w:[],t:[]};ecCamS=[];ecStep=0;render();scrollTo(0,0)}
+function ecBack(){if(ecStep===1||ecStep===4){ecStep=0;ecView="";render()}}
+function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecShots={w:[],t:[]};ecCamS=[];ecStep=0;render();scrollTo(0,0)}
+/* --- ученик и история (пуш 7): привязка проверки к ученику, «Сохранить за учеником»,
+   история сохранённых проверок и повторный просмотр разбора (без запуска модели) --- */
+function ecStuName(){const s=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);return s?s.name:""}
+function ecKindLabel(){return ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}
+function ecWhen(v){try{return when(new Date(String(v||"").replace(" ","T")))}catch(e){return String(v||"")}}
+function ecStuPick(mode){   /* 'start' — ученик проверки, 'save' — «Сохранить за учеником», 'hist' — фильтр истории; выбор можно пропустить */
+  const list=act().slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+  const card=(on,i,tile,t,d,fn)=>`<button type="button" class="fo nr ${on?"on":""}" style="--i:${Math.min(i,8)}" onclick="${fn}"><span class="fi">${tile}</span><span class="ft"><b>${t}</b><small>${d}</small></span></button>`;
+  open(fhead("stu",mode=="save"?"Сохранить за учеником":mode=="hist"?"История по ученику":"Ученик проверки",
+      mode=="hist"?"Показать проверки выбранного ученика":"Кто написал работу — выбор можно пропустить")
+    +(mode=="hist"?card(ecHist.sid=="all",0,fsvg("stu"),"Все проверки","Общая история без фильтра","ecHistPick(0)")
+      :card(ecSid==null,0,fsvg("stu"),"Без ученика","Проверка сохранится без привязки",`ecStuSet(0,'${mode}')`))
+    +list.map((s,i)=>card(mode=="hist"?ecHist.sid==s.id:ecSid==s.id,i+1,av(s,"sm"),esc(s.name),esc(stGrade(s.id)||"—"),
+      mode=="hist"?`ecHistPick(${s.id})`:`ecStuSet(${s.id},'${mode}')`)).join("")+`</div>`)}
+function ecStuSet(v,mode){ecSid=+v||null;close_();render();if(mode=="save")ecSaveRun()}
+function ecSaveLabel(){if(ecSaved)return"Сохранено ✓";const n=ecStuName();return n?"Сохранить за "+n:"Сохранить за учеником"}
+async function ecSave(){   /* «Сохранить за учеником»: без выбранного ученика сначала спрашиваем — можно сохранить и без привязки */
+  if(ecSaved||ecBusy||!ecRes)return;
+  if(ecSid==null){ecStuPick("save");return}
+  await ecSaveRun()}
+async function ecSaveRun(){   /* разбор (текст, ошибки, критерии ФИПИ, статистика) уходит в постоянную историю — модели это не требует */
+  if(ecSaved||ecBusy||!ecRes)return;
+  ecBusy=true;
+  try{
+    const r=await api("/api/essay_check/save",{kind:ecKind,student_id:ecSid||null,result:ecRes});
+    if(r&&r.id){ecSaved=r.id;toast("Проверка сохранена в историю")}
+  }catch(e){}
+  ecBusy=false;if(tab=="ai"&&ecStep===3)render()}
+async function ecHistOpen(){   /* история сохранённых проверок: дата, тип работы, ученик и итоговый балл */
+  ecStep=4;ecView="";ecErrClose();ecHist.list=null;render();scrollTo(0,0);await ecHistLoad()}
+async function ecHistLoad(){
+  const sid=ecHist.sid;ecHist.busy=true;
+  let d=null;
+  try{d=await api("/api/essay_check/history",{student_id:sid=="all"?null:+sid})}catch(e){}
+  if(ecStep!==4||sid!==ecHist.sid)return;   /* устаревший ответ: экран уже другой или фильтр сменился */
+  ecHist.busy=false;ecHist.list=d&&Array.isArray(d.checks)?d.checks:null;
+  if(tab=="ai")render()}
+function ecHistPick(v){ecHist.sid=v?+v:"all";close_();if(tab=="ai")render();ecHistLoad()}
+function ecHistScr(){
+  const Lh=ecHist.list,fn=ecHist.sid=="all"?"Все ученики":(S.find(x=>x.id==ecHist.sid)||{}).name||"Все ученики";
+  const rows=Lh===null?`<div class="ec-note">Загружаю…</div>`
+    :Lh.length?Lh.map(c=>`<button type="button" class="ec-hi" onclick="ecHistTap(${+c.id||0})">
+      <span class="ec-hsc"><b>${+c.got||0}</b><small>из ${+c.max||0}</small></span>
+      <span class="ec-hin"><b>${c.kind=="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b><small>${esc(c.student_name||"Без ученика")} · ${ecWhen(c.created)}</small></span>
+      <span class="ec-hlv">${esc(c.level||"")}</span></button>`).join("")
+    :`<div class="ec-note">Сохранённых проверок пока нет</div>`;
+  return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад">‹</button><b>История проверок</b></div>
+<div class="ec-chs"><button type="button" class="ec-chip on" onclick="ecHistStu()">Ученик: ${esc(fn)}</button></div>
+${rows}
+<div class="ec-note">Сохранённые проверки открываются снова — разбор, ошибки и критерии ФИПИ на месте</div>`}
+function ecHistStu(){ecStuPick("hist")}
+async function ecHistTap(id){   /* повторный просмотр разбора: экран результата рендерится из сохранённых данных, модель не запускается */
+  let d=null;
+  try{d=await api("/api/essay_check/load",{id:+id||0})}catch(e){}
+  if(!d||!d.result)return;
+  ecRes=ecNrm(d.result);ecKind=d.kind=="oge"?"oge":"ege";ecSaved=d.id||0;
+  ecView="hist";ecViewInfo=[d.student_name||"Без ученика",ecKindLabel(),ecWhen(d.created)].join(" · ");
+  ecStep=3;ecTab="e";ecFix=false;ecErrClose();render();scrollTo(0,0)}
 function ecSetCh(s){ecSet=s;render()}
 function ecCnt(){return ecShots.w.length+ecShots.t.length}
 /* --- съёмка: затвор открывает общую камеру (camTake), галерея — запасной путь --- */
@@ -2295,7 +2366,7 @@ async function ecRun(){   /* живой стрим POST /api/essay_check/run (ND
   catch(e){if(id===ecRunId)ecFail("net");return}                  /* сеть упала посреди стрима — тоже честный сбой */
   if(id===ecRunId&&ecState=="run"&&!got&&!locked)ecFail("net")}   /* пустой ответ — сбой, а не вечное ожидание */
 function ecRetry(){if(ecState=="run"||!ecSess)return;ecRun()}     /* повтор после сбоя: тот же сеанс с уже загруженными фото */
-function ecDone(r){ecRes=ecNrm(r);ecState="done";ecStep=3;ecTab="e";ecFix=false;
+function ecDone(r){ecRes=ecNrm(r);ecState="done";ecStep=3;ecTab="e";ecFix=false;ecSaved=0;ecView="";ecViewInfo="";
   if(tab=="ai"){ecErrClose();render();scrollTo(0,0)}}
 function ecFail(why){ecState="fail";ecWhy=why==="empty"||why==="http"?why:"net";if(tab=="ai"&&ecStep===2)render()}
 function ecOff(){ecState="off";if(tab=="ai"&&ecStep===2)render()}
@@ -2356,6 +2427,7 @@ function ecResult(){
   const r=ecRes||ecNrm(null),sc=r.score;
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
   return `<div class="ec-top"><b>Разбор работы · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
+${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 <div class="ec-hd">
   <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки · ${r.errors.length}</button>
   <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
@@ -2366,7 +2438,9 @@ function ecResult(){
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
 <div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Итоговый балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span></div></div>
   <div class="ec-tiles">${EC_TYPES.map(t=>`<div><b>${cnt[t]}</b>${t.toLowerCase()}</div>`).join("")}</div></div>
-<button class="ec-go" onclick="ecReset()">Новая проверка</button>`}
+${ecView=="hist"?`<button class="ec-go" onclick="ecHistOpen()">‹ История проверок</button>`
+  :`<button class="ec-go${ecSaved?" ec-saved":""}" onclick="ecSave()">${ecSaveLabel()}</button>`}
+<button class="ec-go2" onclick="ecReset()">Новая проверка</button>`}
 function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();   /* вкладки переключаются на месте — без перерисовки экрана */
   const ve=$("#ec-ve"),vf=$("#ec-vf"),te=$("#ec-te"),tf=$("#ec-tf");
   if(!ve||!vf||!te||!tf){if(tab=="ai"&&ecStep===3)render();return}
@@ -2408,7 +2482,7 @@ function ecErrClose(){const o=$("#ec-mod");if(o&&!o.hidden)o.hidden=true;
   document.querySelectorAll(".ec-er").forEach(s=>s.classList.remove("sel"))}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")ecErrClose()});
 function ecShot(){const w=ecSet==="w",L=ecShots[ecSet];
-  return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад">‹</button><b>Съёмка · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
+  return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад">‹</button><b>Съёмка · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b><span class="ec-spr"></span><button type="button" class="ec-chip" onclick="ecStuPick('start')">${ecStuName()?esc(ecStuName()):"Без ученика"}</button></div>
 <div class="ec-view"><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip">${w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</div></div>
 <div class="ec-th">${L.map((d,i)=>`<span class="ec-thi"><img src="${d}" alt=""><button type="button" class="ec-thx" aria-label="Удалить фото" onclick="ecDel(${i})">×</button></span>`).join("")}</div>
 <div class="ec-chs"><button class="ec-chip${w?" on":""}" onclick="ecSetCh('w')">Работа · ${ecShots.w.length}</button><button class="ec-chip${w?"":" on"}" onclick="ecSetCh('t')">Задание · ${ecShots.t.length}</button></div>
