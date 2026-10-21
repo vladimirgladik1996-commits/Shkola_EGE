@@ -710,8 +710,6 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .feed{box-sizing:border-box;height:62px;min-height:62px}
 .feed .info b,.feed .info small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .feed>b{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
-.pcd-ok{display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;padding:6px 13px 6px 8px;border-radius:99px;background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn);font-weight:800;font-size:13px}
-.pcd-ok svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .pcd-top{display:flex;align-items:center;gap:12px;padding-right:44px;margin-bottom:14px}
 .pcd-top>div{min-width:0}
 .pcd-top .av{width:48px;height:48px;font-size:17px}
@@ -728,16 +726,6 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pcd-date svg{flex:none;width:18px;height:18px;fill:none;stroke:var(--hint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pcd-date span{color:var(--hint)}
 .pcd-date b{margin-left:auto;text-align:right}
-.pcd-h2{margin:18px 2px 8px}
-.pcd-list{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);overflow:hidden}
-.pcd-li{display:flex;align-items:flex-start;gap:12px;padding:12px 14px}
-.pcd-li+.pcd-li{border-top:1px solid var(--ln)}
-.pcd-li .info b{font-size:14.5px}
-.pcd-li .info small{display:block}
-.pcd-li>b{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums;padding-top:7px}
-.pcd-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:color-mix(in srgb,var(--acc) 11%,var(--card));color:var(--acc)}
-.pcd-ic.pcd-g{background:color-mix(in srgb,var(--grn) 15%,var(--card));color:var(--grn)}
-.pcd-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .aic-menu .aic-cap{padding:6px 10px 4px;font-size:12px;font-weight:700;color:var(--hint)}
 .aic-menu[hidden]{display:none}
 .aic-menu::after{content:"";position:absolute;bottom:-6px;left:var(--ax,28px);width:12px;height:12px;background:var(--bg);transform:translateX(-50%) rotate(45deg);box-shadow:1px 1px 0 var(--ln)}   /* хвостик к иконке */
@@ -1141,6 +1129,53 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-hin small{display:block;color:var(--hint);font-weight:600;font-size:11.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ec-hlv{flex:none;font-size:10.5px;font-weight:800;color:var(--acc);background:rgba(255,201,60,.22);border-radius:8px;padding:3px 8px;max-width:104px}
 .ec-saved{background:var(--grn);color:#fff}
+
+/* ---------- Карточка платежа: чистая шапка (статус, сумма, дата), ученик, сгруппированное распределение ---------- */
+@keyframes pkIn{from{opacity:0;transform:translateY(14px)}}
+#sheet.on .pk>*{animation:pkIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.04s + var(--i,0)*70ms)}
+#sheet.on .pk [data-cnt]{animation:cntgo .01s both}
+.pk-top{position:relative;overflow:hidden;margin-top:-4px;min-height:150px;padding:18px 18px 20px;border-radius:26px 26px 0 0;color:#fff;background:radial-gradient(130px 120px at 86% 50%,#ffc93c73,transparent 72%),radial-gradient(90% 70% at 0 100%,#b6f25a40,transparent 65%),linear-gradient(135deg,#24A872,#0B5A43 62%,#073D30)}
+.pk-top.new{padding-right:120px}
+.pk-st{display:inline-flex;align-items:center;gap:8px;padding:5px 13px 5px 6px;border-radius:99px;background:#ffffff26;box-shadow:inset 0 0 0 1px #ffffff40;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.pk-top:not(.new) .pk-st{padding-left:13px}
+.pk-ck{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:#0B5A43;animation:pkPulse .7s cubic-bezier(.34,1.56,.64,1) .2s both}
+.pk-ck svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.pk-ck path{stroke-dasharray:1;animation:pkDraw .45s ease-out .5s both}
+@keyframes pkDraw{from{stroke-dashoffset:1}}
+@keyframes pkPulse{from{transform:scale(.3);opacity:0}}
+.pk-amt{display:flex;align-items:baseline;gap:2px;margin-top:16px;font-size:38px;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pk-amt span,.pk-amt b{background:linear-gradient(180deg,#fff 30%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+.pk-dt{margin-top:6px;font-size:13.5px;opacity:.9}
+.pk-v{position:absolute;right:2px;bottom:-4px;height:116px;width:auto;pointer-events:none;filter:drop-shadow(0 8px 8px #0006);transform-origin:50% 90%;animation:vsin .95s cubic-bezier(.34,1.56,.64,1) .3s both,hcb 3.4s ease-in-out 1.3s infinite}
+.pk-body{padding:16px 18px 10px;border-radius:0 0 26px 26px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 18px 30px -22px #0B5A43}
+.pk-who{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--ln)}
+.pk-who .av{flex:0 0 auto;width:44px;height:44px;font-size:16px}
+.pk-who>div{min-width:0}.pk-who b{display:block;font-size:16.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk-who small{display:block;margin-top:1px;color:var(--hint);font-size:13px}
+.pk-h{margin:16px 0 12px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--hint)}
+.pk-bar{display:flex;gap:3px;height:10px;margin-bottom:6px}
+.pk-bar i{flex:var(--w) 1 0;min-width:8px;border-radius:5px;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 68%,#fff),var(--c));transform-origin:0 50%;animation:pkGrow .8s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(.45s + var(--k)*.1s)}
+@keyframes pkGrow{from{transform:scaleX(0)}}
+.pk-s{display:grid;grid-template-columns:38px 1fr auto;gap:12px;align-items:center;padding:9px 0}
+.pk-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--c) 16%,transparent);color:color-mix(in srgb,var(--c) 75%,#000)}
+.pk-ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pk-s b{font-size:15px}.pk-s small{display:block;margin-top:1px;color:var(--hint);font-size:12.5px;line-height:1.3}
+.pk-s .pk-sv{font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pk-dl{margin-top:4px;border-top:1px solid var(--ln)}
+.pk-dl summary{display:flex;align-items:center;justify-content:space-between;padding:13px 0 9px;font-size:13.5px;font-weight:700;color:var(--hint);cursor:pointer;list-style:none}
+.pk-dl summary::-webkit-details-marker{display:none}
+.pk-dl summary::after{content:"";width:9px;height:9px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg);transition:transform .25s;margin-left:10px}
+.pk-dl[open] summary::after{transform:rotate(-135deg)}
+.pk-r{position:relative;display:flex;justify-content:space-between;gap:12px;padding:7px 0 7px 16px;font-size:14px}
+.pk-r::before{content:"";position:absolute;left:3px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--c)}
+.pk-r small{display:block;margin-top:1px;color:var(--hint);font-size:12px}
+.pk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pk .btns{margin-top:14px}
+.pk-go{position:relative;overflow:hidden}
+.pk-go span{position:relative;z-index:1}
+.pk-go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 32%,#ffffff30 47%,#ffffff58 50%,#ffffff30 53%,transparent 68%);transform:translateX(-120%);animation:pkShine 1.15s cubic-bezier(.4,0,.2,1) .35s both}
+@keyframes pkShine{to{transform:translateX(120%)}}
+@media (prefers-reduced-motion:reduce){#sheet.on .pk>*,.pk-ck,.pk-ck path,.pk-bar i,.pk-v,.pk-go::after{animation:none}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -1608,16 +1643,32 @@ const pcTop=s=>{const gr=(s.grade||"").trim()?stGrade(s.id):"Класс не у�
 /* kind: "pcd-up" — пополнение (зелёный), "pcd-dn" — долг (красный) */
 const pcHero=(kind,label,amt,dateLabel,date)=>`<div class="pcd-hero ${kind}"><div class="pcd-lab"><span>${label}</span><i class="pcd-bdg">${pcSvg(kind=="pcd-dn"?"debt":"pay")}</i></div><b class="pcd-amt">${amt}</b><div class="pcd-date">${pcSvg("cal")}<span>${dateLabel}</span><b>${date}</b></div></div>`;
 function payCard(id,isNew){
-  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at);
-  const li=(ic,tone,info,amt,cls="")=>`<div class="pcd-li"><span class="pcd-ic ${tone}">${pcSvg(ic)}</span><span class="info">${info}</span><b${cls?` class="${cls}"`:""}>${amt}</b></div>`;
-  /* одним списком: дата и время урока, чем он закрыт, и сколько именно списано с ЭТОЙ оплаты */
-  const items=a.list.map(x=>{const full=x.covered>=x.l.price,past=x.l.day<pd,today=x.l.day==pd,k=past?"Закрыт долг":today?"Занятие сегодня":"Предоплата";
-    return li(past?"ok":today?"cal":"fwd",past?"pcd-g":"",`<b>${dmy2(x.l.day)}, ${x.l.time}</b><small>${k}${full?"":` · оплачено ${money(x.covered)} из ${money(x.l.price)}`}</small>`,"−"+money(x.take))}).join("");
-  const left=a.left>0?li("pay","pcd-g",`<b>Остаток без занятия</b><small>Пока нет занятий, на которые его можно списать</small>`,"+"+money(a.left),"pos"):"";
-  const body=items+left;
-  open(`${isNew?`<p class="pcd-ok">${pcSvg("ok")}Пополнение прошло успешно</p>`:""}${pcTop(s)}${pcHero("pcd-up","Сумма пополнения","+"+money(p.amt),"Дата пополнения",when(p.at))}
-  <h2 class="pcd-h2">На что распределилась сумма</h2>${body?`<div class="pcd-list">${body}</div>`:'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>'}
-  <div class="btns">${isNew?'<button class="btn pri" onclick="close_()">Готово</button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div>`)}
+  const p=P.find(x=>x.id==id),s=S.find(x=>x.id==p.sid),a=allocate(p.sid)[id],pd=iso(p.at),gr=(s.grade||"").trim()?stGrade(s.id):"Класс не указан";
+  /* на что пошла оплата: группируем по смыслу, подробности по занятиям — под «спойлером» */
+  const KD={debt:["Закрыт долг","#EC7F34","M5 12.5l4.5 4.5L19 7.5"],
+    today:["Занятия сегодня","#2B63C9","M4 7.5A3 3 0 017 4.5h10a3 3 0 013 3V17a3 3 0 01-3 3H7a3 3 0 01-3-3zM8 3v3M16 3v3M4 10h16"],
+    pre:["Предоплата","#25A375","M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM12 7.5V12l3 2"],
+    rest:["Остаток","#F2BC2E","M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM9.5 16.5v-9h3.2a2.3 2.3 0 010 4.6H9.5M8.2 14.2h5"]};
+  const lessons=a.list.map(x=>({k:x.l.day<pd?"debt":x.l.day==pd?"today":"pre",v:x.take,x}));
+  const g={};lessons.forEach(l=>{const o=g[l.k]||(g[l.k]={v:0,n:0});o.v+=l.v;o.n++});
+  if(a.left>0)g.rest={v:a.left,n:0};
+  const ks=Object.keys(KD).filter(k=>g[k]);
+  const bar=ks.map((k,i)=>`<i style="--w:${g[k].v};--c:${KD[k][1]};--k:${i}"></i>`).join("");
+  const sub=k=>k=="rest"?"Пока нет занятий, на которые его можно списать":`${g[k].n} ${plu(g[k].n,"занятие","занятия","занятий")}`;
+  const sum=ks.map(k=>`<div class="pk-s" style="--c:${KD[k][1]}"><span class="pk-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${KD[k][2]}"/></svg></span><div><b>${KD[k][0]}</b><small>${sub(k)}</small></div><b class="pk-sv">${money(g[k].v)}</b></div>`).join("");
+  const det=lessons.length?`<details class="pk-dl"><summary>Подробно по занятиям · ${lessons.length}</summary>${lessons.map(l=>{const x=l.x,full=x.covered>=x.l.price;
+    return `<div class="pk-r" style="--c:${KD[l.k][1]}"><span>${dmy2(x.l.day)}, ${x.l.time}${full?"":`<small>Оплачено ${money(x.covered)} из ${money(x.l.price)}</small>`}</span><b>${money(l.v)}</b></div>`}).join("")}</details>`:"";
+  const body=ks.length?`<div class="pk-bar">${bar}</div>${sum}${det}`:'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
+  open(`<div class="pk"><div class="pk-top${isNew?" new":""}" style="--i:0">
+    <div class="pk-st">${isNew?'<span class="pk-ck"><svg viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M6.5 12.5l3.6 3.6L17.5 8.5"/></svg></span>Оплата принята':'Пополнение'}</div>
+    <div class="pk-amt"><span>+</span><b data-cnt="${p.amt}" data-fmt="m" data-cd="260">${money(p.amt)}</b></div>
+    <div class="pk-dt">${when(p.at)}</div>
+    ${isNew?`<img class="pk-v" src="${VSH}" alt="">`:""}</div>
+  <div class="pk-body" style="--i:1">
+    <div class="pk-who">${av(s)}<div><b>${esc(s.name)}</b><small>${esc(gr)}</small></div></div>
+    <h2 class="pk-h">На что распределилась сумма</h2>${body}</div>
+  <div class="btns" style="--i:2">${isNew?'<button class="btn pri pk-go" onclick="close_()"><span>Готово</span></button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div></div>`)}
+
 function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-label="Назад" onclick="payCard(${id})">‹</button><h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
 function payDel(id){tg.showConfirm("Удалить платёж? Баланс пересчитается.",async ok=>{if(ok&&await api("/api/payment/delete",{id})){close_();load()}})}
