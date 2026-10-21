@@ -8,7 +8,7 @@ os.environ.update(BOT_TOKEN="***", PUBLIC_URL="https://bot.example.com", LOG_LEV
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID"): os.environ.pop(k, None)
 sys.path.insert(0, ROOT)
 import auth, bot
-from aiogram.types import InlineQueryResultDocument
+from aiogram.types import InlineQueryResultCachedDocument
 from aiohttp.test_utils import TestClient, TestServer
 def ok(c): print("  ✓", c)
 
@@ -28,7 +28,13 @@ DOCX = b"PK\x03\x04-tiny-docx-bytes"
 MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 class FakeBot:
-    def __init__(self): self.prepared, self.fail = [], None
+    def __init__(self): self.prepared, self.fail, self.uploads, self.deleted = [], None, 0, []
+    async def send_document(self, uid, doc, **kw):        # тихая дозагрузка файла в Telegram (tg_upload_file_id)
+        self.uploads += 1
+        class D: file_id = "fid-1"
+        class M: document, message_id = D(), 77
+        return M()
+    async def delete_message(self, uid, mid): self.deleted.append(mid); return True
     async def save_prepared_inline_message(self, user_id, result, **kw):
         if self.fail: raise self.fail
         self.prepared.append((user_id, result, kw))
@@ -67,20 +73,13 @@ async def main():
         r = await c.post("/api/chat_file/prepare", json={"tok": tok}, headers=H)
         assert r.status == 200 and (await r.json())["id"] == "prepared-id-1", r.status
         uid, res, kw = fb.prepared[-1]
-        assert uid == 42 and isinstance(res, InlineQueryResultDocument), type(res)
-        assert res.title == "План урока.docx" and res.mime_type == "application/zip"   # Telegram шлёт через это окно только pdf/zip
-        assert res.document_url.startswith("https://")
-        # получатель забирает файл из document_url: там zip-архив, внутри — сам «План урока.docx»
-        import io, zipfile
-        from urllib.parse import urlparse
-        pu = urlparse(res.document_url)
-        rz = await c.get(pu.path + ("?" + pu.query if pu.query else ""))
-        zb = await rz.read()
-        zf = zipfile.ZipFile(io.BytesIO(zb))
-        assert rz.status == 200 and zf.namelist() == ["План урока.docx"] and zf.read("План урока.docx") == DOCX
-        assert "План урока.zip" in unquote(pu.path)   # имя архива — из имени Word-файла
+        assert uid == 42 and isinstance(res, InlineQueryResultCachedDocument), type(res)
+        assert res.title == "План урока.docx" and res.document_file_id == "fid-1"   # получатель берёт СОХРАНЁННУЮ копию из Telegram — .docx, без zip
         assert kw.get("allow_user_chats") and kw.get("allow_group_chats")
-        ok("владеleц получает id подготовленного сообщения: document_url — наш подписной файл, имя и mime верные")
+        assert fb.uploads == 1 and fb.deleted == [77]    # файл дозагрузился тихо, служебное сообщение удалено
+        r = await c.post("/api/chat_file/prepare", json={"tok": tok}, headers=H)    # повторное «Поделиться»
+        assert r.status == 200 and fb.uploads == 1 and len(fb.prepared) == 2        # file_id закэширован — повторной загрузки нет
+        ok("владеleц получает id подготовленного сообщения: пересылка идёт самим файлом (CachedDocument по file_id), без zip; повторно не дозагружает")
 
         # --- 5. контракт фронтенда: «Поделиться» передаёт ТОЛЬКО файл — любые ссылки запрещены ---
         html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
