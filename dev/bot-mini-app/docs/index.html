@@ -1068,6 +1068,69 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-cam-ok{flex:none;padding:12px 16px;border-radius:14px;background:var(--yel);color:var(--tx);font-weight:800}
 .ec-cam.flash{animation:ecFlash .12s ease}
 @keyframes ecFlash{50%{opacity:.55}}
+/* --- «ИИ-проверка», экран результата (пуш 6): разбор текста, модалка ошибки, вкладки «Ошибки / ФИПИ» и балл --- */
+.ec-hd{display:flex;align-items:center;gap:8px;margin:10px 0 12px}
+.ec-hd .ec-chip{flex:none;padding:9px 14px;font-size:13px}
+.ec-spr{flex:1}
+.ec-round{flex:none;width:38px;height:38px;border-radius:50%;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-weight:900;font-size:14px;color:var(--tx)}
+.ec-hid{display:none}
+.ec-desk{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.ec-er{border-bottom:2px solid #E8294F;color:#B3142F;font-weight:700;cursor:pointer}
+.ec-er b{font-size:9px;vertical-align:super;color:#E8294F;margin-left:1px}
+.ec-er.sel{background:rgba(232,41,79,.14);border-radius:4px}
+.ec-ok{color:var(--grn);font-weight:700}
+.ec-blk{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:12px 14px;margin-top:12px}
+.ec-blk h3{font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.ec-blk p{font-size:12.5px;line-height:1.45;margin:6px 0 0}
+.ec-pot{font-size:11.5px;font-weight:800;color:var(--acc)}
+.ec-st{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px;font-weight:700}
+.ec-st+.ec-st{border-top:1px solid var(--ln)}
+.ec-st span{flex:none;width:104px;color:var(--hint)}
+.ec-st i{flex:1;height:8px;border-radius:6px;background:var(--yel);min-width:4px}
+.ec-st em{flex:none;font-style:normal;font-weight:800;min-width:18px;text-align:right}
+.ec-kc{padding:10px 0;font-size:12.5px}
+.ec-kc+.ec-kc{border-top:1px solid var(--ln)}
+.ec-kt{display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:13px}
+.ec-pp{flex:none;color:var(--acc)}
+.ec-kc.r .ec-pp{color:#B3142F}
+.ec-kc.w .ec-pp{color:#C98A00}
+.ec-kb{height:8px;border-radius:6px;background:var(--ln);margin:6px 0 2px;overflow:hidden}
+.ec-kb i{display:block;height:100%;border-radius:6px;background:var(--acc)}
+.ec-kc.r .ec-kb i{background:#E8294F}
+.ec-kc.w .ec-kb i{background:var(--yel)}
+.ec-kadv{color:var(--hint)}
+.ec-rc{display:flex;gap:10px;padding:10px 0}
+.ec-rc+.ec-rc{border-top:1px solid var(--ln)}
+.ec-nn{flex:none;width:26px;height:26px;border-radius:50%;background:var(--yel);display:grid;place-items:center;font-weight:900;font-size:12px}
+.ec-rc b{display:block;font-size:13px}
+.ec-rc p{margin:3px 0 0;color:var(--hint);font-size:12px;line-height:1.45}
+.ec-rc em{display:inline-block;margin-top:6px;font-style:normal;font-size:11px;font-weight:800;color:var(--acc);background:rgba(255,201,60,.22);border-radius:8px;padding:2px 8px}
+.ec-hero2{margin-top:12px;border-radius:22px;padding:16px;color:#fff;background:radial-gradient(120px 110px at 84% -10%,rgba(255,201,60,.35),transparent 60%),linear-gradient(150deg,#1B4AAE,#0B2257)}
+.ec-top2{display:flex;align-items:center;gap:14px}
+.ec-gauge{position:relative;flex:none;width:104px;height:104px}
+.ec-gauge>div{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.ec-gauge b{font-size:26px;line-height:1}
+.ec-gauge small{display:block;font-size:11px;opacity:.8;font-weight:700}
+.ec-lb{font-size:12px;font-weight:700;opacity:.85}
+.ec-lv{display:inline-block;margin-top:6px;font-size:13px;font-weight:800;background:rgba(255,255,255,.14);border-radius:10px;padding:4px 10px}
+.ec-tiles{display:flex;gap:8px;margin-top:14px}
+.ec-tiles>div{flex:1;background:rgba(255,255,255,.12);border-radius:14px;padding:8px;text-align:center;font-size:11px;font-weight:700}
+.ec-tiles b{display:block;font-size:18px}
+.ec-mod{position:fixed;inset:0;z-index:80;background:rgba(8,22,60,.55);display:flex;align-items:flex-end;justify-content:center}
+.ec-mod[hidden]{display:none}
+.ec-mc{width:100%;max-width:560px;max-height:92vh;overflow:auto;background:var(--card);border-radius:22px 22px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.ec-mh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ec-mn{font-weight:900;font-size:15px}
+.ec-pill{font-size:11px;font-weight:800;border-radius:10px;padding:3px 10px;background:var(--yel);color:var(--tx)}
+.ec-x{margin-left:auto;width:32px;height:32px;border-radius:50%;background:var(--ln);font-size:19px;line-height:1;color:var(--tx)}
+.ec-sec{margin-top:12px}
+.ec-sec h4{margin:0;font-size:11.5px;font-weight:800;color:var(--hint);text-transform:uppercase;letter-spacing:.4px}
+.ec-fr{margin-top:6px;background:var(--ln);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.ec-fr mark{background:rgba(232,41,79,.18);color:inherit;border-radius:4px;padding:0 2px;font-weight:700}
+.ec-sec p{margin:6px 0 0;font-size:13px;line-height:1.5}
+.ec-sec a{display:block;margin-top:6px;font-size:12.5px;font-weight:700;color:var(--acc)}
+.ec-mc .ec-go2{width:100%;margin-top:16px}
+.ec-err2{color:#B3142F}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -2125,25 +2188,29 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
-function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai")ecCamClose(0)}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();
+function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecCamClose(0);ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
   const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=tab=="ch"?"none":"";if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
-/* ---------- раздел «ИИ-проверка»: каркас (пуш 3) + съёмка и загрузка (пуш 4 из PUSH-PLAN.md) ----------
-   Старт → «Съёмка» (камера и галерея) → «Вишенка читает…». Анализ и превью — пуши 5–6;
-   дизайн-макет раздела: dev/mockups/essay-check.html */
+/* ---------- раздел «ИИ-проверка»: каркас (пуш 3) + съёмка и загрузка (пуш 4) + разбор (пуш 6 из PUSH-PLAN.md) ----------
+   Старт → «Съёмка» (камера и галерея) → «Вишенка читает…» (живой стрим POST /api/essay_check/run)
+   → экран результата: текст с ошибками, модалка ошибки, вкладки «Ошибки / ФИПИ», балл и рекомендации.
+   Дизайн-макет раздела: dev/mockups/essay-check.html */
 const EC_MAX=12;   /* фото на одну проверку: страницы работы + задание */
+const EC_STAGES=["Распознан рукописный текст","Прочитано задание и опорный текст","Проверены орфография и пунктуацию","Сверяю с критериями ФИПИ…"];   /* этапы пайплайма — по ним отмечаются реальные статусы стрима */
+const EC_TYPES=["Орфография","Пунктуация","Речь"];   /* закрытый список типов ошибок — как в essaycheck._result */
 let ecStep=0,ecKind="ege",ecSet="w",ecShots={w:[],t:[]},ecCamS=[],ecBusy=false;
-function aiCheck(){return ecStep===2?ecProc():ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
+let ecSess="",ecState="run",ecWhy="",ecLive=[],ecWait=[],ecRes=null,ecTab="e",ecFix=false,ecRunId=0;
+function aiCheck(){return ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
 <div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки, объяснит их и оценит по критериям ФИПИ</div></div>
 <button class="ec-big" onclick="ecStart('ege')"><span class="ec-ic">✍️</span><span><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span></button>
 <button class="ec-big" onclick="ecStart('oge')"><span class="ec-ic">📝</span><span><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span></button>
-<div class="ec-note">Раздел в разработке — разбор ошибок появится в следующем обновлении</div>`}
+<div class="ec-note">Снимите страницы работы и задание — получите разбор ошибок и баллы по критериям ФИПИ</div>`}
 function ecStart(k){ecKind=k;ecStep=1;render();scrollTo(0,0)}
 function ecBack(){if(ecStep===1){ecStep=0;render()}}
-function ecReset(){ecShots={w:[],t:[]};ecCamS=[];ecStep=0;render();scrollTo(0,0)}
+function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecErrClose();ecShots={w:[],t:[]};ecCamS=[];ecStep=0;render();scrollTo(0,0)}
 function ecSetCh(s){ecSet=s;render()}
 function ecCnt(){return ecShots.w.length+ecShots.t.length}
 /* --- съёмка: затвор открывает общую камеру (camTake), галерея — запасной путь --- */
@@ -2185,7 +2252,7 @@ function ecCamDone(){const shots=ecCamS.slice();ecCamClose(0);
 function ecCamClose(discard){const v=$("#ec-cam-v");if(v)try{v.srcObject=null}catch(_){}
   const o=$("#ec-cam-ui");if(o)o.hidden=true;
   if(discard)ecCamS=[]}
-/* --- «Готово»: фото уходят на бэкенд (api_essay_check_upload), дальше — экран обработки --- */
+/* --- «Готово»: фото уходят на бэкенд (api_essay_check_upload), дальше — экран обработки и стрим проверки --- */
 async function ecUpload(){if(ecBusy)return;
   if(!ecCnt()){toast("Сначала сделайте хотя бы одно фото");return}
   ecBusy=true;
@@ -2193,21 +2260,153 @@ async function ecUpload(){if(ecBusy)return;
     const pack=a=>a.map((d,i)=>({n:"photo-"+(i+1)+".jpg",d:d.split(",")[1]||"",mime:"image/jpeg"}));
     const r=await api("/api/essay_check/upload",{w:pack(ecShots.w),t:pack(ecShots.t)});
     if(!r||!r.id){ecBusy=false;return}
-    ecStep=2;render();scrollTo(0,0);
+    ecSess=r.id;ecStep=2;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
+    render();scrollTo(0,0);ecRun();
   }catch(e){toast("Не получилось загрузить фото — попробуйте ещё раз")}
   ecBusy=false}
-function ecProc(){const nw=ecShots.w.length,nt=ecShots.t.length;
-  return `<div class="ec-top"><b>Вишенка читает…</b></div>
-<div class="ec-log">
-  <div class="ec-stage done">Собрала фото: ${nw} стр. работы, ${nt} стр. задания</div>
-  <div class="ec-stage done">Фото загружены на сервер</div>
-  <div class="ec-stage wait">Распознан рукописный текст</div>
-  <div class="ec-stage wait">Прочитано задание и опорный текст</div>
-  <div class="ec-stage wait">Проверены орфография и пунктуация</div>
-  <div class="ec-stage wait">Сверяю с критериями ФИПИ…</div>
+/* --- экран обработки: лог этапов заполняется реальными {"t":"status"} стрима, финал — done/fail/off --- */
+function ecLogHtml(){
+  return `<div class="ec-stage done">Фото загружены на сервер</div>`+
+    ecLive.map(v=>`<div class="ec-stage done">${esc(v)}</div>`).join("")+
+    ecWait.map(v=>`<div class="ec-stage wait">${esc(v)}</div>`).join("")}
+function ecUpdProc(){if(tab!="ai"||ecStep!==2)return;const g=$("#ec-log");if(g)g.innerHTML=ecLogHtml();else render()}
+function ecWhyMsg(){return ecWhy==="empty"?"Не получилось разобрать текст работы — попробуйте снять страницы чётче."
+  :ecWhy==="http"?"Сервис модели временно отказал — попробуйте повторить проверку чуть позже."
+  :"Прервалась связь с сервером — проверьте интернет и повторите проверку."}
+function ecProc(){
+  const head=ecState==="run"?"Вишенка читает…":ecState==="off"?"ИИ не подключён":"Проверка не завершилась";
+  const tail=ecState==="run"?`<div class="ec-note">Проверка идёт — обычно это занимает минуту</div>`
+    :ecState==="off"?`<div class="ec-note">ИИ пока не подключён: администратору нужно задать KIMI_API_KEY. После подключения проверка заработает.</div>`
+    :`<div class="ec-note ec-err2">${ecWhyMsg()}</div><button class="ec-go" onclick="ecRetry()">Повторить</button>`;
+  return `<div class="ec-top"><b>${head}</b></div>
+<div class="ec-log" id="ec-log">${ecLogHtml()}</div>${tail}
+<button class="ec-go2" onclick="ecReset()">Новая проверка</button>`}
+async function ecRun(){   /* живой стрим POST /api/essay_check/run (NDJSON, как у /api/chat): стадии → done/fail/off */
+  if(!ecSess)return;
+  const id=++ecRunId;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
+  if(tab=="ai"&&ecStep===2)render();
+  let got=false;
+  const on=ev=>{if(id!==ecRunId||!ev||typeof ev!="object")return;   /* устаревший стрим (повтор/новая проверка) экран не трогает */
+    if(ev.t=="status"&&typeof ev.v=="string"&&ev.v){got=true;ecWait=ecWait.filter(x=>x!==ev.v);ecLive.push(ev.v);ecUpdProc()}
+    else if(ev.t=="done"){got=true;ecDone(ev.result)}
+    else if(ev.t=="fail"){got=true;ecFail(ev.why)}
+    else if(ev.t=="off"){got=true;ecOff()}};
+  try{await apiStream("/api/essay_check/run",{id:ecSess,kind:ecKind},on)}
+  catch(e){if(id===ecRunId)ecFail("net");return}                  /* сеть упала посреди стрима — тоже честный сбой */
+  if(id===ecRunId&&ecState=="run"&&!got&&!locked)ecFail("net")}   /* пустой ответ — сбой, а не вечное ожидание */
+function ecRetry(){if(ecState=="run"||!ecSess)return;ecRun()}     /* повтор после сбоя: тот же сеанс с уже загруженными фото */
+function ecDone(r){ecRes=ecNrm(r);ecState="done";ecStep=3;ecTab="e";ecFix=false;
+  if(tab=="ai"){ecErrClose();render();scrollTo(0,0)}}
+function ecFail(why){ecState="fail";ecWhy=why==="empty"||why==="http"?why:"net";if(tab=="ai"&&ecStep===2)render()}
+function ecOff(){ecState="off";if(tab=="ai"&&ecStep===2)render()}
+/* --- результат (экран 4): поля — из essaycheck._result; пустой или кривой ответ не роняет экран --- */
+function ecLevel(p){return p>=85?"Отлично":p>=70?"Хорошо":p>=50?"Удовлетворительно":"Нужно доработать"}
+function ecNrm(r){const s=r&&typeof r=="object"?r:{};
+  const errs=(Array.isArray(s.errors)?s.errors:[]).filter(e=>e&&typeof e=="object"&&String(e.found||"").trim())
+    .map((e,k)=>({i:k+1,type:EC_TYPES.indexOf(e.type)>=0?e.type:"Речь",found:String(e.found).trim(),
+      correct:String(e.correct||"").trim(),why:String(e.why||"").trim(),src:String(e.src||"").trim()}));
+  const crit=(Array.isArray(s.criteria)?s.criteria:[]).filter(c=>c&&typeof c=="object"&&String(c.name||"").trim())
+    .map(c=>{const mx=Math.max(1,parseInt(c.max,10)||1),got=Math.max(0,Math.min(mx,parseInt(c.got,10)||0));
+      return{name:String(c.name).trim(),got:got,max:mx,why:String(c.why||"").trim(),tip:String(c.tip||"").trim()}});
+  const recs=(Array.isArray(s.recommendations)?s.recommendations:[]).filter(x=>x&&typeof x=="object"&&String(x.title||"").trim())
+    .slice(0,3).map(x=>({title:String(x.title).trim(),text:String(x.text||"").trim(),badge:String(x.badge||"").trim()}));
+  const sc=s.score&&typeof s.score=="object"?s.score:{},got=crit.reduce((a,c)=>a+c.got,0),max=crit.reduce((a,c)=>a+c.max,0);
+  const pct=max?Math.round(got*100/max):0;
+  return{task:String(s.task||"").trim(),text:String(s.text||"").trim(),errors:errs,criteria:crit,recommendations:recs,
+    score:{got:got,max:max,percent:pct,level:String(sc.level||"").trim()||ecLevel(pct)}}}
+function ecPl(n){const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?"баллов":b>1&&b<5?"балла":b===1?"балл":"баллов"}
+function ecPot(){   /* «потенциал +N баллов»: сумма ожидаемых эффектов рекомендаций (badge «+1 К2» → +1) */
+  return ((ecRes&&ecRes.recommendations)||[]).reduce((s,x)=>{const m=/\+\s*(\d+)/.exec(x.badge||"");return s+(m?+m[1]:1)},0)}
+function ecText(r){   /* текст работы с кликабельными фрагментами ошибок; режим П — те же места с исправлениями */
+  const t=String(r.text||"");
+  if(!t)return `<div class="ec-note">Текст работы не распознан — разбор по фрагментам недоступен</div>`;
+  const hits=[],used=[];
+  r.errors.forEach(e=>{const f=e.found;if(!f)return;
+    let i=t.indexOf(f);
+    while(i>=0&&used.some(u=>i<u[1]&&i+f.length>u[0]))i=t.indexOf(f,i+1);   /* накладки не дублируем */
+    if(i<0)return;used.push([i,i+f.length]);hits.push({a:i,b:i+f.length,i:e.i,e:e})});
+  hits.sort((x,y)=>x.a-y.a);
+  let out="",pos=0;
+  hits.forEach(h=>{out+=esc(t.slice(pos,h.a));
+    out+=ecFix?`<span class="ec-ok">${esc(h.e.correct||h.e.found)}</span>`
+      :`<span class="ec-er" role="button" tabindex="0" data-i="${h.i}" onclick="ecErrShow(${h.i})" onkeydown="if(event.key==='Enter')ecErrShow(${h.i})" title="Ошибка №${h.i} — нажмите для разбора">${esc(t.slice(h.a,h.b))}<b>${h.i}</b></span>`;
+    pos=h.b});
+  return out+esc(t.slice(pos))}
+function ecStats(r){
+  const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
+  if(!r.errors.length)return `<div class="ec-note">Ошибок не найдено</div>`;
+  const mx=Math.max.apply(null,EC_TYPES.map(t=>cnt[t]).concat([1]));
+  return EC_TYPES.map(t=>`<div class="ec-st"><span>${t}</span><i style="width:${Math.round(cnt[t]*100/mx)}%"></i><em>${cnt[t]}</em></div>`).join("")}
+function ecErrorsView(r){return `<div class="ec-desk" id="ec-desk">${ecText(r)}</div>
+<div class="ec-blk"><h3>Статистика ошибок</h3>${ecStats(r)}</div>`}
+function ecFipiView(r){
+  const kr=r.criteria.length?r.criteria.map(c=>{const pc=c.max?Math.round(c.got*100/c.max):0;
+    return `<div class="ec-kc${pc>=100?"":pc>=50?" w":" r"}"><div class="ec-kt"><span>${esc(c.name)}</span><span class="ec-pp">${c.got} / ${c.max}</span></div>
+<div class="ec-kb"><i style="width:${pc}%"></i></div>
+${c.why?`<p><b>Почему:</b> ${esc(c.why)}</p>`:""}${c.tip?`<p class="ec-kadv"><b>Совет:</b> ${esc(c.tip)}</p>`:""}</div>`}).join("")
+    :`<div class="ec-note">Критерии не пришли — повторите проверку</div>`;
+  const pot=ecPot();
+  const rc=r.recommendations.length?r.recommendations.map((x,k)=>`<div class="ec-rc"><div class="ec-nn">${k+1}</div><div><b>${esc(x.title)}</b>${x.text?`<p>${esc(x.text)}</p>`:""}${x.badge?`<em>${esc(x.badge)}</em>`:""}</div></div>`).join("")
+    :`<div class="ec-note">Рекомендаций нет — работа разобрана без замечаний</div>`;
+  return `<div class="ec-blk"><h3>Критерии ФИПИ с обоснованием</h3>${kr}</div>
+<div class="ec-blk"><h3>Рекомендации${pot?`<span class="ec-pot">потенциал +${pot} ${ecPl(pot)}</span>`:""}</h3>${rc}</div>`}
+function ecGauge(sc){const C=277,fill=Math.max(0,Math.min(100,sc.percent))*C/100;   /* шкала итогового балла */
+  return `<div class="ec-gauge"><svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="44" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="9"/><circle cx="52" cy="52" r="44" fill="none" stroke="#FFD766" stroke-width="9" stroke-linecap="round" stroke-dasharray="${Math.round(fill)} ${C}"/></svg><div><b>${sc.got}</b><small>из ${sc.max}</small></div></div>`}
+function ecResult(){
+  const r=ecRes||ecNrm(null),sc=r.score;
+  const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
+  return `<div class="ec-top"><b>Разбор работы · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
+<div class="ec-hd">
+  <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки · ${r.errors.length}</button>
+  <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
+  <span class="ec-spr"></span>
+  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixSet(${ecFix?0:1})" title="Т — как написано учеником, П — с исправлениями" aria-label="Вид текста: как написано или с исправлениями">${ecFix?"П":"Т"}</button>
 </div>
-<div class="ec-note">Распознавание и проверка заработают в следующем обновлении</div>
+<div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
+<div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
+<div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Итоговый балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span></div></div>
+  <div class="ec-tiles">${EC_TYPES.map(t=>`<div><b>${cnt[t]}</b>${t.toLowerCase()}</div>`).join("")}</div></div>
 <button class="ec-go" onclick="ecReset()">Новая проверка</button>`}
+function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();   /* вкладки переключаются на месте — без перерисовки экрана */
+  const ve=$("#ec-ve"),vf=$("#ec-vf"),te=$("#ec-te"),tf=$("#ec-tf");
+  if(!ve||!vf||!te||!tf){if(tab=="ai"&&ecStep===3)render();return}
+  ve.classList.toggle("ec-hid",ecTab!="e");vf.classList.toggle("ec-hid",ecTab!="f");
+  te.classList.toggle("on",ecTab=="e");tf.classList.toggle("on",ecTab=="f")}
+function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т/П: как написано учеником / с исправлениями */
+  const d=$("#ec-desk"),b=$("#ec-tg");
+  if(!d||!b){if(tab=="ai"&&ecStep===3)render();return}
+  d.innerHTML=ecText(ecRes||ecNrm(null));b.textContent=ecFix?"П":"Т"}
+/* --- модалка ошибки: фрагмент → ошибка → обоснование → источники; Esc, ×, «Закрыть» и клик по фону --- */
+const EC_KIND={"Орфография":"Нарушение правописания","Пунктуация":"Нарушение пунктуации","Речь":"Речевая ошибка"};
+function ecModUi(){let o=$("#ec-mod");if(o)return o;
+  o=document.createElement("div");o.id="ec-mod";o.className="ec-mod";o.hidden=true;
+  o.innerHTML=`<div class="ec-mc" role="dialog" aria-modal="true" aria-label="Разбор ошибки">
+  <div class="ec-mh"><span class="ec-mn" id="ec-mn"></span><span class="ec-pill" id="ec-mk"></span><button type="button" class="ec-x" aria-label="Закрыть" onclick="ecErrClose()">×</button></div>
+  <div class="ec-sec"><h4>Фрагмент текста</h4><div class="ec-fr" id="ec-mf"></div></div>
+  <div class="ec-sec"><h4>Ошибка</h4><p id="ec-me"></p></div>
+  <div class="ec-sec"><h4>Теоретическое обоснование</h4><p id="ec-mw"></p></div>
+  <div class="ec-sec"><h4>Источники теории</h4><div id="ec-ms"></div></div>
+  <button type="button" class="ec-go2" onclick="ecErrClose()">Закрыть</button></div>`;
+  o.onclick=e=>{if(e.target===o)ecErrClose()};   /* клик по фону — как у шторок кабинета */
+  document.body.appendChild(o);return o}
+function ecErrShow(i){
+  const r=ecRes;if(!r||!Array.isArray(r.errors))return;
+  const e=r.errors.filter(x=>x&&x.i==i)[0];if(!e)return;   /* повторный тап и мусорный номер — без падений */
+  document.querySelectorAll(".ec-er").forEach(s=>s.classList.toggle("sel",s.dataset.i==i));
+  const o=ecModUi(),t=String(r.text||""),k=e.found?t.indexOf(e.found):-1;
+  const a=k<0?0:Math.max(0,k-40),b=k<0?t.length:Math.min(t.length,k+e.found.length+40);
+  $("#ec-mn").textContent="Ошибка №"+e.i;
+  $("#ec-mk").textContent=EC_KIND[e.type]||e.type;
+  $("#ec-mf").innerHTML=(a>0?"…":"")+(k<0?esc(t.slice(a,b)):esc(t.slice(a,k))+"<mark>"+esc(e.found)+"</mark>"+esc(t.slice(k+e.found.length,b)))+(b<t.length?"…":"");
+  $("#ec-me").innerHTML="«"+esc(e.found)+"» — ошибка."+(e.correct?" Правильно: <b>"+esc(e.correct)+"</b>.":"");
+  $("#ec-mw").textContent=e.why||"Обоснование не пришло — попробуйте повторить проверку.";
+  $("#ec-ms").innerHTML=(e.src?"<div>"+esc(e.src)+"</div>":"")+
+    '<a href="https://gramota.ru/" target="_blank" rel="noopener">Грамота.ру: справочник по правилам</a>'+
+    '<a href="https://fipi.ru/" target="_blank" rel="noopener">ФИПИ: критерии и открытый банк заданий</a>';
+  o.hidden=false}
+function ecErrClose(){const o=$("#ec-mod");if(o&&!o.hidden)o.hidden=true;
+  document.querySelectorAll(".ec-er").forEach(s=>s.classList.remove("sel"))}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")ecErrClose()});
 function ecShot(){const w=ecSet==="w",L=ecShots[ecSet];
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад">‹</button><b>Съёмка · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
 <div class="ec-view"><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip">${w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</div></div>

@@ -37,6 +37,33 @@ for s in ("Вишенка читает", "Распознан рукописны�
 assert ".ec-hero{" in html and ".ec-shut{" in html and ".ec-cam{" in html, "нет стилей ec-"
 ok("экран обработки и стили ec- на месте")
 
+# --- 5б. экран обработки подключён к стриму проверки (пуш 6), заглушка убрана ---
+assert 'apiStream("/api/essay_check/run"' in html, "экран обработки не зовёт /api/essay_check/run"
+for s in ('ev.t=="status"', 'ev.t=="done"', 'ev.t=="fail"', 'ev.t=="off"',
+          "function ecRetry(", "Повторить", 'id:ecSess,kind:ecKind'):
+    assert s in html, f"нет обработки стрима run: {s}"
+assert "Распознавание и проверка заработают в следующем обновлении" not in html, \
+    "заглушка «заработают в следующем обновлении» должна быть убрана"
+ok("экран обработки: живой стрим run (status → done/fail/off), «Повторить», заглушка убрана")
+
+# --- 5в. экран результата (экран 4): текст с ошибками, модалка, вкладки, Т/П, статистика, балл ---
+for s in ("function ecResult(", "function ecErrShow(", "function ecErrClose(", "function ecTabSet(",
+          "function ecFixSet(", "function ecNrm(", "Фрагмент текста", "Теоретическое обоснование",
+          "Источники теории", "Статистика ошибок", "Критерии ФИПИ с обоснованием", "Рекомендации",
+          "потенциал +", "Ошибки · ${", "Итоговый балл", "Новая проверка"):
+    assert s in html, f"нет строки экрана результата: {s}"
+assert '.ec-mod{' in html and '.ec-er{' in html and '.ec-desk{' in html, "нет стилей экрана результата ec-"
+assert 'if(e.key==="Escape")ecErrClose()' in html, "модалка ошибки не закрывается по Esc"
+assert 'onclick="ecErrShow(' in html, "фрагменты ошибок в тексте не кликабельны"
+ok("экран результата: кликабельные ошибки, модалка (фрагмент → ошибка → обоснование → источники), вкладки, Т/П, балл")
+
+# --- 5г. экран результата не падает на пустом результате и повторных тапах ---
+for s in ("function ecPot(", "ecRes||ecNrm(null)", 'if(!e)return;', "ec-er\" role=\"button\""):
+    assert s in html, f"нет защиты экрана результата: {s}"
+assert re.search(r"r\.errors\.filter\(x=>x&&x\.i==i\)\[0\];if\(!e\)return", html), \
+    "повторный тап по фрагменту/мусорный номер ошибки должен быть безопасен"
+ok("защита результата: пустой результат нормализуется (ecNrm), повторные тапы не палят экран")
+
 # --- 6. API приёма фото: маршрут и поведение ---
 import asyncio, base64, hashlib, hmac, io, json, sqlite3, time
 from urllib.parse import urlencode
@@ -160,12 +187,30 @@ async def main():
         assert r.status == 200 and [e["t"] for e in evs].count("status") == 5 and evs[-1]["t"] == "done", evs
         res = evs[-1]["result"]
         assert res["score"]["max"] == 7 and res["errors"][0]["found"] == "влеяния"
-        ok("run: 5 стадий и нормализованный разбор в done.result")
+        assert {"text", "task", "errors", "criteria", "recommendations", "score"} <= set(res), sorted(res)
+        assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Отлично"
+        assert set(res["errors"][0]) == {"i", "type", "found", "correct", "why", "src"}, sorted(res["errors"][0])
+        assert set(res["criteria"][0]) == {"name", "got", "max", "why", "tip"}
+        assert set(res["recommendations"][0]) == {"title", "text", "badge"}
+        ok("run: 5 стадий и нормализованный разбор в done.result (схема экрана результата)")
 
         kimi.ask_json = fake_none
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert evs[-1] == {"t": "fail", "why": "net"}, evs
+
+        kimi.ask_json = fake_empty                       # пустой разбор — тоже честный сбой, а не падение фронта
+        r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
+        evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+        assert evs[-1] == {"t": "fail", "why": "empty"}, evs
+        ok("пустое распознавание/разбор → fail/empty")
+
+        kimi.ask_json = fake_ocr_ok                      # «Повторить» после сбоя: тот же сеанс проверяется заново
+        r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
+        evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+        assert evs[-1]["t"] == "done" and evs[-1]["result"]["text"], evs[-1]
+        ok("повторный run по тому же сеансу работает (кнопка «Повторить» на экране сбоя)")
+
         kimi.ask_json = real_ask_json; kimi.API_KEY = real_key
         ok("сбой модели → fail/net (фронт увидит честный отказ)")
 
