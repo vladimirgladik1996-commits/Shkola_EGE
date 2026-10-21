@@ -1073,24 +1073,30 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-stage.wait{color:var(--hint)}
 .ec-stage.wait:before{content:"○";color:var(--yel);font-weight:900}
 /* --- «Съёмка»: видоискатель, рамка, плашка Вишенки, стопка страниц — из макета essay-check --- */
-.ec-lab{font-weight:900;font-size:15px;white-space:nowrap}
+.ec-lab{flex:1;min-width:0;font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ec-view{position:relative;border-radius:20px;overflow:hidden;aspect-ratio:3/4;background:linear-gradient(160deg,#2a3550,#171e30);box-shadow:0 14px 30px -18px var(--sh)}
 .ec-cam{position:absolute;inset:0}
 .ec-cam video{width:100%;height:100%;object-fit:cover;background:#000}
-.ec-frame{position:absolute;inset:34px 26px;border:2px dashed rgba(255,255,255,.5);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:rgba(255,255,255,.7);text-align:center;padding:10px;pointer-events:none}
+.ec-frame{position:absolute;inset:26px 26px 86px;border:2px dashed rgba(255,255,255,.5);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:rgba(255,255,255,.7);text-align:center;padding:10px;pointer-events:none}
 .ec-tip{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(255,255,255,.14);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-radius:14px;padding:8px 10px;display:flex;gap:8px;align-items:center;font-size:12px;font-weight:700;color:#fff}
 .ec-tip img{flex:none;width:34px;height:34px;border-radius:50%}
-.ec-chs{display:flex;gap:8px;justify-content:center;padding:12px 4px 4px}
-.ec-ctl{display:grid;grid-template-columns:1fr 84px 1fr;align-items:center;padding:10px 14px 6px}
-.ec-th{position:relative;width:62px;height:64px;margin-left:6px}
-.ec-th b{position:absolute;left:4px;top:6px;width:40px;height:52px;border-radius:7px;border:2px solid #fff;background:#fbf8ee repeating-linear-gradient(transparent 0 7px,#b9c6e6 7px 8px);box-shadow:0 3px 8px rgba(0,0,0,.35);background-size:cover;cursor:pointer;transform-origin:50% 90%}
+.ec-chs{display:flex;gap:6px;justify-content:center;padding:2px 4px 0}
+.ec-chs .ec-chip{padding:6px 13px;font-size:12.5px}
+.ec-ctl .ec-go{justify-self:center;margin:0;padding:10px 14px;font-size:13px;border-radius:14px}
+.ec-tip{cursor:pointer;transition:opacity .25s,transform .25s}
+.ec-tip.out{opacity:0;transform:translateY(8px);pointer-events:none}
+.ec-tip.gone{display:none}
+.ec-tip .ec-tipx{margin-left:auto;padding:0 2px 0 8px;font:900 20px/1 inherit;opacity:.65}
+.ec-ctl{display:grid;grid-template-columns:1fr 64px 1fr;align-items:center;padding:8px 0 14px}
+.ec-th{position:relative;width:46px;height:48px;justify-self:center;margin:0}
+.ec-th b{position:absolute;left:50%;margin-left:-15px;top:5px;width:30px;height:38px;border-radius:7px;border:2px solid #fff;background:#fbf8ee repeating-linear-gradient(transparent 0 7px,#b9c6e6 7px 8px);box-shadow:0 3px 8px rgba(0,0,0,.35);background-size:cover;cursor:pointer;transform-origin:50% 90%}
 .ec-th b.t{filter:hue-rotate(180deg) saturate(.6)}
-.ec-th i{position:absolute;right:-6px;top:-4px;z-index:3;min-width:20px;height:20px;border-radius:99px;background:var(--yel);color:#0E2250;font:900 11px/20px inherit;text-align:center;font-style:normal;padding:0 5px}
+.ec-th i{position:absolute;right:-6px;top:-4px;z-index:3;min-width:18px;height:18px;border-radius:99px;background:var(--yel);color:#0E2250;font:900 10px/18px inherit;text-align:center;font-style:normal;padding:0 5px}
 .ec-th b.pop{animation:ecPop .5s cubic-bezier(.2,1.35,.4,1) both}
 .ec-th i.bump{animation:ecBump .35s ease-out}
 @keyframes ecPop{from{opacity:0;transform:scale(.5) rotate(-7deg)}}
 @keyframes ecBump{50%{transform:scale(1.25)}}
-.ec-shut{width:80px;height:80px;border:0;padding:0;justify-self:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ec-shut{width:64px;height:64px;border:0;padding:0;justify-self:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ec-shut:active{transform:scale(.94)}
 .ec-cam[hidden]{display:none}
 
@@ -2424,14 +2430,19 @@ async function ecHistTap(id){   /* повторный просмотр разб�
   ecRes=ecNrm(d.result);ecKind=d.kind=="oge"?"oge":"ege";ecSaved=d.id||0;
   ecView="hist";ecViewInfo=[d.student_name||"Без ученика",ecKindLabel(),ecWhen(d.created)].join(" · ");
   ecStep=3;ecTab="e";ecFix=false;ecErrClose();render();scrollTo(0,0)}
-function ecSetCh(k){ecSet=k;ecThUpd();const w=k==="w",fr=$(".ec-frame"),tp=$(".ec-tip span");
+function ecSetCh(k){ecSet=k;ecThUpd();ecTipShow();const w=k==="w",fr=$(".ec-frame"),tp=$(".ec-tip span");
   if(fr)fr.innerHTML=w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст";
-  if(tp)tp.textContent=w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме";
+  if(tp)tp.textContent=w?"Снимайте страницы по порядку — я соберу фото в одну работу":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме";
   const c1=$("#ec-c1"),c2=$("#ec-c2");if(c1)c1.classList.toggle("on",w);if(c2)c2.classList.toggle("on",!w)}
 function ecCnt(){return ecShots.w.length+ecShots.t.length}
+/* плашка подсказки видоискателя: закрывается тапом, состояние — по набору «Работа»/«Задание» (tipOff в мокете) */
+let ecTipOff={w:false,t:false};
+function ecTipShow(){const t=$("#ec-tip");if(!t)return;t.classList.remove("out");t.classList.toggle("gone",!!ecTipOff[ecSet])}
+function ecTipHide(){const k=ecSet;ecTipOff[k]=true;const t=$("#ec-tip");if(!t)return;t.classList.add("out");setTimeout(()=>{if(ecTipOff[ecSet])t.classList.add("gone")},260)}
 /* --- съёмка: затвор открывает общую камеру (camTake), галерея — запасной путь --- */
-function ecInp(){let i=$("#ec-inp");if(!i){i=document.createElement("input");i.type="file";i.id="ec-inp";i.accept="image/*";i.multiple=true;i.hidden=true;i.onchange=()=>ecPicked(i);document.body.appendChild(i)}return i}
+function ecInp(){let i=$("#ec-inp");if(!i){i=document.createElement("input");i.type="file";i.id="ec-inp";i.accept="image/*";i.setAttribute("capture","environment");i.multiple=true;i.hidden=true;i.onchange=()=>ecPicked(i);document.body.appendChild(i)}return i}   /* запасной путь камеры — системная съёмка (см. dev/mockups/camera-integration.md) */
 async function ecPicked(inp){const fs=[...inp.files];inp.value="";
+  ecTipHide();
   for(const f of fs){if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");break}
     try{ecShots[ecSet].push(await chJpeg(f))}catch(e){toast("Не получилось прочитать фото")}}
   ecThUpd()}
@@ -2659,7 +2670,7 @@ function ecFAsk(){   /* «Спросить у Вишенки»: чат откр�
   const el=$("#aic-in");if(el){el.value=q;chGrow(el);try{el.focus({preventScroll:true})}catch(e){}}}
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>
-<div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip"><img src="${EC_TIP}" alt=""><span>${w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</span></div></div>
+<div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip${ecTipOff[ecSet]?" gone":""}" id="ec-tip" onclick="ecTipHide()"><img src="${EC_TIP}" alt=""><span>${w?"Снимайте страницы по порядку — я соберу фото в одну работу":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</span><b class="ec-tipx" aria-hidden="true">×</b></div></div>
 <div class="ec-chs"><button class="ec-chip${w?" on":""}" id="ec-c1" onclick="ecSetCh('w')">Работа · ${ecShots.w.length}</button><button class="ec-chip${w?"":" on"}" id="ec-c2" onclick="ecSetCh('t')">Задание · ${ecShots.t.length}</button></div>
 <div class="ec-ctl"><div class="ec-th" id="ec-th">${ecThHtml()}</div><button class="ec-shut" style="background:url(${EC_SHUT}) center/contain no-repeat" onclick="ecCamShot()" aria-label="Сделать фото"></button><button class="ec-go" onclick="ecUpload()">Готово</button></div>`}
 /* стопка страниц: максимум 3 верхних + счётчик; тап по странице — убрать фото */
@@ -2686,7 +2697,7 @@ function ecCamShot(){const v=$("#ec-cv");
   const k=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
   c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
   c.getContext("2d").drawImage(v,0,0,c.width,c.height);
-  ecShots[ecSet].push(c.toDataURL("image/jpeg",.85));ecThUpd(true)}
+  ecShots[ecSet].push(c.toDataURL("image/jpeg",.85));ecTipHide();ecThUpd(true)}
 
 
 /* ---------- раздел «Материалы» ---------- */
