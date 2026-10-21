@@ -807,6 +807,15 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aim .aimb.fc-act button{flex:1 1 0;min-width:0;justify-content:center;gap:6px;padding:0 8px;font-size:13.5px;white-space:nowrap}
 .aim .aimb.fc-act button:disabled{opacity:.55}
 @media (prefers-reduced-motion:reduce){.fc-stk img,.fc-stk::before{animation:none!important}}
+/* ---- карточка картинки: превью → описание → «Скачать / Поделиться»; если картинка не отрисовалась — ссылка-строка ---- */
+.fc-pic{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.fc-pic a.fc-im{display:block;border-radius:14px;overflow:hidden;background:color-mix(in srgb,var(--card) 70%,transparent);box-shadow:0 0 0 1px var(--ln);-webkit-tap-highlight-color:transparent;transition:transform .12s}
+.fc-pic a.fc-im:active{transform:scale(.985)}
+.fc-pic img{display:block;width:100%;max-height:340px;object-fit:contain}
+.fc-pic .aif{display:none;align-self:flex-start}
+.fc.bad .fc-pic .fc-im{display:none}
+.fc.bad .fc-pic .aif{display:inline-flex}
+.fc.fi .fc-tx{margin-top:10px}
 
 
 /* ===== Премиум-чат: крупные значки, глубина, золото + тёмно-синий ===== */
@@ -2707,6 +2716,7 @@ const CH_WORD='<svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient
 const CH_PDFI='<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="10" y="3" width="26" height="34" rx="4" fill="#FDECEA" stroke="#F0A8A2"/><path d="M16 12h14M16 17h14M16 22h14M16 27h9" stroke="#EE9A93" stroke-width="2" stroke-linecap="round"/><rect x="2" y="11" width="22" height="22" rx="4.5" fill="#D93025"/><text x="13" y="26.6" text-anchor="middle" font-size="9.2" font-weight="800" fill="#fff" font-family="Arial,Helvetica,sans-serif">PDF</text></svg>';
 const chIsPdf=x=>!!x&&(/\.pdf$/i.test(x.n||"")||x.m=="application/pdf");
 const chIsDoc=x=>!!x&&x.k=="out"&&!!x.u&&(/\.docx$/i.test(x.n||"")||/wordprocessingml/.test(x.m||"")||chIsPdf(x));
+const chIsImg=x=>!!x&&x.k=="out"&&!!x.u&&(/^image\//.test(x.m||"")||/\.(png|jpe?g|webp)$/i.test(x.n||""));
 const chDocAt=(i,j)=>{const x=((CH[i]||{}).a||[])[j];return x&&x.u?x:null};
 const chAbs=x=>new URL(x.u,API_BASE||location.origin).href;
 function chFc(m,i,n,live){   // n — класс «new» + задержка из chList; live — только последний ответ «дышит» анимацией
@@ -2714,6 +2724,14 @@ function chFc(m,i,n,live){   // n — класс «new» + задержка из
   return `<div class="aim a fc${pdf?" pdf":""}${live?" fl":""}${n}">
     <a class="fc-stk" href="${x.u}" target="_blank" rel="noopener" onclick="return chFileTap(${i},${j},event)" aria-label="Открыть ${kind} ${nm}"><img src="${pdf?CH_STKP:CH_STK}" alt="${pdf?"Вишенка с PDF-документом":"Вишенка с Word-документом"}" draggable="false"></a>
     <a class="fc-doc${pdf?" pdf":""}" href="${x.u}" target="_blank" rel="noopener" onclick="return chFileTap(${i},${j},event)" title="Открыть документ"><span class="fc-wi">${pdf?CH_PDFI:CH_WORD}</span><span class="fc-dn"><b>${nm}</b><small>${kind} · открыть</small></span><span class="fc-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span></a>
+    ${m.t?`<div class="fc-tx">${esc(m.t)}</div>`:""}
+    <div class="aimb fc-act"><button type="button" onclick="chDl(${i},${j})">${CH_IC.dl}Скачать</button><button type="button" onclick="chShare(${i},${j})">${CH_IC.share}Поделиться</button></div>
+    ${m.tg?`<div class="aimtg">✅ Ответ также отправлен в Telegram</div>`:""}</div>`}
+function chFi(m,i,n){   // картинка: превью → описание → «Скачать / Поделиться» (+ конфетти из answer())
+  const j=m.a.findIndex(chIsImg),x=m.a[j],nm=esc(x.n);
+  return `<div class="aim a fc fi${n}">
+    <div class="fc-pic"><a class="fc-im" href="${x.u}" target="_blank" rel="noopener" onclick="return chFileTap(${i},${j},event)" title="Открыть картинку"><img src="${x.u}" alt="${nm}" loading="lazy" onerror="this.closest('.fc').classList.add('bad')"></a>
+      <a class="aif" href="${x.u}" target="_blank" rel="noopener" onclick="return chFileTap(${i},${j},event)">${CH_IC.img}<span>${nm}</span></a></div>
     ${m.t?`<div class="fc-tx">${esc(m.t)}</div>`:""}
     <div class="aimb fc-act"><button type="button" onclick="chDl(${i},${j})">${CH_IC.dl}Скачать</button><button type="button" onclick="chShare(${i},${j})">${CH_IC.share}Поделиться</button></div>
     ${m.tg?`<div class="aimtg">✅ Ответ также отправлен в Telegram</div>`:""}</div>`}
@@ -2739,7 +2757,7 @@ function chConfetti(){
    и открывает его просмотрщиком) — иного способа открыть файл из мини-аппа Telegram нет;
    браузер — скачивание файла. Никаких ссылок и лишних сообщений. */
 const chMime=x=>x.m||(/\.pdf$/i.test(x.n||"")?"application/pdf":/\.png$/i.test(x.n||"")?"image/png"
-  :/\.jpe?g$/i.test(x.n||"")?"image/jpeg":/\.docx$/i.test(x.n||"")?CH_DOCX:"application/octet-stream");
+  :/\.jpe?g$/i.test(x.n||"")?"image/jpeg":/\.webp$/i.test(x.n||"")?"image/webp":/\.docx$/i.test(x.n||"")?CH_DOCX:"application/octet-stream");
 /* Карточка Word-файла живёт в истории чата, а файл на сервере — в памяти и со сроком подписи:
    «Скачать»/«Поделиться» берут ЖИВУЮ копию файла — ровно ту, что ушла в Telegram-бота;
    чтобы кнопки работали и на СТАРЫХ карточках (файл истёк), он собирается заново из src —
@@ -2832,6 +2850,7 @@ function chList(){
   return CH.map((m,i)=>m.r=="u"?`<div class="aim u${nw(m)}${m===chHeroMsg?" hw":""}">${chAtts(m.a,i)}${esc(m.t)}</div>`
     :m.err?`<div class="aim e${nw(m)}">${esc(m.t)}<div class="aimb"><button type="button" onclick="chRetry()">${CH_IC.retry}Повторить</button></div></div>`
     :m.a&&m.a.some(chIsDoc)?chFc(m,i,nw(m),i==CH.length-1)
+    :m.a&&m.a.some(chIsImg)?chFi(m,i,nw(m))
     :m.step||m.live?`<div class="aim a st${m.live?" live":""}${nw(m)}">${chStep(m)}</div>`
     :`<div class="aim a${nw(m)}">${chAtts(m.a,i)}${esc(m.t)}${m.a&&m.a.length?"":`<div class="aimb"><button type="button" onclick="chCopy(${i},this)">${CH_IC.copy}Копировать</button></div>`}${m.tg?`<div class="aimtg">✅ Ответ также отправлен в Telegram</div>`:""}</div>`).join("")
     +(chBusy&&!CH.some(m=>m.live)?(()=>{const f=chDots?"":" new";chDots=true;const q=Date.now()%1100,d=k=>`-${(q+1100-k*160)%1100}ms`;return `<div class="aim a dots${f}"${f&&chHeroLag?` style="--d:${chHeroLag}ms"`:""} aria-label="Вишенка отвечает"><i style="animation-delay:${d(0)}"></i><i style="animation-delay:${d(1)}"></i><i style="animation-delay:${d(2)}"></i><small>Вишенка на связи…</small></div>`})():(chDots=false,""))}
