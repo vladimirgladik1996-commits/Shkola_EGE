@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, kimi, matlib, whisper
+import assist, auth, chatfiles, essaycheck, kimi, matlib, whisper
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -2562,6 +2562,50 @@ async def api_essay_check_upload(request):
     return web.json_response({"id": cid, "n_w": len(out["w"]), "n_t": len(out["t"])})
 
 
+@guarded
+async def api_essay_check_run(request):
+    """Запуск проверки по фото сеанса (пуш 5): NDJSON-стрим — события стадий
+    ({"t":"status"}), финальный разбор ({"t":"done","result":…}) или сбой
+    ({"t":"fail","why":…}). Формат стрима — как у /api/chat: фронт читает его тем же apiStream."""
+    try:
+        j = await request.json()
+    except Exception:
+        raise ValueError
+    if not isinstance(j, dict):
+        raise ValueError
+    uid, cid = user_id(request), j.get("id")
+    rec = EC_CHECKS.get(cid) if isinstance(cid, str) else None
+    if not rec or not isinstance(uid, int) or uid <= 0:
+        raise ValueError
+    if rec[0] != uid:                              # чужой сеанс проверки не трогаем
+        return web.json_response({"error": "forbidden"}, status=403)
+    resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
+                                                   "Cache-Control": "no-store"})
+    await resp.prepare(request)
+
+    async def send(ev):
+        await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    if not kimi.enabled():
+        await send({"t": "off"})
+        await resp.write_eof()
+        return resp
+    kind = j.get("kind") if isinstance(j.get("kind"), str) else "ege"
+    log.info("essay check: tg_id=%s photos=%d/%d kind=%s", uid, len(rec[1]["w"]), len(rec[1]["t"]), kind)
+    async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
+        if ev_kind == "status":
+            await send({"t": "status", "v": v})
+        elif ev_kind == "err":
+            log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
+            await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
+            await resp.write_eof()
+            return resp
+        else:                                      # done
+            await send({"t": "done", "result": v})
+    await resp.write_eof()
+    return resp
+
+
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
     app = web.Application(client_max_size=12 * 1024 * 1024, middlewares=[cors_mw])   # 12 МБ: вложения чата с ИИ (до 8 МБ в base64)
@@ -2593,7 +2637,8 @@ def make_app():
     app.router.add_get("/api/chat_file/{tok}/{fname}", api_chat_file)   # имя файла в пути — так документ называется у получателя
     app.router.add_post("/api/chat_file/prepare", api_chat_file_prepare)   # «Поделиться»: tg.shareMessage — файл, не ссылка
     app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)
-    app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: фото работ и задания (пуш 4)   # оживление старых карточек: файл собирается заново из текста ответа
+    app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: фото работ и задания (пуш 4)
+    app.router.add_post("/api/essay_check/run", api_essay_check_run)           # «ИИ-проверка»: запуск проверки, стрим стадий и результата (пуш 5)   # оживление старых карточек: файл собирается заново из текста ответа
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)
