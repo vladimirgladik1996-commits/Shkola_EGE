@@ -2326,12 +2326,10 @@ const EC_ART="data:image/webp;base64,"+"UklGRjp2AQBXRUJQVlA4WAoAAAAQAAAAzwIAMAIA
 let ecStep=0,ecKind="ege",ecSet="w",ecShots={w:[],t:[]},ecCamS=[],ecBusy=false;
 let ecSess="",ecState="run",ecWhy="",ecLive=[],ecWait=[],ecRes=null,ecTab="e",ecFix=false,ecRunId=0;
 let ecSid=null,ecSaved=0,ecView="",ecViewInfo="",ecHist={sid:"all",list:null,busy:false};   /* ученик, «сохранено», просмотр из истории (пуш 7) */
-function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
-<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки, объяснит их и оценит по критериям ФИПИ</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
+function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки, объяснит их и оценит по критериям ФИПИ</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
 <button class="ec-pb a" onclick="ecStart('ege')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/></svg></span><span class="ec-pbt"><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
 <button class="ec-pb b" onclick="ecStart('oge')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><span class="ec-pbt"><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
-<button class="ec-big" onclick="ecStuPick('start')"><span class="ec-ic">👤</span><span><b>Ученик${ecStuName()?" · "+esc(ecStuName()):""}</b><small>${ecStuName()?"проверка сохранится за ним":"кто написал работу — можно пропустить"}</small></span></button>
-<button class="ec-big" onclick="ecHistOpen()"><span class="ec-ic">🗂</span><span><b>История проверок</b><small>сохранённые разборы и отчёт по критериям ФИПИ</small></span></button>
+<button class="ec-link" onclick="ecHistOpen()">🗂 История проверок</button>
 <div class="ec-note">Снимите страницы работы и задание — получите разбор ошибок и баллы по критериям ФИПИ</div>`}
 function ecStart(k){ecKind=k;ecStep=1;render();scrollTo(0,0)}
 function ecBack(){if(ecStep===1||ecStep===4){ecStep=0;ecView="";render()}}
