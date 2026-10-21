@@ -1021,6 +1021,27 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes aicHeroShine{from{left:-45%}to{left:130%}}
 @media (prefers-reduced-motion:reduce){.aic-fx{display:none}.aim.hw{opacity:1}.aim.hp,.aim.hp::before{animation:none}}
 @media (prefers-reduced-motion:reduce){.aipul{animation:none!important}}
+/* ===== ИИ-проверка: каркас раздела (пуш 3) ===== */
+.ec-hero{position:relative;overflow:hidden;border-radius:22px;padding:18px 16px;color:#fff;margin-bottom:12px;background:radial-gradient(120px 110px at 84% -10%,rgba(255,201,60,.35),transparent 60%),linear-gradient(150deg,#1B4AAE,#0B2257)}
+.ec-sub{font-size:15px;line-height:1.45;font-weight:700}
+.ec-big{width:100%;display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;background:var(--card);box-shadow:0 0 0 1px var(--ln);margin-bottom:10px;text-align:left;font:inherit;color:var(--tx)}
+.ec-big:active{transform:scale(.98)}
+.ec-ic{flex:none;width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:var(--yel);font-size:22px}
+.ec-big b{display:block;font-size:16px;font-weight:800}
+.ec-big small{display:block;color:var(--hint);font-weight:600;font-size:12.5px}
+.ec-note{text-align:center;color:var(--hint);font-size:12px;font-weight:600;margin:12px 0 4px}
+.ec-top{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+.ec-back{flex:none;width:38px;height:38px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-size:22px;line-height:1;color:var(--tx)}
+.ec-view{border-radius:22px;padding:14px;background:radial-gradient(140px 120px at 90% -10%,rgba(255,201,60,.22),transparent 60%),#0B2257;box-shadow:0 14px 30px -18px var(--sh)}
+.ec-frame{aspect-ratio:3/4;display:grid;place-items:center;text-align:center;color:#cfe0ff;font-weight:700;font-size:14px;border:2px dashed rgba(255,255,255,.35);border-radius:14px}
+.ec-tip{margin-top:10px;color:#dbe6ff;font-size:12.5px;font-weight:600;line-height:1.4}
+.ec-chs{display:flex;gap:8px;margin:12px 0}
+.ec-chip{flex:1;padding:10px;border-radius:14px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-weight:800;color:var(--hint)}
+.ec-chip.on{background:var(--acc);color:var(--on);box-shadow:none}
+.ec-ctl{display:flex;align-items:center;gap:12px}
+.ec-shut{flex:none;width:64px;height:64px;border-radius:50%;background:var(--card);box-shadow:0 0 0 3px var(--yel),0 12px 24px -12px var(--sh)}
+.ec-go{flex:1;padding:16px;border-radius:16px;background:var(--acc);color:var(--on);font-weight:800;font-size:15px}
+.ec-go:active{transform:scale(.98)}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl"><div class="page"><div class="wrap">
 <div class="scene"><div class="art">
@@ -2078,11 +2099,28 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
-function render(){try{if(tab!="ch")chStop()}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():soon();
+function render(){try{if(tab!="ch")chStop()}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
   const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=tab=="ch"?"none":"";if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
+
+/* ---------- раздел «ИИ-проверка»: каркас (пуш 3 из PUSH-PLAN.md) ----------
+   Старт → «Съёмка». Приём фото, сама проверка и превью — следующие пуши (4–6);
+   дизайн-макет раздела: dev/mockups/essay-check.html */
+let ecStep=0,ecKind="ege",ecSet="w";
+function aiCheck(){return ecStep===1?ecShot():`<h2>ИИ-проверка</h2>
+<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки, объяснит их и оценит по критериям ФИПИ</div></div>
+<button class="ec-big" onclick="ecStart('ege')"><span class="ec-ic">✍️</span><span><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span></button>
+<button class="ec-big" onclick="ecStart('oge')"><span class="ec-ic">📝</span><span><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span></button>
+<div class="ec-note">Раздел в разработке — приём фото заработает в следующем обновлении</div>`}
+function ecStart(k){ecKind=k;ecStep=1;render();scrollTo(0,0)}
+function ecBack(){ecStep=0;render()}
+function ecSetCh(s){ecSet=s;render()}
+function ecShot(){const w=ecSet==="w";return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад">‹</button><b>Съёмка · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
+<div class="ec-view"><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-tip">${w?"Снимайте страницы по порядку — я соберу их в одно сочинение":"Сфотографируйте условие из учебника и опорный текст — по ним я проверю соответствие теме"}</div></div>
+<div class="ec-chs"><button class="ec-chip${w?" on":""}" onclick="ecSetCh('w')">Работа · 3</button><button class="ec-chip${w?"":" on"}" onclick="ecSetCh('t')">Задание · 1</button></div>
+<div class="ec-ctl"><button class="ec-shut" onclick="toast('Приём фото заработает в следующем обновлении')" aria-label="Сделать фото"></button><button class="ec-go" onclick="toast('Приём фото заработает в следующем обновлении')">Готово</button></div>`}
 
 /* ---------- раздел «Материалы» ---------- */
 /* Два каталога → по нажатию на каталог показываются чипсины всех 36 вариантов → по нажатию на вариант во весь экран открывается
