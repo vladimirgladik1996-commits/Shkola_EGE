@@ -2196,7 +2196,8 @@ function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]}
   try{if(tab=="c"){c.view=view;c.week_start=iso(ws);c.month=iso(mo)}
     else if(tab=="p"){if(pst!=="all")c.student_id=pst;if(pd1)c.date_from=pd1;if(pd2)c.date_to=pd2}
     else if(tab=="s"&&pf&&pf!=="all")c.filter=String(pf).slice(0,20)
-    else if(tab=="mt"&&matCur&&matCur.n)c.mat={cat:matCur.cat,n:matCur.n,part:matCur.part||"other"}}catch(e){}   // Вишенка знает, какой вариант материала открыт
+    else if(tab=="mt"&&matCur&&matCur.n)c.mat={cat:matCur.cat,n:matCur.n,part:matCur.part||"other"}
+    else if(tab=="ai"){const e=ecVCtx||ecEssayCtx();if(e)return e}}catch(e){}   // Вишенка знает: открытый вариант материала или сочинение в «ИИ-проверке»
   return c}
 var vc=null;   // состояние записи: {raf, stream, ctx, an}
 var vfrag=null;   // режим «Спросить у Вишенки»: {fragment, cat, n, part} — запись уходит на /api/fragment, ответ приходит в чат с ботом
@@ -2449,7 +2450,7 @@ function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.re
 function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
-  const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=tab=="ch"?"none":"";if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
+  const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=(tab=="ch"||tab=="ai")?"none":"";   /* «ИИ-проверка»: Вишенка вызывается из карточки ошибки и по выделению текста — плавающая кнопка на странице не нужна */if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
 /* ---------- раздел «ИИ-проверка»: каркас (пуш 3) + съёмка и загрузка (пуш 4) + разбор (пуш 6 из PUSH-PLAN.md) ----------
@@ -2814,9 +2815,10 @@ function ecFragUi(){let o=$("#ec-modf");if(o)return o;
   document.body.appendChild(o);return o}
 function ecFragShow(key){   /* key: номер ошибки или 'c<N>' — карточка критерия ФИПИ */
   const r=ecRes||ecNrm(null),num=String(key).charAt(0)!="c";
-  let tag="",name="",lost=0,why="",tip="",frag="",plain="";
+  let tag="",name="",lost=0,why="",tip="",frag="",plain="",pg=1;
   if(num){
     const e=(r.errors||[]).filter(x=>x&&x.i==key)[0];if(!e)return;
+    if(typeof e.page=="number")pg=e.page+1;
     const c=ecCritOf(r,e.type);
     tag=EC_FTAG[e.type]||e.type;name=e.type;
     if(c){lost=Math.max(0,c.max-c.got);why=c.why||"";tip=c.tip||""}
@@ -2841,13 +2843,15 @@ function ecFragShow(key){   /* key: номер ошибки или 'c<N>' — к
   $("#ec-flost").textContent=lost>0?"−"+lost+" "+ecPl(lost):"";
   $("#ec-fwhy").textContent=why;
   $("#ec-ftip").textContent=tip||"Совет не пришёл — спросите Вишенку.";
-  ecFrag={t:String(plain||"").replace(/\s+/g," ").trim()};
+  ecFrag={t:String(plain||"").replace(/\s+/g," ").trim(),pg:pg,i:num?+key||0:0};
   o.hidden=false}
 function ecFragClose(){const o=$("#ec-modf");if(o&&!o.hidden)o.hidden=true}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")ecFragClose()});
 function ecFAsk(){   /* «Спросить у Вишенки» (fask в макете): голосовой виджет по фрагменту */
   const t=ecFrag&&ecFrag.t?ecFrag.t:"";
-  ecFragClose();ecErrClose();ecVS("frag",t)}
+  const pg=ecFrag&&ecFrag.pg?ecFrag.pg:1;
+  const i=ecFrag&&ecFrag.i?ecFrag.i:0;   /* карточка ошибки в «ФИПИ» — контекст этой ошибки */
+  ecFragClose();ecErrClose();ecVS("frag",t,pg,i)}
 /* ===== голосовой виджет Вишенки в «ИИ-проверке» — МОК: распознавание симулируется,
    API не вызывается (отладка интерфейса). Логика — из макета essay-check (SC/vmic/vok) ===== */
 const EC_SC={err:[
@@ -2862,8 +2866,19 @@ frag:[
 const EC_PH={err:"Что сделать с ошибкой? Скажите — например, «исправь только слово», «в тексте распознано неверно» или любое другое задание: «объясни правило», «придумай примеры».",
 frag:"Что сделать с этим фрагментом? Скажите — например, «перепиши» или «найди аргументы получше». Нажмите кнопку и скажите задачу."};
 let ecVMode="err",ecVI=0,ecVT=null;
+let ecVCtx=null;   /* контекст открытого виджета: конкретная ошибка/фрагмент + весь текст и задание по необходимости */
+function ecEssayCtx(mode,frag,pg,errId){   /* контекст сочинения для Вишенки: {kind:"essay", exam, work_id, error_id?, page, fragment}
+     (см. dev/mockups/voice-widget.md); text/task — весь текст сочинения и задание с фото: виджет подключается к ним по необходимости */
+  const r=ecRes;if(!r||!Array.isArray(r.errors))return null;
+  const id=mode=="err"?ecCur:(+errId||0);   /* карточка ошибки (в «Ошибках» и в «ФИПИ») → контекст этой ошибки; выделение → только фрагмент */
+  const e=(r.errors||[]).filter(x=>x&&x.i==id)[0]||null;
+  const c={kind:"essay",exam:ecKind=="oge"?"oge":"ege",work_id:ecSaved||ecSess||0,
+    page:(e&&typeof e.page=="number")?e.page+1:Math.max(1,+pg||1),fragment:String(frag||"")};
+  if(e&&e.i)c.error_id=e.i;
+  c.text=String(r.text||"");c.task=String(r.task||"");
+  return c}
 function ecVBtns(){return `<button type="button" class="mic" id="ec-vmic" onclick="ecVMic()">${MIC_I}<span id="ec-vml">Сказать, что сделать</span></button><button type="button" class="ok" onclick="ecVOk()">${OK_I}<span>Применить</span></button><button type="button" class="no" onclick="ecVClose()">${X_I}<span>Отмена</span></button>`}
-function ecVS(mode,frag){   /* va() / vfrag() макета: лист Вишенки над разделом */
+function ecVS(mode,frag,pg,errId){   /* va() / vfrag() макета: лист Вишенки над разделом */
   clearTimeout(ecVT);
   ecVMode=mode=="frag"?"frag":"err";
   const err=ecVMode=="err",e=err?(ecRes&&Array.isArray(ecRes.errors)?ecRes.errors:[]).filter(x=>x&&x.i==ecCur)[0]:null;
@@ -2871,8 +2886,9 @@ function ecVS(mode,frag){   /* va() / vfrag() макета: лист Вишен�
   const a=k<0?0:Math.max(0,k-40),b=k<0?t.length:Math.min(t.length,k+e.found.length+40);
   const q=err&&e?(a>0?"…":"")+t.slice(a,b)+(b<t.length?"…":""):String(frag||"");
   const k2=q.length,w=k2%10==1&&k2%100!=11?"символ":k2%10>=2&&k2%10<=4&&(k2%100<10||k2%100>=20)?"символа":"символов";
-  const sub=err&&e?e.type+" · ошибка №"+e.i:k2+" "+w+" · сочинение, фрагмент";
+  const sub=err&&e?e.type+" · ошибка №"+e.i:k2+" "+w+" · сочинение, стр. "+(pg||1);   /* подпись как в макете: «сочинение, стр. N» */
   const av=$("#tmk")&&$("#tmk").src?$("#tmk").src:EC_ART;
+  ecVCtx=ecEssayCtx(ecVMode,q,pg,errId);   /* контекст: ошибка/фрагмент + весь текст и задание — по необходимости */
   open(`<div class="chs ecvs"><div class="chb"><img src="${av}" alt=""></div>
   <h3>${err?"Вишенка":"Спросить у Вишенки"}</h3>
   <blockquote class="fq"><span>${esc(q.length>220?q.slice(0,217).trimEnd()+"…":q).replace(/\n+/g," ")}</span><small>${esc(sub)}</small></blockquote>
@@ -2916,7 +2932,10 @@ function ecVChat(){clearTimeout(ecVT);close_();tab="ch";render();scrollTo(0,0)}
   function read(){const s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return null;const r=s.getRangeAt(0);
     let n=r.commonAncestorContainer;n=n.nodeType===1?n:n.parentNode;
     const dk=n&&n.closest?n.closest("#ec-desk"):null;if(!dk)return null;   /* только текст разбора */
-    const t=clean(r);if(t.length<3)return null;return{t,r}}
+    const t=clean(r);if(t.length<3)return null;
+    const pe=n.closest?n.closest(".ec-page"):null;   /* страница выделения — в контекст виджета (как pg в макете) */
+    const pg=pe?[...dk.querySelectorAll(".ec-page")].indexOf(pe)+1:1;
+    return{t,pg,r}}
   function place(r){const b=r.getBoundingClientRect(),vw=innerWidth,vh=innerHeight,w=ask.offsetWidth||200,h=ask.offsetHeight||42;
     let x=Math.max(8,Math.min(vw-w-8,(b.left+b.right)/2-w/2)),y=b.bottom+34;
     if(y+h>vh-8)y=b.top-h-52;if(y<8||y+h>vh-8)y=vh-h-16;
@@ -2926,7 +2945,7 @@ function ecVChat(){clearTimeout(ecVT);close_();tab="ch";render();scrollTo(0,0)}
   document.addEventListener("selectionchange",later);addEventListener("scroll",()=>{if(cur)later()},{passive:true,capture:true});addEventListener("resize",later);
   ["mousedown","touchstart","pointerdown"].forEach(ev=>ask.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
   function go(e){if(e&&e.cancelable)e.preventDefault();if(Date.now()-sent<800)return;sent=Date.now();
-    const c=cur||read();if(!c)return;try{getSelection().removeAllRanges()}catch(x){}cur=null;ask.hidden=true;ecVS("frag",c.t)}
+    const c=cur||read();if(!c)return;try{getSelection().removeAllRanges()}catch(x){}cur=null;ask.hidden=true;ecVS("frag",c.t,c.pg||1)}
   ["click","touchend","pointerup"].forEach(ev=>ask.addEventListener(ev,go,{passive:false}));})();
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>

@@ -31,6 +31,8 @@ log = logging.getLogger("tutor.assist")
 PENDING = {}                    # uid -> состояние диалога {"phase", "task", "text", "ts", ...}
 TTL = 15 * 60                   # состояние диалога живёт 15 минут
 ACTIONS = ("add_student", "add_lesson", "move_lesson", "cancel_lesson", "add_payment")
+ESSAY_ACTIONS = ("fix_error", "edit_ocr")   # «ИИ-проверка»: правки текста сочинения (см. dev/mockups/voice-widget.md)
+ESSAY_CTX_MAX = 12_000                      # символов контекста сочинения (фрагмент + задание + весь текст) в разборе задачи
 
 
 class AssistError(Exception):
@@ -285,7 +287,8 @@ ASK = {"student": "Как зовут ученика?", "name": "Как зову�
        "subject": "Какие занятия (предмет)?", "price": "Какая цена за занятие?",
        "day": "На какой день запланировать?", "time": "Во сколько?",
        "new_day": "На какой день перенести?", "new_time": "На какое время перенести?",
-       "amount": "Какая сумма оплаты?", "dur": "Сколько минут длится занятие?"}
+       "amount": "Какая сумма оплаты?", "dur": "Сколько минут длится занятие?",
+       "error_id": "Какой номер ошибки исправляем?", "replacement": "На что заменить фрагмент?"}
 
 
 def prepare(params, action):
@@ -325,11 +328,20 @@ def prepare(params, action):
     if action == "add_payment":
         p["amount"] = norm_int(params.get("amount"), 1, bot.MAX_MONEY)
         if p["amount"] is None: need.append("amount")
+    if action in ESSAY_ACTIONS:            # правка сочинения: номер ошибки и замена (см. dev/mockups/voice-widget.md)
+        p["error_id"] = norm_int(params.get("error_id"), 1, 10 ** 6)
+        if p["error_id"] is None: need.append("error_id")
+        p["replacement"] = norm_text(params.get("replacement"), 500)
+        if not p["replacement"]: need.append("replacement")
     return p, need
 
 
 def confirm_text(action, p):
     """Человекочитаемое описание будущего действия — строится из ПРОВЕРЕННЫХ параметров, не из слов модели."""
+    if action == "fix_error":
+        return f"Исправить ошибку №{p['error_id']}: «{p['replacement']}»"
+    if action == "edit_ocr":
+        return f"Поправить распознанный текст (ошибка №{p['error_id']}): «{p['replacement']}»"
     if action == "add_student":
         return ("Добавить ученика: " + p["name"] +
                 (f", {bot.grade_text(p['grade'])}" if p.get("grade") else "") +
@@ -358,6 +370,9 @@ def _student_name(sid):
 def confirm_fields(action, p):
     """Те же ПРОВЕРЕННЫЕ параметры, но по полям — для крупной карточки подтверждения в мини-аппе.
     add_student («Ученики»), add_payment («Оплаты»), add_lesson / move_lesson / cancel_lesson («Расписание»)."""
+    if action in ESSAY_ACTIONS:            # «ИИ-проверка»: карточка правки сочинения (см. dev/mockups/voice-widget.md)
+        return [{"k": "Ошибка", "v": f"№{p['error_id']}"},
+                {"k": "Замена", "v": p["replacement"]}]
     if action == "add_payment":
         return [{"k": "Ученик", "v": p["student"]["name"]},
                 {"k": "Сумма", "v": bot.money(p["amount"])}]
@@ -398,6 +413,10 @@ def execute(action, p, info=None):
     """Исполняет подтверждённое действие. Возвращает текст отчёта; проблемы — AssistError.
     info (dict, необязательно) заполняется тем, что изменилось, — мини-апп по нему запускает анимацию на странице."""
     info = {} if info is None else info
+    if action in ESSAY_ACTIONS:            # правку применяет клиент: обновляет текст и карточку ошибки (см. dev/mockups/voice-widget.md)
+        info.update(error_id=p["error_id"], replacement=p["replacement"])
+        return (("✅ Исправление применено" if action == "fix_error" else "✅ Распознанный текст обновлён")
+                + f"\nОшибка №{p['error_id']} → «{p['replacement']}»")
     if action == "add_student":
         sid = bot.run("insert into students(name,price,grade,subject) values(?,?,?,?)",
                       p["name"], p.get("price") or 0, p.get("grade"), p.get("subject"))
