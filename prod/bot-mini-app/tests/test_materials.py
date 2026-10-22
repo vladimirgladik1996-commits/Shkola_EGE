@@ -75,7 +75,8 @@ for cid in CATS:
         assert "['click','touchend','pointerup']" in page, (cid, n)   # кнопка срабатывает и по тапу: preventDefault на touchstart подавляет click
     assert 'id="ask"' not in read("materials", cid, "about.html"), cid   # на странице «о каталоге» кнопки нет
 ok("страницы вариантов: при выделении текста появляется кнопка «Спросить у Вишенки» (на «о каталоге» её нет)")
-assert "function fragOpen(a)" in front and "e.data.matAsk" in front and 'api(fr?"/api/fragment":"/api/voice"' in front and "fqc" not in front and "FRAG_ASKS" not in front and "body:has(#mv.on) #sheet{z-index:90}" in front
+code = re.sub(r'data:[^"\')\s]+', '', front)   # base64-иллюстрации могут случайно содержать «fqc» — мусорные слова ищем только в коде
+assert "function fragOpen(a)" in front and "e.data.matAsk" in front and 'api(fr?"/api/fragment":"/api/voice"' in front and "fqc" not in code and "FRAG_ASKS" not in code and "body:has(#mv.on) #sheet{z-index:90}" in front
 assert 'add_post("/api/fragment", api_fragment)' in bot and re.search(r'@guarded\s+async def api_fragment\(', bot), "маршрут /api/fragment должен быть под @guarded"
 ok("мини-апп открывает виджет Вишенки по выделенному фрагменту; /api/fragment закрыт входом (@guarded)")
 
