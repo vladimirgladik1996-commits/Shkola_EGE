@@ -1206,7 +1206,6 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-av.pl{background:none!important;border:1.5px dashed var(--hint);color:var(--hint)}
 .ec-save{width:100%;margin-top:10px;border:0;border-radius:14px;padding:13px;background:var(--acc);color:var(--on);font:900 15px "Nunito",system-ui,sans-serif;cursor:pointer}
 .ec-save.ec-saved{background:var(--grn);color:#fff}
-.ec-cnt.bump{display:inline-block;animation:ecBump .4s}
 /* модалки — как .mod/.mc в макете: по центру, карточки-секции, круглый номер,
    пилюля категории, действия «Удалить/Исправить ошибку» */
 .ec-mod{position:fixed;inset:0;z-index:80;background:rgba(10,24,60,.55);display:flex;align-items:center;justify-content:center;padding:12px;animation:ecFade .22s ease both}
@@ -2770,8 +2769,6 @@ function ecPot(){   /* «потенциал +N баллов»: сумма ожи
   return ((ecRes&&ecRes.recommendations)||[]).reduce((s,x)=>{const m=/\+\s*(\d+)/.exec(x.badge||"");return s+(m?+m[1]:1)},0)}
 let ecFx={};   /* состояние обработанных ошибок: i → "ok" (исправлена) / "del" (удалена) — fx()/dl() макета */
 function ecFxN(){return Object.keys(ecFx).filter(k=>ecFx[k]).length}   /* сколько ошибок уже обработано */
-function ecCntBadge(r){   /* счётчик ошибок с анимацией bump — как span#cnt в макете */
-  return `<span class="ec-cnt" id="ec-cnt">${Math.max(0,r.errors.length-ecFxN())}</span>`}
 function ecText(r){   /* текст работы с кликабельными фрагментами ошибок; режим П — тот же текст печатным видом, карточки ошибок на месте */
   const t=String(r.text||"");
   if(!t)return `<div class="ec-note">Текст работы не распознан — разбор по фрагментам недоступен</div>`;
@@ -2832,14 +2829,14 @@ function ecStuBlock(){   /* блок «Ученик» из макета: чип�
 function ecResult(){
   const r=ecRes||ecNrm(null),sc=r.score;
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
-  return `<div class="ec-top"><button type="button" class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button></div>
-${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
-<div class="ec-hd">
-  <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки · ${ecCntBadge(r)}</button>
+  return `<div class="ec-hd">
+  <button type="button" class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button>
+  <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки</button>
   <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
   <span class="ec-spr"></span>
   <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="Т — фото рукописи ученика, П — печатный текст с разбором" aria-label="Вид текста: фото рукописи или печатный текст">${ecFix?"П":"Т"}</button>
 </div>
+${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
@@ -2897,8 +2894,6 @@ function ecErrClose(){const o=$("#ec-mod");if(o&&!o.hidden)o.hidden=true;
 function ecFxApply(i,mode){const e=(ecRes&&Array.isArray(ecRes.errors)?ecRes.errors:[]).filter(x=>x&&x.i==i)[0];
   if(!e||ecFx[i])return;   /* повторное действие — без изменений (защита от двойного тапа) */
   ecFx[i]=mode;
-  const r=ecRes||ecNrm(null),c=$("#ec-cnt");
-  if(c){c.textContent=Math.max(0,r.errors.length-ecFxN());c.classList.remove("bump");void c.offsetWidth;c.classList.add("bump")}
   ecErrClose();
   const d=$("#ec-desk");if(d){d.innerHTML=ecDeskHtml();ecRelabel()}}
 function ecErrDel(){ecFxApply(ecCur,"del")}

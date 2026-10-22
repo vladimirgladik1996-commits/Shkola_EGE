@@ -61,10 +61,13 @@ ok("экран обработки: живой стрим run (status → done/fa
 for s in ("function ecResult(", "function ecErrShow(", "function ecErrClose(", "function ecTabSet(",
           "function ecFixSet(", "function ecNrm(", "Фрагмент текста", "Теоретическое обоснование",
           "Источники теории", "Статистика ошибок", "Критерии ФИПИ с обоснованием", "Рекомендации",
-          "потенциал +", "Ошибки · ${", "Прогнозный балл", "Разбор работы · "):
+          "потенциал +", "Прогнозный балл", "Разбор ошибки"):
     assert s in html, f"нет строки экрана результата: {s}"
 # шапка разбора — по макету: кнопка «Назад» (с разбора — к съёмке, как goCam в патче)
 assert html.count('class="ec-back"') >= 2, "«Назад» нужен и на съёмке, и на разборе"
+assert "Ошибки · " not in html and "ФИПИ · " not in html, "в чипсах вкладок не должно быть счётчиков"
+assert 'class="ec-top"><button type="button" class="ec-back"' not in html, \
+    "на разборе «Назад» — в одном ряду с чипсами (ec-hd), а не отдельной строкой"
 assert "‹ История проверок" not in html, "в подвале разбора лишних кнопок из патча нет"
 assert '.ec-mod{' in html and '.ec-er{' in html and '.ec-desk{' in html, "нет стилей экрана результата ec-"
 assert 'if(e.key==="Escape")ecErrClose()' in html, "модалка ошибки не закрывается по Esc"
