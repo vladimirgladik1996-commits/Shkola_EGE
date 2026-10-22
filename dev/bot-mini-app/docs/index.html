@@ -1368,6 +1368,29 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pn-pop b{display:block;margin-top:2px;font-size:36px;line-height:1.15;font-weight:800;font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#fff 30%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
 @keyframes pnPopIn{from{opacity:0;transform:scale(.5) translateY(26px)}}
 @media (prefers-reduced-motion:reduce){#sheet.on .pn>*,.pn-v,.pn-fl,.pn-go::after,.pn-pop,#pn-big.tick,.pn-stack i.new,.pn-q button.on{animation:none}}
+/* --- сверка с essay-check-full.patch (строго по макету): пропорции, контейнеры, подвал --- */
+.ec-back{padding:6px 12px 6px 6px;font-size:12.5px}
+.ec-back svg{width:16px;height:16px}
+.ec-hd{gap:8px;padding:12px 0 8px;margin:0}
+.ec-hd .ec-chip{flex:0 1 84px;min-width:0;justify-content:center;padding:8px 0}
+.ec-round{width:34px;height:34px}
+.ec-view{aspect-ratio:auto;height:min(72dvh,640px);margin:6px 8px 8px}
+.ec-frame{inset:22px 22px 156px}
+.ec-view .ec-chs{bottom:104px}
+.ec-ctl{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:34px 0 14px;background:linear-gradient(180deg,transparent,rgba(8,14,26,.6))}
+.ec-ctl .ec-go{padding:11px 16px;font-size:14px;border-radius:15px}
+.ec-mc{overflow-wrap:anywhere;overflow-x:hidden}
+.ec-mh{min-width:0}
+.ec-pill{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:top}
+.ec-mh .ec-pill{display:block}
+.ec-sec,.ec-fr,.ec-sec p{min-width:0;max-width:100%}
+.ec-sec .ec-ic svg{flex:0 0 22px}
+.ec-sec .ec-ic>:last-child{min-width:0;flex:1 1 auto}
+.ec-sec a{overflow-wrap:anywhere}
+.ecvs{overflow-wrap:anywhere}
+.ecvs .fq,.ecvs .fq span{min-width:0;max-width:100%}
+.ecvs .act{flex:none}
+body.ec-nb{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
@@ -2538,7 +2561,7 @@ function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.re
 function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
-  const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";const cw=$("#chw");if(cw)cw.style.display=(tab=="ch"||tab=="ai")?"none":"";   /* «ИИ-проверка»: Вишенка вызывается из карточки ошибки и по выделению текста — плавающая кнопка на странице не нужна */if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
+  const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";document.body.classList.toggle("ec-nb",tab=="ai");const cw=$("#chw");if(cw)cw.style.display=(tab=="ch"||tab=="ai")?"none":"";   /* «ИИ-проверка»: Вишенка вызывается из карточки ошибки и по выделению текста — плавающая кнопка на странице не нужна */if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
 function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class="e0i">🚧</div><b>Раздел «${NAMES[tab]||""}»</b><p>Появится позже.</p></div>`}
 
 /* ---------- раздел «ИИ-проверка»: каркас (пуш 3) + съёмка и загрузка (пуш 4) + разбор (пуш 6 из PUSH-PLAN.md) ----------
@@ -3037,8 +3060,8 @@ function ecVChat(){clearTimeout(ecVT);close_();tab="ch";render();scrollTo(0,0)}
   ["click","touchend","pointerup"].forEach(ev=>ask.addEventListener(ev,go,{passive:false}));})();
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>
-<div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-chs"><button type="button" class="ec-chip${w?" on":""}" id="ec-c1" onclick="ecSetCh('w')">${ecLbl(ecShots.w.length,"Работа")}</button><button type="button" class="ec-chip${w?"":" on"}" id="ec-c2" onclick="ecSetCh('t')">${ecLbl(ecShots.t.length,"Задание")}</button></div></div>
-<div class="ec-ctl"><div class="ec-th" id="ec-th">${ecThHtml()}</div><button class="ec-shut" style="background:url(${EC_SHUT}) center/contain no-repeat" onclick="ecCamShot()" aria-label="Сделать фото"></button><button class="ec-go${ecCnt()?"":" off"}" id="ec-go" onclick="ecUpload()">Готово</button></div>`}
+<div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-chs"><button type="button" class="ec-chip${w?" on":""}" id="ec-c1" onclick="ecSetCh('w')">${ecLbl(ecShots.w.length,"Работа")}</button><button type="button" class="ec-chip${w?"":" on"}" id="ec-c2" onclick="ecSetCh('t')">${ecLbl(ecShots.t.length,"Задание")}</button></div>
+<div class="ec-ctl"><div class="ec-th" id="ec-th">${ecThHtml()}</div><button class="ec-shut" style="background:url(${EC_SHUT}) center/contain no-repeat" onclick="ecCamShot()" aria-label="Сделать фото"></button><button class="ec-go${ecCnt()?"":" off"}" id="ec-go" onclick="ecUpload()">Готово</button></div></div>`}
 /* метка набора — lbl() макета: «Работа · N», при нуле фото — без числа */
 function ecLbl(n,t){return t+(n?" · "+n:"")}
 /* стопка страниц: максимум 3 верхних + счётчик; пустой набор — пунктирный слот (renderTh макета); тап по странице — убрать фото */

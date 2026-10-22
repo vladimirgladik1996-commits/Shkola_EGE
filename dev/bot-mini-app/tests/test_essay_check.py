@@ -39,6 +39,13 @@ for s in ("Вишенка читает", "Распознан рукописны�
 # в подвалах экранов нет кнопок, которых нет в макете патча (essay-check-full.patch)
 assert "Новая проверка" not in html, "«Новая проверка» отсутствует в макете патча — и в подвалах быть не должна"
 assert ".ec-hero{" in html and ".ec-shut{" in html and ".ec-cam{" in html, "нет стилей ec-"
+# пропорции, ограничения контейнеров и компактный подвал — строго по правилам патча
+for s_ in (".ec-sec .ec-ic svg{flex:0 0 22px}", ".ec-sec .ec-ic>:last-child{min-width:0;flex:1 1 auto}",
+           ".ec-frame{inset:22px 22px 156px}", ".ec-view .ec-chs{bottom:104px}",
+           ".ec-ctl .ec-go{padding:11px 16px;font-size:14px;border-radius:15px}",
+           "body.ec-nb{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}"):
+    assert s_ in html, f"нет правила патча: {s_}"
+assert "class=\"ec-ctl\"" in html, "затвор и «Готово» живут в видоискателе (кнопки поверх)"
 ok("экран обработки и стили ec- на месте")
 
 # --- 5б. экран обработки подключён к стриму проверки (пуш 6), заглушка убрана ---
