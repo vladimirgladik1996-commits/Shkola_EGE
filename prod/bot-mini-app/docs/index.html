@@ -677,7 +677,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic{display:flex;flex-direction:column;min-height:calc(100dvh - 190px - env(safe-area-inset-top,0px))}
 /* «Создать новый чат» — в шапке страницы, на одной строке с заголовком «Чат с ИИ»:
    кнопка видна всегда, чат не надо проматывать в самое начало */
-#aic-new{flex:none;display:flex;align-items:center;gap:6px;height:38px;padding:0 12px;margin-left:10px;border:0;border-radius:12px;background:var(--acc);color:var(--on);font:800 12.5px/1 inherit;white-space:nowrap;box-shadow:0 4px 12px -6px rgba(15,46,110,.5)}
+#aic-new{flex:none;display:flex;align-items:center;gap:6px;height:38px;padding:0 12px;margin-left:10px;border:0;border-radius:12px;background:var(--acc);color:var(--on);font:800 12.5px/1 "Nunito",system-ui,sans-serif;white-space:nowrap;box-shadow:0 4px 12px -6px rgba(15,46,110,.5)}
 #aic-new:active{transform:scale(.95)}
 #aic-new svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 #aic-new[hidden]{display:none!important}
@@ -1064,12 +1064,12 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-pb:active{transform:scale(.97)}
 .ec-pb:active .ec-pbc{transform:translateX(3px)}
 .ec-top{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
-.ec-back{display:inline-flex;align-items:center;gap:2px;border:0;border-radius:99px;padding:8px 14px 8px 8px;background:rgba(15,46,110,.1);color:var(--tx);font:800 13.5px inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ec-back{display:inline-flex;align-items:center;gap:2px;border:0;border-radius:99px;padding:8px 14px 8px 8px;background:rgba(15,46,110,.1);color:var(--tx);font:800 13.5px "Nunito",system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ec-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .ec-back:active{transform:scale(.95)}
-.ec-chip{border:1.5px solid var(--ln);background:var(--card);color:var(--tx);border-radius:99px;padding:8px 14px;font:800 13px inherit;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.ec-chip{border:1.5px solid var(--ln);background:var(--card);color:var(--tx);border-radius:99px;padding:8px 14px;font:800 13px "Nunito",system-ui,sans-serif;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .ec-chip.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
-.ec-go{justify-self:end;border:1px solid #e3c36a;border-radius:16px;padding:12px 16px;font:900 14px inherit;letter-spacing:.3px;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2fbf79 0%,#12864f 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 2px rgba(31,154,91,.25),0 6px 16px rgba(18,134,79,.5);text-shadow:0 1px 2px rgba(0,0,0,.25);position:relative;overflow:hidden}
+.ec-go{justify-self:end;border:1px solid #e3c36a;border-radius:16px;padding:12px 16px;font:900 14px "Nunito",system-ui,sans-serif;letter-spacing:.3px;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2fbf79 0%,#12864f 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 2px rgba(31,154,91,.25),0 6px 16px rgba(18,134,79,.5);text-shadow:0 1px 2px rgba(0,0,0,.25);position:relative;overflow:hidden}
 .ec-go::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);animation:ecSheen 3.6s ease-in-out infinite}
 @keyframes ecSheen{0%,60%{left:-60%}100%{left:130%}}
 .ec-ctl .ec-go{transition:opacity .25s,transform .25s}
@@ -1123,7 +1123,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-th .ec-slot svg{width:18px;height:18px;fill:none;stroke:rgba(255,255,255,.45);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ec-th b{position:absolute;left:50%;margin-left:-15px;top:5px;width:30px;height:38px;border-radius:7px;border:2px solid #fff;background:#fbf8ee repeating-linear-gradient(transparent 0 7px,#b9c6e6 7px 8px);box-shadow:0 3px 8px rgba(0,0,0,.35);background-size:cover;cursor:pointer;transform-origin:50% 90%}
 .ec-th b.t{filter:hue-rotate(180deg) saturate(.6)}
-.ec-th i{position:absolute;right:-6px;top:-4px;z-index:3;min-width:18px;height:18px;border-radius:99px;background:var(--yel);color:#0E2250;font:900 10px/18px inherit;text-align:center;font-style:normal;padding:0 5px}
+.ec-th i{position:absolute;right:-6px;top:-4px;z-index:3;min-width:18px;height:18px;border-radius:99px;background:var(--yel);color:#0E2250;font:900 10px/18px "Nunito",system-ui,sans-serif;text-align:center;font-style:normal;padding:0 5px}
 .ec-th b.pop{animation:ecPop .5s cubic-bezier(.2,1.35,.4,1) both}
 .ec-th i.bump{animation:ecBump .35s ease-out}
 @keyframes ecPop{from{opacity:0;transform:scale(.5) rotate(-7deg)}}
@@ -1138,7 +1138,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-hd{display:flex;align-items:center;gap:8px;margin:10px 0 12px}
 .ec-hd .ec-chip{flex:none;padding:9px 14px;font-size:13px}
 .ec-spr{flex:1}
-.ec-round{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--acc);color:var(--on);font:900 15px inherit;cursor:pointer}
+.ec-round{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--acc);color:var(--on);font:900 15px "Nunito",system-ui,sans-serif;cursor:pointer}
 .ec-hid{display:none}
 .ec-desk{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .ec-er{border-bottom:2px solid #E8294F;color:#B3142F;font-weight:700;cursor:pointer}
@@ -1181,30 +1181,30 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-kc p b{font-weight:900}
 .ec-kc p.ec-ktp{margin-top:4px;color:var(--hint)}
 .ec-rc{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--ln)}
-.ec-nn{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:900 13px inherit;color:#0E2250;background:linear-gradient(180deg,#FFD766,#F0AC1A);box-shadow:0 3px 8px rgba(240,172,26,.5)}
+.ec-nn{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:900 13px "Nunito",system-ui,sans-serif;color:#0E2250;background:linear-gradient(180deg,#FFD766,#F0AC1A);box-shadow:0 3px 8px rgba(240,172,26,.5)}
 .ec-rc b{display:block;font-size:13px;font-weight:900}
 .ec-rc p{margin:2px 0 0;color:var(--hint);font-size:12px;line-height:1.45;font-weight:600}
-.ec-rc em{display:inline-block;margin-top:5px;font:900 11px inherit;font-style:normal;background:rgba(31,154,91,.15);color:var(--grn);border-radius:99px;padding:2px 9px}
+.ec-rc em{display:inline-block;margin-top:5px;font:900 11px "Nunito",system-ui,sans-serif;font-style:normal;background:rgba(31,154,91,.15);color:var(--grn);border-radius:99px;padding:2px 9px}
 /* hero-балл — как .hero в макете: золотая рамка, «Прогнозный балл», шкала N из M, уровень, ученик, плитки */
 .ec-hero2{margin-top:12px;border-radius:24px;padding:16px;color:#fff;background:radial-gradient(circle at 85% 0%,rgba(255,201,60,.35),transparent 55%),linear-gradient(145deg,#0B2556,#1B4AA8);border:1px solid rgba(255,201,60,.55);box-shadow:0 14px 30px var(--sh),inset 0 1px 0 rgba(255,255,255,.2)}
 .ec-top2{display:flex;align-items:center;gap:14px}
 .ec-gauge{position:relative;flex:none;width:104px;height:104px}
 .ec-gauge svg{transform:rotate(-90deg)}
 .ec-gauge>div{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
-.ec-gauge b{font:900 30px/1 inherit;color:#FFD766}
+.ec-gauge b{font:900 30px/1 "Nunito",system-ui,sans-serif;color:#FFD766}
 .ec-gauge small{font-size:11px;font-weight:800;opacity:.8}
 .ec-lb{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#FFD766}
 .ec-lv{display:inline-block;margin:6px 0;background:linear-gradient(180deg,#FFD766,#F0AC1A);color:#0E2250;border-radius:99px;padding:3px 12px;font-weight:900;font-size:13px}
 .ec-who{display:flex;gap:8px;align-items:center;font-weight:800;font-size:13px}
 .ec-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
 .ec-tiles>div{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:8px;text-align:center;font-size:11px;font-weight:800}
-.ec-tiles b{display:block;font:900 20px inherit;color:#FFD766}
+.ec-tiles b{display:block;font:900 20px "Nunito",system-ui,sans-serif;color:#FFD766}
 /* блок «Ученик» — как .blk в макете: чипсы учеников + «Сохранить за учеником» */
 .ec-stu{display:flex;gap:6px;flex-wrap:wrap}
-.ec-av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font:800 11px inherit;flex:none}
+.ec-av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font:800 11px "Nunito",system-ui,sans-serif;flex:none}
 .ec-chip .ec-av{margin:-4px 0 -4px -9px}
 .ec-av.pl{background:none!important;border:1.5px dashed var(--hint);color:var(--hint)}
-.ec-save{width:100%;margin-top:10px;border:0;border-radius:14px;padding:13px;background:var(--acc);color:var(--on);font:900 15px inherit;cursor:pointer}
+.ec-save{width:100%;margin-top:10px;border:0;border-radius:14px;padding:13px;background:var(--acc);color:var(--on);font:900 15px "Nunito",system-ui,sans-serif;cursor:pointer}
 .ec-save.ec-saved{background:var(--grn);color:#fff}
 .ec-cnt.bump{display:inline-block;animation:ecBump .4s}
 /* модалки — как .mod/.mc в макете: по центру, карточки-секции, круглый номер,
@@ -1215,37 +1215,40 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes ecPop2{from{opacity:0;transform:translateY(16px) scale(.94)}}
 .ec-mc{width:100%;max-width:560px;max-height:100%;overflow-y:auto;background:var(--bg);border-radius:22px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.4);animation:ecPop2 .34s cubic-bezier(.2,1.15,.4,1) both}
 .ec-mh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.ec-mn{flex:none;width:34px;height:34px;border-radius:50%;background:#E8294F;color:#fff;display:grid;place-items:center;font:900 18px inherit}
-.ec-pill{background:rgba(232,41,79,.14);color:#E8294F;border-radius:99px;padding:5px 12px;font:900 13px inherit}
-.ec-x{margin-left:auto;border:0;background:none;color:var(--acc);font:900 26px/1 inherit;cursor:pointer}
+.ec-mn{flex:none;width:34px;height:34px;border-radius:50%;background:#E8294F;color:#fff;display:grid;place-items:center;font:900 18px "Nunito",system-ui,sans-serif}
+.ec-pill{background:rgba(232,41,79,.14);color:#E8294F;border-radius:99px;padding:5px 12px;font:900 13px "Nunito",system-ui,sans-serif}
+.ec-x{margin-left:auto;border:0;background:none;color:var(--acc);font:900 26px/1 "Nunito",system-ui,sans-serif;cursor:pointer}
 .ec-sec{background:var(--card);border:1.5px solid var(--ln);border-radius:14px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.45;font-weight:600}
 .ec-sec h4{font-size:13px;font-weight:900;margin:0 0 6px;color:var(--tx);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ec-fr{background:rgba(232,41,79,.1);border-radius:10px;padding:8px 10px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .ec-fr mark{background:rgba(232,41,79,.22);color:inherit;border-radius:6px;padding:0 4px;font-weight:800}
 .ec-sec p{margin:6px 0 0;font-size:12.5px;line-height:1.45}
-.ec-sec .ec-ic{display:flex;gap:10px;align-items:flex-start}
+.ec-sec .ec-ic{display:flex;gap:10px;align-items:flex-start;width:auto;height:auto;background:none;border-radius:0;font-size:12.5px}   /* .ec-ic стартового экрана (46×46) не должен протекать в строки иконок модалки */
 .ec-sec .ec-ic svg{flex:none;width:22px;height:22px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-top:2px}
 .ec-sec a{display:block;color:var(--acc);font-weight:800;text-decoration:none;margin-bottom:3px}
 .ec-sec a::after{content:" ↗";opacity:.6}
-.ec-mb{display:flex;gap:8px;position:sticky;bottom:-12px;margin:0 -12px -12px;padding:10px 12px 12px;background:var(--bg);z-index:2}
-.ec-mb button{flex:1;border-radius:14px;padding:12px 6px;font:900 12.5px inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
-.ec-mb svg{flex:none;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.ec-bd{background:rgba(232,41,79,.1);border:1.5px solid rgba(232,41,79,.35);color:#E8294F}
-.ec-bf{background:var(--acc);color:var(--on);border:1.5px solid var(--acc)}
+.ec-mb{display:flex;gap:10px;position:sticky;bottom:-12px;margin:0 -12px -12px;padding:10px 12px 12px;background:var(--bg);z-index:2}
+.ec-mb button{flex:1;border-radius:14px;min-height:54px;padding:8px 10px 8px 8px;font:900 12.5px/1.15 "Nunito",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:8px;transition:transform .15s}
+.ec-mb button:active{transform:scale(.97)}
+.ec-mb svg{flex:none;width:30px;height:30px;padding:6px;border-radius:50%;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.ec-bd{background:linear-gradient(180deg,rgba(232,41,79,.05),rgba(232,41,79,.2));border:1px solid rgba(232,41,79,.5);color:#E8294F;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 6px 14px rgba(232,41,79,.22)}
+.ec-bd svg{background:#E8294F;stroke:#fff;box-shadow:0 3px 8px rgba(232,41,79,.5)}
+.ec-bf{color:#fff;background:linear-gradient(180deg,#1F54B8 0%,#0B2556 100%);border:1px solid #E3C36A;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 0 0 2px rgba(255,201,60,.18),0 8px 18px rgba(15,46,110,.5)}
+.ec-bf svg{background:linear-gradient(180deg,#FFD766,#F0AC1A);stroke:#0E2250;box-shadow:0 3px 8px rgba(240,172,26,.55)}
 .ec-mb button:active{transform:scale(.97)}
 /* режим фрагментов на «ФИПИ» (макет essay-check): бейджи ошибок — категории, места — «под критерий» */
 .ec-desk.mf .ec-er{background:rgba(255,201,60,.4);border-bottom-color:#d99200;color:inherit}
 .ec-desk.mf .ec-er.sel{background:rgba(217,146,0,.32)}
-.ec-desk.mf .ec-er b{min-width:17px;padding:0 5px;border-radius:99px;background:#d99200;color:#fff;font:900 9.5px/17px inherit;text-align:center}
+.ec-desk.mf .ec-er b{min-width:17px;padding:0 5px;border-radius:99px;background:#d99200;color:#fff;font:900 9.5px/17px "Nunito",system-ui,sans-serif;text-align:center}
 .ec-desk.mf .ec-ok{color:inherit;background:rgba(31,154,91,.2);border-bottom:2px solid var(--grn);border-radius:3px}
 /* модалка «Почему теряется балл» */
-.ec-fn{font:900 13px inherit;border-radius:99px;padding:3px 12px;background:#d99200;color:#fff}
+.ec-fn{font:900 13px "Nunito",system-ui,sans-serif;border-radius:99px;padding:3px 12px;background:#d99200;color:#fff}
 .ec-fk{font-size:11px;font-weight:800;border-radius:10px;padding:3px 10px;background:rgba(217,146,0,.18);color:#a06a00}
-.ec-lost{float:right;background:rgba(214,69,69,.14);color:var(--red);border-radius:99px;padding:1px 9px;font:900 11px/18px inherit}
+.ec-lost{float:right;background:rgba(214,69,69,.14);color:var(--red);border-radius:99px;padding:1px 9px;font:900 11px/18px "Nunito",system-ui,sans-serif}
 .ec-lost:empty{display:none}
 .ec-fr.kfr{background:rgba(255,201,60,.18)}
 .ec-fr.kfr mark{background:rgba(255,201,60,.55)}
-.ec-fask{width:100%;margin-top:16px;border:0;border-radius:16px;padding:13px 16px;font:900 14px inherit;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2a3550,#171e30);display:flex;align-items:center;justify-content:center;gap:8px}
+.ec-fask{width:100%;margin-top:16px;border:0;border-radius:16px;padding:13px 16px;font:900 14px "Nunito",system-ui,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2a3550,#171e30);display:flex;align-items:center;justify-content:center;gap:8px}
 .ec-fask:active{transform:scale(.98)}
 .ec-fask svg{width:18px;height:18px;fill:none;stroke:#FFC93C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 /* голосовой виджет Вишенки (мок) — как .vs/.vc в макете: eq-бары, состояния кнопок, плавающая кнопка выделения */
@@ -1257,7 +1260,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes ecEqb{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
 .ecvs .act.dn .mic{background:var(--card);color:var(--tx);box-shadow:0 0 0 1.5px var(--ln)}
 .ecvs .act.dn .sec{background:var(--acc);color:var(--on);box-shadow:0 10px 22px -10px var(--sh)}
-#ec-ask{position:fixed;z-index:50;left:0;top:0;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px 0 6px;border:0;border-radius:99px;background:var(--acc);color:var(--on);font:800 13.5px inherit;white-space:nowrap;box-shadow:0 10px 22px -8px rgba(15,46,110,.6),0 0 0 2px var(--yel);cursor:pointer;-webkit-tap-highlight-color:transparent}
+#ec-ask{position:fixed;z-index:50;left:0;top:0;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px 0 6px;border:0;border-radius:99px;background:var(--acc);color:var(--on);font:800 13.5px "Nunito",system-ui,sans-serif;white-space:nowrap;box-shadow:0 10px 22px -8px rgba(15,46,110,.6),0 0 0 2px var(--yel);cursor:pointer;-webkit-tap-highlight-color:transparent}
 #ec-ask[hidden]{display:none}
 #ec-ask img{width:30px;height:30px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#FBF7E9;box-shadow:0 0 0 2px var(--yel)}
 #ec-ask:active{transform:scale(.96)}
@@ -2651,7 +2654,7 @@ function ecSetCh(k){ecSet=k;ecThUpd();const w=k==="w",fr=$(".ec-frame");   /* se
   const c1=$("#ec-c1"),c2=$("#ec-c2");if(c1)c1.classList.toggle("on",w);if(c2)c2.classList.toggle("on",!w)}
 function ecCnt(){return ecShots.w.length+ecShots.t.length}
 /* --- съёмка: затвор открывает общую камеру (camTake), галерея — запасной путь --- */
-function ecInp(){let i=$("#ec-inp");if(!i){i=document.createElement("input");i.type="file";i.id="ec-inp";i.accept="image/*";i.setAttribute("capture","environment");i.multiple=true;i.hidden=true;i.onchange=()=>ecPicked(i);document.body.appendChild(i)}return i}   /* запасной путь камеры — системная съёмка (см. dev/mockups/camera-integration.md) */
+function ecInp(){let i=$("#ec-inp");if(!i){i=document.createElement("input");i.type="file";i.id="ec-inp";i.accept="image/*";i.setAttribute("capture","environment");i.multiple=true;i.hidden=true;i.className="aic-hid";i.onchange=()=>ecPicked(i);document.body.appendChild(i)}return i}   /* запасной путь камеры — системная съёмка (см. dev/mockups/camera-integration.md) */
 async function ecPicked(inp){const fs=[...inp.files];inp.value="";
   for(const f of fs){if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");break}
     try{ecShots[ecSet].push(await chJpeg(f))}catch(e){toast("Не получилось прочитать фото")}}
@@ -2769,7 +2772,7 @@ let ecFx={};   /* состояние обработанных ошибок: i �
 function ecFxN(){return Object.keys(ecFx).filter(k=>ecFx[k]).length}   /* сколько ошибок уже обработано */
 function ecCntBadge(r){   /* счётчик ошибок с анимацией bump — как span#cnt в макете */
   return `<span class="ec-cnt" id="ec-cnt">${Math.max(0,r.errors.length-ecFxN())}</span>`}
-function ecText(r){   /* текст работы с кликабельными фрагментами ошибок; режим П — те же места с исправлениями */
+function ecText(r){   /* текст работы с кликабельными фрагментами ошибок; режим П — тот же текст печатным видом, карточки ошибок на месте */
   const t=String(r.text||"");
   if(!t)return `<div class="ec-note">Текст работы не распознан — разбор по фрагментам недоступен</div>`;
   const hits=[],used=[];
@@ -2781,7 +2784,7 @@ function ecText(r){   /* текст работы с кликабельными �
   let out="",pos=0;
   hits.forEach(h=>{out+=esc(t.slice(pos,h.a));
     const st=ecFx[h.i];   /* исправленная ошибка — зелёная (fx макета), удалённая — просто текст (dl макета) */
-    out+=(ecFix||st=="ok")?`<span class="ec-ok">${esc(h.e.correct||h.e.found)}</span>`
+    out+=(st=="ok")?`<span class="ec-ok">${esc(h.e.correct||h.e.found)}</span>`
       :st=="del"?esc(t.slice(h.a,h.b))
       :`<span class="ec-er" role="button" tabindex="0" data-i="${h.i}" onclick="ecErrShow(${h.i})" onkeydown="if(event.key==='Enter')ecErrShow(${h.i})" title="Ошибка №${h.i} — нажмите для разбора">${esc(t.slice(h.a,h.b))}<b>${ecTab=="f"?(EC_FTAG[h.e.type]||h.e.type):h.i}</b></span>`;
     pos=h.b});
@@ -2829,13 +2832,13 @@ function ecStuBlock(){   /* блок «Ученик» из макета: чип�
 function ecResult(){
   const r=ecRes||ecNrm(null),sc=r.score;
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
-  return `<div class="ec-top"><button type="button" class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><b>Разбор работы · ${ecKind==="oge"?"Эссе для ОГЭ":"Сочинение для ЕГЭ"}</b></div>
+  return `<div class="ec-top"><button type="button" class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button></div>
 ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 <div class="ec-hd">
   <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки · ${ecCntBadge(r)}</button>
   <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
   <span class="ec-spr"></span>
-  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixSet(${ecFix?0:1})" title="Т — как есть (фото работы), П — с исправлениями" aria-label="Вид текста: как есть или с исправлениями">${ecFix?"П":"Т"}</button>
+  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="Т — фото рукописи ученика, П — печатный текст с разбором" aria-label="Вид текста: фото рукописи или печатный текст">${ecFix?"П":"Т"}</button>
 </div>
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
@@ -2850,7 +2853,9 @@ function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вк�
   ve.classList.toggle("ec-hid",ecTab!="e");vf.classList.toggle("ec-hid",ecTab!="f");
   te.classList.toggle("on",ecTab=="e");tf.classList.toggle("on",ecTab=="f");
   ecRelabel()   /* на «ФИПИ» бейджи становятся категориями и места горят «под критерий» */}
-function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т/П: как написано учеником / с исправлениями */
+function ecFixTgl(){ecFixSet(!ecFix)}   /* Т/П (tgl макета): листаем «фото рукописи / печатный текст»; состояние не запекается в onclick,
+   иначе повторное нажатие присылало ту же константу и кнопка зависала на «П» */
+function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т — фото рукописи ученика, П — печатный текст (карточки ошибок остаются в обоих) */
   const d=$("#ec-desk"),b=$("#ec-tg");
   if(!d||!b){if(tab=="ai"&&ecStep===3)render();return}
   d.innerHTML=ecDeskHtml();ecRelabel();b.textContent=ecFix?"П":"Т"}
