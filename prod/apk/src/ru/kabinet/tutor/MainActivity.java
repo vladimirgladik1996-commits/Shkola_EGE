@@ -62,7 +62,6 @@ public class MainActivity extends Activity {
     private static final int MIC_PERM_REQ = 1002;
     private static final int CAMERA_REQ = 1003;          // «Снять камерой»: снимок возвращается отдельно от выбора файла
     private static final int CAMERA_PERM_REQ = 1004;     // встроенная камера «Снять камерой» (getUserMedia на странице)
-    private static final int MEDIA_PERM_REQ = 1005;      // первый вход: камера + микрофон одним запросом
     private final List<BroadcastReceiver> shareReceivers = new ArrayList<>();   // ждут окончания загрузки PDF; снимаются в onDestroy
     private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
     private File micFile;
@@ -301,29 +300,15 @@ public class MainActivity extends Activity {
         });
 
         web.loadUrl(url);
-        askMediaPermissions();   // первый вход: камера и микрофон — одним системным окном, один раз за жизнь приложения
+        // Разрешения НЕ спрашиваем при открытии приложения — только при первом реальном
+        // использовании камеры/микрофона (см. onPermissionRequest, askMic/askCamera).
     }
 
     /**
-     * Первый вход в приложение: просим камеру и микрофон СРАЗУ, одним системным окном.
-     * Выданное разрешение Android помнит всегда — дальше страница берёт потоки без вопросов
-     * (onPermissionRequest выдаёт доступ молча, повторных диалогов нет). Спрашиваем один раз;
-     * повторный запрос — только по явной кнопке (askMic/askCamera, force=true) или через настройки.
-     */
-    private void askMediaPermissions() {
-        if (prefs.getBoolean("mediaAsked", false)) return;   // уже спрашивали — больше не пристаём
-        prefs.edit().putBoolean("mediaAsked", true).apply();
-        List<String> need = new ArrayList<>();
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.RECORD_AUDIO);
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.CAMERA);
-        if (!need.isEmpty()) requestPermissions(need.toArray(new String[0]), MEDIA_PERM_REQ);
-    }
-
-    /**
-     * Запрос микрофона. Просим заранее: пока системный диалог открыт, страница
+     * Запрос микрофона. Пока системный диалог открыт, страница
      * НЕ должна держать pending-запрос getUserMedia — на части устройств такой
      * конфликт отменяет запрос WebView, и запись падает без объяснений.
-     * force=false — предзапрос при открытии («больше не спрашивать» уважаем);
+     * force=false — мягкий запрос, «больше не спрашивать» уважаем (разрешения НЕ просим при открытии — только при первом использовании);
      * force=true — явное нажатие кнопки в виджете (см. JsBridge.askMic).
      */
     private void askMicPermission(boolean force) {
@@ -747,16 +732,6 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == MEDIA_PERM_REQ) {
-            // Первый вход: без лишних тостов — но если что-то запретили, подсказываем, где включить.
-            for (int i = 0; i < permissions.length; i++) {
-                if (grantResults.length > i && grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Без камеры или микрофона часть функций будет недоступна — их можно включить в настройках приложения", Toast.LENGTH_LONG).show();
-                    break;
-                }
-            }
-            return;
-        }
         if (requestCode != MIC_PERM_REQ && requestCode != CAMERA_PERM_REQ) return;
         boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
         if (requestCode == CAMERA_PERM_REQ) {

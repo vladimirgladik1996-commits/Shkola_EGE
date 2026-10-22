@@ -60,9 +60,9 @@ ok("страница всегда с сервера (LOAD_NO_CACHE): WebView н�
 assert "A.micStatus" in html and "A.askMic" in html, "виджет не спрашивает состояние микрофона до getUserMedia"
 ok("виджет спрашивает micStatus/askMic ДО getUserMedia — без гонок с системным диалогом")
 
-assert "askMediaPermissions" in java and "mediaAsked" in java, \
-    "обёртка не просит камеру и микрофон при первом входе — разрешения будут спрашивать при каждом открытии"
-ok("первый вход: камера и микрофон — одним системным запросом, один раз; дальше getUserMedia без вопросов")
+assert "askMediaPermissions" not in java and not re.search(r"web\.loadUrl\(url\);\s*\n\s*ask", java), \
+    "обёртка спрашивает разрешения при открытии приложения — запрос должен идти только при первом использовании камеры/микрофона"
+ok("при открытии приложения разрешения не спрашиваются — запрос идёт при первом реальном использовании")
 
 assert "A.openSettings" in html and "micSettings" in html, \
     "когда микрофон запрещён навсегда, виджет должен вести в настройки приложения"
