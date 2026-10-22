@@ -1248,6 +1248,19 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-fask{width:100%;margin-top:16px;border:0;border-radius:16px;padding:13px 16px;font:900 14px inherit;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2a3550,#171e30);display:flex;align-items:center;justify-content:center;gap:8px}
 .ec-fask:active{transform:scale(.98)}
 .ec-fask svg{width:18px;height:18px;fill:none;stroke:#FFC93C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* голосовой виджет Вишенки (мок) — как .vs/.vc в макете: eq-бары, состояния кнопок, плавающая кнопка выделения */
+.ecvs .eq{display:flex;gap:5px;align-items:center;justify-content:center}
+.ecvs .eq i{width:5px;height:34px;border-radius:3px;background:var(--grn);animation:ecEqb 1s ease-in-out infinite}
+.ecvs .eq i:nth-child(2n){animation-delay:.15s}
+.ecvs .eq i:nth-child(3n){animation-delay:.3s}
+.ecvs .eq i:nth-child(5n){animation-delay:.45s}
+@keyframes ecEqb{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+.ecvs .act.dn .mic{background:var(--card);color:var(--tx);box-shadow:0 0 0 1.5px var(--ln)}
+.ecvs .act.dn .sec{background:var(--acc);color:var(--on);box-shadow:0 10px 22px -10px var(--sh)}
+#ec-ask{position:fixed;z-index:50;left:0;top:0;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px 0 6px;border:0;border-radius:99px;background:var(--acc);color:var(--on);font:800 13.5px inherit;white-space:nowrap;box-shadow:0 10px 22px -8px rgba(15,46,110,.6),0 0 0 2px var(--yel);cursor:pointer;-webkit-tap-highlight-color:transparent}
+#ec-ask[hidden]{display:none}
+#ec-ask img{width:30px;height:30px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#FBF7E9;box-shadow:0 0 0 2px var(--yel)}
+#ec-ask:active{transform:scale(.96)}
 .ec-err2{color:#B3142F}
 .ec-hi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln);margin-bottom:8px;text-align:left;font:inherit;color:var(--tx)}
 .ec-hi:active{transform:scale(.98)}
@@ -2832,11 +2845,89 @@ function ecFragShow(key){   /* key: номер ошибки или 'c<N>' — к
   o.hidden=false}
 function ecFragClose(){const o=$("#ec-modf");if(o&&!o.hidden)o.hidden=true}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")ecFragClose()});
-function ecFAsk(){   /* «Спросить у Вишенки»: чат открывается с готовым вопросом по фрагменту */
-  const t=ecFrag&&ecFrag.t?ecFrag.t.slice(0,220):"";
-  const q=t?"Как исправить этот фрагмент из моего сочинения: «"+t+"»":"Как исправить фрагмент из моего сочинения?";
-  ecFragClose();ecErrClose();tab="ch";render();scrollTo(0,0);
-  const el=$("#aic-in");if(el){el.value=q;chGrow(el);try{el.focus({preventScroll:true})}catch(e){}}}
+function ecFAsk(){   /* «Спросить у Вишенки» (fask в макете): голосовой виджет по фрагменту */
+  const t=ecFrag&&ecFrag.t?ecFrag.t:"";
+  ecFragClose();ecErrClose();ecVS("frag",t)}
+/* ===== голосовой виджет Вишенки в «ИИ-проверке» — МОК: распознавание симулируется,
+   API не вызывается (отладка интерфейса). Логика — из макета essay-check (SC/vmic/vok) ===== */
+const EC_SC={err:[
+ {say:"исправь только слово",re:"Поняла: заменю «{t}» на «{c}», остальной текст не трогаю. Применить?",k:"apply"},
+ {say:"в тексте распознано неверно — там «{c}»",re:"Поняла: поправлю распознанный текст — «{t}» заменю на «{c}» и перепроверю ошибку. Применить?",k:"apply"},
+ {say:"объясни правило и придумай два примера",re:"Поняла: подготовлю объяснение и примеры, ответ придёт в чат с ботом.",k:"chat"}],
+frag:[
+ {say:"перепиши",re:"Поняла: перепишу фрагмент и отправлю вариант в чат с ботом.",k:"chat"},
+ {say:"исправь распознанный текст",re:"Поняла: перечитаю фрагмент по фото и поправлю распознанный текст. Применить?",k:"apply"},
+ {say:"найди аргументы получше",re:"Поняла: подберу аргументы из литературы, ответ придёт в чат с ботом.",k:"chat"},
+ {say:"сократи до двух предложений",re:"Поняла: сокращу и отправлю результат в чат с ботом.",k:"chat"}]};
+const EC_PH={err:"Что сделать с ошибкой? Скажите — например, «исправь только слово», «в тексте распознано неверно» или любое другое задание: «объясни правило», «придумай примеры».",
+frag:"Что сделать с этим фрагментом? Скажите — например, «перепиши» или «найди аргументы получше». Нажмите кнопку и скажите задачу."};
+let ecVMode="err",ecVI=0,ecVT=null;
+function ecVBtns(){return `<button type="button" class="mic" id="ec-vmic" onclick="ecVMic()">${MIC_I}<span id="ec-vml">Сказать, что сделать</span></button><button type="button" class="ok" onclick="ecVOk()">${OK_I}<span>Применить</span></button><button type="button" class="no" onclick="ecVClose()">${X_I}<span>Отмена</span></button>`}
+function ecVS(mode,frag){   /* va() / vfrag() макета: лист Вишенки над разделом */
+  clearTimeout(ecVT);
+  ecVMode=mode=="frag"?"frag":"err";
+  const err=ecVMode=="err",e=err?(ecRes&&Array.isArray(ecRes.errors)?ecRes.errors:[]).filter(x=>x&&x.i==ecCur)[0]:null;
+  const t=err&&ecRes?String(ecRes.text||""):"",k=err&&e&&e.found?t.indexOf(e.found):-1;
+  const a=k<0?0:Math.max(0,k-40),b=k<0?t.length:Math.min(t.length,k+e.found.length+40);
+  const q=err&&e?(a>0?"…":"")+t.slice(a,b)+(b<t.length?"…":""):String(frag||"");
+  const k2=q.length,w=k2%10==1&&k2%100!=11?"символ":k2%10>=2&&k2%10<=4&&(k2%100<10||k2%100>=20)?"символа":"символов";
+  const sub=err&&e?e.type+" · ошибка №"+e.i:k2+" "+w+" · сочинение, фрагмент";
+  const av=$("#tmk")&&$("#tmk").src?$("#tmk").src:EC_ART;
+  open(`<div class="chs ecvs"><div class="chb"><img src="${av}" alt=""></div>
+  <h3>${err?"Вишенка":"Спросить у Вишенки"}</h3>
+  <blockquote class="fq"><span>${esc(q.length>220?q.slice(0,217).trimEnd()+"…":q).replace(/\n+/g," ")}</span><small>${esc(sub)}</small></blockquote>
+  <p id="ec-vph">${esc(EC_PH[ecVMode])}</p>
+  <div class="zone"><div class="eq" id="ec-veq" aria-hidden="true">${"<i></i>".repeat(11)}</div><div class="chh" id="ec-vhh" aria-live="polite"></div><p class="chr" id="ec-vrr" aria-live="polite"></p></div>
+  <div class="act" id="ec-vact">${ecVBtns()}</div></div>`);
+  return true}
+function ecVReset(){clearTimeout(ecVT);const a=$("#ec-vact");if(!a)return;
+  a.className="act";a.innerHTML=ecVBtns();
+  const eq=$("#ec-veq");if(eq)eq.classList.remove("on");
+  const h=$("#ec-vhh");if(h){h.className="chh";h.textContent=""}
+  const r=$("#ec-vrr");if(r)r.textContent="";
+  const p=$("#ec-vph");if(p){p.hidden=false;p.textContent=EC_PH[ecVMode]}}
+function ecVMic(){   /* vmic() макета: симуляция прослушивания (2.4с) — без микрофона и без API */
+  const m=$("#ec-vmic");if(!m||m.classList.contains("rec"))return;
+  ecVReset();m.classList.add("rec");const ml=$("#ec-vml");if(ml)ml.textContent="Слушаю…";
+  const eq=$("#ec-veq");if(eq)eq.classList.add("on");
+  const p=$("#ec-vph");if(p)p.hidden=true;
+  ecVT=setTimeout(()=>{const mm=$("#ec-vmic");if(mm)mm.classList.remove("rec");
+    const eq2=$("#ec-veq");if(eq2)eq2.classList.remove("on");
+    const L=EC_SC[ecVMode],v=L[ecVI++%L.length];
+    const e=ecVMode=="err"?(ecRes&&Array.isArray(ecRes.errors)?ecRes.errors:[]).filter(x=>x&&x.i==ecCur)[0]:null;
+    const f=x=>e?x.replace(/\{t\}/g,e.found||"").replace(/\{c\}/g,e.correct||""):x;
+    const h=$("#ec-vhh");if(h){h.textContent="«"+f(v.say)+"»";void h.offsetWidth;h.classList.add("on")}
+    const r=$("#ec-vrr");if(r)r.textContent=f(v.re);
+    const a=$("#ec-vact");if(!a)return;
+    if(v.k==="apply"){a.classList.add("cf");const ml2=$("#ec-vml");if(ml2)ml2.textContent="Сказать иначе"}
+    else{a.className="act dn";a.innerHTML='<button type="button" class="mic" onclick="ecVClose()">К тексту</button><button type="button" class="sec" onclick="ecVChat()">В чат с ботом</button>'}},2400)}
+function ecVOk(){   /* vok() макета: «Применить» — подтверждение действия */
+  const err=ecVMode=="err";clearTimeout(ecVT);close_();
+  if(err)ecErrFix();
+  else toast("Распознанный текст обновлён")}
+function ecVClose(){clearTimeout(ecVT);close_();ecErrClose()}
+function ecVChat(){clearTimeout(ecVT);close_();tab="ch";render();scrollTo(0,0)}
+/* «Спросить у Вишенки» на выделении текста — плавающая кнопка #ec-ask над разбором (как #ask в макете) */
+(function(){const ask=document.createElement("button");ask.id="ec-ask";ask.type="button";ask.hidden=true;
+  ask.innerHTML='<img alt="">Спросить у Вишенки';document.body.appendChild(ask);
+  ask.querySelector("img").src=$("#tmk")&&$("#tmk").src?$("#tmk").src:EC_ART;
+  let cur=null,tm=0,sent=0;
+  function clean(r){const b=document.createElement("div");b.appendChild(r.cloneContents());b.querySelectorAll("b,em").forEach(e=>e.remove());return (b.textContent||"").replace(/[ \t\u00a0]+/g," ").replace(/\n{3,}/g,"\n\n").trim()}
+  function read(){const s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return null;const r=s.getRangeAt(0);
+    let n=r.commonAncestorContainer;n=n.nodeType===1?n:n.parentNode;
+    const dk=n&&n.closest?n.closest("#ec-desk"):null;if(!dk)return null;   /* только текст разбора */
+    const t=clean(r);if(t.length<3)return null;return{t,r}}
+  function place(r){const b=r.getBoundingClientRect(),vw=innerWidth,vh=innerHeight,w=ask.offsetWidth||200,h=ask.offsetHeight||42;
+    let x=Math.max(8,Math.min(vw-w-8,(b.left+b.right)/2-w/2)),y=b.bottom+34;
+    if(y+h>vh-8)y=b.top-h-52;if(y<8||y+h>vh-8)y=vh-h-16;
+    ask.style.transform="translate("+Math.round(x)+"px,"+Math.round(y)+"px)"}
+  function upd(){const c=read();cur=c;if(!c){ask.hidden=true;return}ask.hidden=false;place(c.r)}
+  function later(){clearTimeout(tm);tm=setTimeout(upd,140)}
+  document.addEventListener("selectionchange",later);addEventListener("scroll",()=>{if(cur)later()},{passive:true,capture:true});addEventListener("resize",later);
+  ["mousedown","touchstart","pointerdown"].forEach(ev=>ask.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
+  function go(e){if(e&&e.cancelable)e.preventDefault();if(Date.now()-sent<800)return;sent=Date.now();
+    const c=cur||read();if(!c)return;try{getSelection().removeAllRanges()}catch(x){}cur=null;ask.hidden=true;ecVS("frag",c.t)}
+  ["click","touchend","pointerup"].forEach(ev=>ask.addEventListener(ev,go,{passive:false}));})();
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>
 <div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-chs"><button type="button" class="ec-chip${w?" on":""}" id="ec-c1" onclick="ecSetCh('w')">${ecLbl(ecShots.w.length,"Работа")}</button><button type="button" class="ec-chip${w?"":" on"}" id="ec-c2" onclick="ecSetCh('t')">${ecLbl(ecShots.t.length,"Задание")}</button></div></div>
