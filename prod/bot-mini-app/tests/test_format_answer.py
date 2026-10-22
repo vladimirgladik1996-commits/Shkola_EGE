@@ -81,6 +81,11 @@ async def main():
     real_stream, real_json, real_ask = kimi.ask_stream, kimi.ask_json, kimi.ask
     kimi.ask_stream, kimi.ask_json, kimi.ask = fake_stream, fake_ask_json, fake_ask
     try:
+        # --- 0) контракт полноты: файл — полный результат по задаче, с ответами для самопроверки ---
+        for tail in (assist.CHAT_DOC_TAIL, assist.CHAT_PDF_TAIL):
+            assert "Ответы для самопроверки" in tail and "полный результат" in tail, tail
+        ok("промпты файлов требуют полный результат по задаче (для тестов — «Ответы для самопроверки»)")
+
         # --- 1) «Долгий ответ» → кнопки формата (набор как в разделе «Чат с ИИ») ---
         m = FakeChat()
         assist._keep(42, phase="mode", text="сделай документ")

@@ -25,6 +25,14 @@
   клиент сам подберёт МАКСИМУМ, который этот API принимает, и запомнит его — лимит с
   нашей стороны никогда не режет ответ.
 
+ВАЖНО ПРО ОБРЕЗАННЫЙ ОТВЕТ (корень бага «в Word попало не всё»):
+  Обрезанный ответ НИКОГДА не выдаётся за полный. Раньше частичный текст (поток оборвался:
+  finish_reason=length — кончился бюджет, обрыв соединения) молча отдавался за готовый ответ,
+  и файл собирался из обрывка — вопросы теста в документе были, а ответы в конце — нет.
+  Теперь ответ ДОСОБИРАЕТСЯ продолжением (до MAX_CONT заходов): обрезанный текст
+  закрепляется репликой ассистента и модель продолжает ровно с места обрыва (CONT_PROMPT).
+  В ответы и файлы попадает всё, что API выдал целиком.
+
 Важно: Kimi принимает текст, картинки и видео — ГОЛОС НЕ РАСПОЗНАЁТ (audio-входа нет):
 распознаванием речи занимается отдельный STT (см. whisper.py).
 
@@ -75,6 +83,11 @@ TIMEOUT = _flt("KIMI_TIMEOUT", 600, 3, 7200)
 TIMEOUT_DEEP = _flt("KIMI_TIMEOUT_DEEP", 3600, 3, 21600)
 SOCK_READ = _flt("KIMI_SOCK_READ", 300, 5, 3600)
 CONNECT = _flt("KIMI_CONNECT", 30, 3, 300)
+
+# Продолжение обрезанного ответа: сколько заходов допускается и как просим продолжать.
+MAX_CONT = _int("KIMI_MAX_CONT", 3, 1, 10)
+CONT_PROMPT = ("Продолжай ответ ровно с места, где он оборвался: без повторов уже "
+               "написанного, без вступлений и пояснений — сразу продолжение текста.")
 
 
 def stream_timeout():
@@ -198,17 +211,27 @@ def build_payload(messages, model=None, deep=False, json_mode=False, images=None
     return p
 
 
+def _continue_run(run, acc):
+    """Диалог для захода продолжения: обрезанный ответ закрепляется репликой ассистента,
+    и модель продолжает ровно с места обрыва (CONT_PROMPT). Модель и режим не меняются."""
+    return run + [{"role": "assistant", "content": acc}, {"role": "user", "content": CONT_PROMPT}]
+
+
 async def ask(messages, model=None, deep=False, json_mode=False, images=None, max_tokens=None, _attempt=0):
-    """Ответ модели (str) или None — нет ключа / API недоступен / формат ответа неожиданный."""
+    """Ответ модели (str) или None — нет ключа / API недоступен / формат ответа неожиданный.
+
+    Обрезанный ответ (finish_reason=length) не возвращается как готовый — он дособирается
+    продолжением (до MAX_CONT заходов), чтобы в ответ попало всё, что API выдал целиком."""
     if not API_KEY:
         return None
     m = resolve_model(model, deep)
     budget = budget_for(deep, m.startswith("kimi-k3"), max_tokens)
     if max_tokens is None:
         budget = _clamp_to_known(m, budget)
+    run, acc, cont = list(messages), [], 0    # run — диалог с закреплёнными продолжениями
     attempt, drops = 0, 0
     while True:
-        body = build_payload(messages, model=m, deep=deep, json_mode=json_mode, images=images,
+        body = build_payload(run, model=m, deep=deep, json_mode=json_mode, images=images,
                              max_tokens=budget)
         timeout = TIMEOUT_DEEP if deep else TIMEOUT
         try:
@@ -235,17 +258,31 @@ async def ask(messages, model=None, deep=False, json_mode=False, images=None, ma
             return None
         ch = (j.get("choices") or [{}])[0]
         reply = (ch.get("message") or {}).get("content")
-        if not isinstance(reply, str) or not reply.strip():
-            # бюджет сгорел на размышлениях (finish_reason=length) — повторяем с тем же
-            # огромным бюджетом: модель почти всегда доходит до ответа со второго раза
-            log.warning("kimi: пустой ответ (finish=%s usage=%s max_tokens=%s)",
-                        ch.get("finish_reason"), j.get("usage"), body.get("max_tokens"))
-            if attempt == 0:
-                attempt += 1
+        fr = ch.get("finish_reason")
+        if isinstance(reply, str) and reply.strip():
+            acc.append(reply)
+            _remember(m, budget)
+            if fr == "length" and cont < MAX_CONT:    # обрезанный по бюджету ответ — дособираем
+                log.warning("kimi: ответ обрезан по max_tokens — продолжаю (заход %s)", cont + 1)
+                run = _continue_run(run, "".join(acc))
+                cont += 1
                 continue
-            return None
-        _remember(m, budget)
-        return reply.strip()
+            if fr == "length":
+                log.warning("kimi: ответ обрезан и продолжения исчерпаны — отдаю как есть (%s символов)",
+                            sum(len(x) for x in acc))
+            return "".join(acc).strip()
+        if acc:                           # продолжение не дало текста — отдаём, что уже собрали
+            log.warning("kimi: продолжение пустое (finish=%s) — отдаю %s символов как есть",
+                        fr, sum(len(x) for x in acc))
+            return "".join(acc).strip()
+        # бюджет сгорел на размышлениях (finish_reason=length) — повторяем с тем же
+        # огромным бюджетом: модель почти всегда доходит до ответа со второго раза
+        log.warning("kimi: пустой ответ (finish=%s usage=%s max_tokens=%s)",
+                    fr, j.get("usage"), body.get("max_tokens"))
+        if attempt == 0:
+            attempt += 1
+            continue
+        return None
 
 
 async def ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
@@ -262,7 +299,14 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
 
     Если стрим оборвался без ответа (бюджет сгорел на размышлениях, обрыв соединения),
     запрос повторяется один раз с тем же огромным бюджетом, но мышление при повторе уже
-    не показывается — пользователь не видит дублей «Вишенка думает»."""
+    не показывается — пользователь не видит дублей «Вишенка думает».
+
+    ОБРЕЗАННЫЙ ОТВЕТ НЕ ВЫДАЁТСЯ ЗА ПОЛНЫЙ (корень бага «в Word попало не всё»): если
+    после первого кусочка ответа поток оборвался (finish_reason=length — кончился бюджет,
+    обрыв соединения, обрыв SSE без [DONE]) — ответ ДОСОБИРАЕТСЯ продолжением (до MAX_CONT
+    заходов): обрезанный текст закрепляется репликой ассистента, модель продолжает ровно
+    с места обрыва (см. CONT_PROMPT). Дельты продолжения идут теми же «text»-кусочками,
+    мышление при продолжении не показывается (чтобы не путать историю)."""
     if not API_KEY:
         yield "err", "off"
         return
@@ -271,13 +315,15 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
     budget = budget_for(deep, reasoning, max_tokens)
     if max_tokens is None:
         budget = _clamp_to_known(m, budget)
+    run, acc, cont, cretry = list(messages), [], 0, 0    # run — диалог с закреплёнными продолжениями
     attempt, drops = 0, 0
     while True:
-        body = build_payload(messages, model=m, deep=deep, json_mode=json_mode, images=images,
+        body = build_payload(run, model=m, deep=deep, json_mode=json_mode, images=images,
                              thinking=thinking, max_tokens=budget)
         body["stream"] = True
         body["stream_options"] = {"include_usage": True}    # usage в конце стрима — видно, сгорел ли бюджет
-        finish, usage, got_text, broke = None, None, False, False
+        finish, usage, got_text, broke, done = None, None, False, False, False
+        buf = []                            # текст этого захода — для закрепления в продолжении
         try:
             async with aiohttp.ClientSession(timeout=stream_timeout()) as s:
                 async with s.post(BASE + "/chat/completions", json=body,
@@ -298,7 +344,10 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
                         if not s_line.startswith("data:"):
                             continue
                         data = s_line[5:].strip()
-                        if not data or data == "[DONE]":
+                        if data == "[DONE]":
+                            done = True
+                            continue
+                        if not data:
                             continue
                         try:
                             j = json.loads(data)
@@ -311,17 +360,37 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
                             finish = ch["finish_reason"]
                         d = ch.get("delta") or {}
                         th, tx = d.get("reasoning_content"), d.get("content")
-                        if th and attempt == 0:
+                        if th and attempt == 0 and cont == 0:
                             yield "think", th
                         if tx:
                             got_text = True
+                            buf.append(tx)
                             yield "text", tx
         except Exception as e:                    # сеть, таймаут, кривой SSE — всё мимо бота
             log.warning("kimi: стрим не прошёл: %r", e)
             broke = True
+        cut = broke or finish == "length" or (got_text and not done and finish is None)
         if got_text:
+            acc += buf
             _remember(m, budget)
-            return                              # частичный ответ уже показан — не трогаем
+            if cut and cont < MAX_CONT:     # обрезанный ответ — дособираем продолжением
+                log.warning("kimi: ответ обрезан (finish=%s broke=%s, %s символов) — продолжаю (заход %s)",
+                            finish, broke, sum(len(x) for x in acc), cont + 1)
+                run = _continue_run(run, "".join(acc))
+                cont += 1
+                cretry = 0
+                continue
+            if cut:
+                log.warning("kimi: ответ обрезан и продолжения исчерпаны — отдаю как есть (%s символов)",
+                            sum(len(x) for x in acc))
+            return
+        if acc:                             # продолжение не дало текста — один повтор, затем отдаём что есть
+            log.warning("kimi: продолжение без текста (finish=%s broke=%s) — отдаю %s символов как есть",
+                        finish, broke, sum(len(x) for x in acc))
+            if cretry == 0:
+                cretry += 1
+                continue
+            return
         # стрим дошёл до конца без единой дельты ответа: почти всегда бюджет max_tokens
         # сгорел на размышлениях (finish_reason=length) либо соединение оборвалось
         log.warning("kimi: стрим без ответа (finish=%s usage=%s max_tokens=%s broke=%s)",

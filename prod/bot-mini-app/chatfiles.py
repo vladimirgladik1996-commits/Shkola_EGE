@@ -786,9 +786,20 @@ def _jpeg_b64(im, maxw=1200):
     return base64.b64encode(out.getvalue()).decode()
 
 
-def render_shots(fmt, data, max_pages=3):
-    """Готовый файл → картинки страниц для проверки моделью (JPEG в base64, не больше max_pages).
-    Не отрендерилось — просто нет картинок: проверка пропустится, файл не сломается."""
+def page_pick(n, max_pages=4):
+    """Какие страницы документа отдавать на проверку: начало И конец (поровну).
+    Конец обязателен: длинные документы (тесты, ответы для самопроверки) обрезаются именно
+    с хвоста, а проверка, видящая только первые страницы, такого не найдёт никогда."""
+    if n <= max_pages:
+        return list(range(n))
+    half = max_pages // 2
+    return list(range(half)) + list(range(n - (max_pages - half), n))
+
+
+def render_shots(fmt, data, max_pages=4):
+    """Готовый файл → картинки страниц для проверки моделью (JPEG в base64, не больше max_pages):
+    первые и последние страницы (см. page_pick). Не отрендерилось — просто нет картинок:
+    проверка пропустится, файл не сломается."""
     try:
         if fmt == "image":
             from PIL import Image
@@ -798,7 +809,7 @@ def render_shots(fmt, data, max_pages=3):
         import pypdfium2 as pdfium
         doc = pdfium.PdfDocument(data)
         out = []
-        for k in range(min(len(doc), max_pages)):
+        for k in page_pick(len(doc), max_pages):
             page = doc[k]
             w, _h = page.get_size()
             if not w:
