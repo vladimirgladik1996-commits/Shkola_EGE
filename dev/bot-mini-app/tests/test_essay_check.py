@@ -52,7 +52,7 @@ ok("экран обработки: живой стрим run (status → done/fa
 for s in ("function ecResult(", "function ecErrShow(", "function ecErrClose(", "function ecTabSet(",
           "function ecFixSet(", "function ecNrm(", "Фрагмент текста", "Теоретическое обоснование",
           "Источники теории", "Статистика ошибок", "Критерии ФИПИ с обоснованием", "Рекомендации",
-          "потенциал +", "Ошибки · ${", "Итоговый балл", "Новая проверка"):
+          "потенциал +", "Ошибки · ${", "Прогнозный балл", "Новая проверка"):
     assert s in html, f"нет строки экрана результата: {s}"
 assert '.ec-mod{' in html and '.ec-er{' in html and '.ec-desk{' in html, "нет стилей экрана результата ec-"
 assert 'if(e.key==="Escape")ecErrClose()' in html, "модалка ошибки не закрывается по Esc"
