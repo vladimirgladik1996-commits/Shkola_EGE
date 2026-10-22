@@ -2367,9 +2367,7 @@ async def api_chat_file_rebuild(request):
 @guarded
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
-    Запрос сначала проверяется по разделу «Материалы» (matlib): если в каталогах есть нужный вариант,
-    в запрос модели подставляются его исходный текст, задания (тест) и текущее сочинение/эссе — и только
-    если в материалах ничего нет, модель отвечает по общим знаниям (см. assist.CHAT_SYS_APP).
+    Модель работает с запросом напрямую — без поиска совпадений по разделу «Материалы» (см. assist.CHAT_SYS_APP).
     format=docx|pdf|image — ответ собирается в файл и присылается ботом в диалог с пользователем
     (в WebView Telegram нет сохранения файлов — так же сделан «Поделиться PDF» недели).
     Готовый ответ приходит ОДНОВРЕМЕННО и в чат приложения, и в чат с ботом (файл — тоже в чат с ботом),
@@ -2400,7 +2398,6 @@ async def api_chat(request):
         if isinstance(f, dict) and isinstance(f.get("mime"), str) and f["mime"].startswith("image/"):
             attach[f["name"]] = "data:%s;base64,%s" % (f["mime"], f["data"])
             img_names.append(f["name"])
-    mat_ctx, _mat_hits = matlib.context(" ".join(m["content"] for m in hist if m["role"] == "user")[-1200:])
     task = hist[-1]["content"]                   # сама задача — для проверки готового файла моделью
     uid = user_id(request)
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
@@ -2416,7 +2413,7 @@ async def api_chat(request):
         return resp
     reply = ""
     async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt,
-                                            img_names=img_names or None, mat=mat_ctx):
+                                            img_names=img_names or None):
         if kind in ("status", "think", "text"):
             if kind == "text":
                 reply += v

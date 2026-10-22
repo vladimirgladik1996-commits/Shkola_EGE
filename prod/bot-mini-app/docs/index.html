@@ -3730,7 +3730,7 @@ addEventListener("scroll",()=>{const t=$("#top");if(t)t.classList.toggle("scr",s
 const lpMark=e=>{window.__lpOnBtn=!!(e.target.closest&&e.target.closest("button,a,input,select,textarea,[onclick]"))};
 document.addEventListener("touchstart",lpMark,{passive:true});
 document.addEventListener("mousedown",lpMark,{passive:true});
-document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest("button,a,input,select,textarea"))e.preventDefault()});
+document.addEventListener("contextmenu",e=>{const t=e.target.closest&&e.target.closest("button,a,input,select,textarea");if(t&&!t.matches("input,textarea,select"))e.preventDefault()});   // в полях ввода системное меню («Вставить») не блокируем
 addEventListener("resize",syncNav);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(syncNav);
 /* старт за прелоадером: показываем __done, когда данные пришли, и __fail, если связи нет */
 window.__bootRetry=async()=>{try{await load();window.__done&&window.__done()}catch(e){window.__fail&&window.__fail()}};
