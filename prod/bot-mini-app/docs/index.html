@@ -1274,8 +1274,8 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-saved{background:var(--grn);color:#fff}
 
 /* ---------- Карточка платежа: чистая шапка (статус, сумма, дата), ученик, сгруппированное распределение ---------- */
-@keyframes pkIn{from{opacity:0;transform:translateY(14px)}}
-#sheet.on .pk>*{animation:pkIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.04s + var(--i,0)*70ms)}
+@keyframes pnIn{from{opacity:0;transform:translateY(14px)}}
+#sheet.on .pk>*{animation:pnIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.04s + var(--i,0)*70ms)}
 #sheet.on .pk [data-cnt]{animation:cntgo .01s both}
 .pk-top{position:relative;overflow:hidden;margin-top:-4px;min-height:150px;padding:18px 18px 20px;border-radius:26px 26px 0 0;color:#fff;background:radial-gradient(130px 120px at 86% 50%,#ffc93c73,transparent 72%),radial-gradient(90% 70% at 0 100%,#b6f25a40,transparent 65%),linear-gradient(135deg,#24A872,#0B5A43 62%,#073D30)}
 .pk-top.new{padding-right:120px}
@@ -1307,18 +1307,21 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pk-dl{margin-top:4px;border-top:1px solid var(--ln)}
 .pk-dl summary{display:flex;align-items:center;justify-content:space-between;padding:13px 0 9px;font-size:13.5px;font-weight:700;color:var(--hint);cursor:pointer;list-style:none}
 .pk-dl summary::-webkit-details-marker{display:none}
-.pk-dl summary::after{content:"";width:9px;height:9px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg);transition:transform .25s;margin-left:10px}
-.pk-dl[open] summary::after{transform:rotate(-135deg)}
+.pk-dl summary::after{content:"";width:16px;height:16px;background:currentColor;-webkit-mask:var(--ic-chev) center/contain no-repeat;mask:var(--ic-chev) center/contain no-repeat;transform:rotate(90deg);transition:transform .25s}
+.pk-dl[open] summary::after{transform:rotate(-90deg)}
 .pk-r{position:relative;display:flex;justify-content:space-between;gap:12px;padding:7px 0 7px 16px;font-size:14px}
 .pk-r::before{content:"";position:absolute;left:3px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--c)}
 .pk-r small{display:block;margin-top:1px;color:var(--hint);font-size:12px}
 .pk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .pk .btns{margin-top:14px}
-.pk-go{position:relative;overflow:hidden}
-.pk-go span{position:relative;z-index:1}
-.pk-go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 32%,#ffffff30 47%,#ffffff58 50%,#ffffff30 53%,transparent 68%);transform:translateX(-120%);animation:pkShine 1.15s cubic-bezier(.4,0,.2,1) .35s both}
+.pn-go{position:relative;overflow:hidden}
+.pn-go span{position:relative;z-index:1}
+.pn-go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 32%,#ffffff30 47%,#ffffff58 50%,#ffffff30 53%,transparent 68%);transform:translateX(-120%);animation:pkShine 1.15s cubic-bezier(.4,0,.2,1) .35s both}
 @keyframes pkShine{to{transform:translateX(120%)}}
-@media (prefers-reduced-motion:reduce){#sheet.on .pk>*,.pk-ck,.pk-ck path,.pk-bar i,.pk-v,.pk-go::after{animation:none}}
+@media (prefers-reduced-motion:reduce){#sheet.on .pk>*,.pk-ck,.pk-ck path,.pk-bar i,.pk-v{animation:none}}
+/* дождь: слои и изоляция, чтобы падение монет не зависело от перерисовок страницы */
+#rain{contain:layout style paint}
+.pn-c.big,.pn-bn{will-change:transform,opacity;backface-visibility:hidden}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
@@ -1828,7 +1831,7 @@ function payCard(id,isNew){
   <div class="pk-body" style="--i:1">
     <div class="pk-who">${av(s)}<div><b>${esc(s.name)}</b><small>${esc(gr)}</small></div></div>
     <h2 class="pk-h">На что распределилась сумма</h2>${body}</div>
-  <div class="btns" style="--i:2">${isNew?'<button class="btn pri pk-go" onclick="close_()"><span>Готово</span></button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div></div>`)}
+  <div class="btns" style="--i:2">${isNew?'<button class="btn pri pn-go" onclick="close_()"><span>Готово</span></button>':`<button class="btn" onclick="payEdit(${id})">Изменить сумму</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button>`}</div></div>`)}
 
 function payEdit(id){const p=P.find(x=>x.id==id);open(`<button class="pen" aria-label="Назад" onclick="payCard(${id})">‹</button><h3>Оплата — ${esc(stName(p.sid))}</h3><p class="sub">${when(p.at)}</p><label>Сумма<input id="pa" type="number" inputmode="numeric" value="${p.amt}"></label><div class="btns"><button class="btn pri" onclick="payOk(${id})">Сохранить</button><button class="btn dng" onclick="payDel(${id})">Удалить платёж</button></div>`)}
 async function payOk(id){const v=parseInt($("#pa").value,10);if(!v||v<=0)return toast("Введите сумму больше нуля");if(await api("/api/payment/update",{id,amount:v})){close_();load()}}
@@ -3696,18 +3699,18 @@ async function go(t,btn){
   const dir=ORDER.indexOf(t)>ORDER.indexOf(tab)?1:-1;   /* вниз по меню — контент уходит вверх и приходит снизу, и наоборот */
   try{
     document.querySelectorAll(".mn-it").forEach(b=>b.classList.toggle("on",b===btn));moveInd(btn,true);
-    if(!REDUCE)await new Promise(r=>setTimeout(r,240));   /* даём подсветке доехать до пункта, и только потом закрываем меню */
+    if(!REDUCE)await new Promise(r=>setTimeout(r,300));   /* даём подсветке доехать до пункта, и только потом закрываем меню */
     setNav(false);
     if(!REDUCE){
-      const out={duration:200,easing:"cubic-bezier(.5,0,.9,.4)",fill:"forwards"};
+      const out={duration:240,easing:"cubic-bezier(.4,0,1,1)",fill:"forwards"};
       await Promise.all([app.animate([{opacity:1,transform:"none"},{opacity:0,transform:`translateY(${-dir*12}px) scale(.985)`}],out).finished,ttl.animate([{opacity:1,transform:"none"},{opacity:0,transform:`translateY(${-dir*6}px)`}],out).finished])}
     tab=t;render();scrollTo(0,0);   /* scrollTo(0,0) вместо {behavior:"instant"} — enum кидает TypeError в старом WebView */
     if(!REDUCE){
       app.getAnimations().forEach(a=>a.cancel());ttl.getAnimations().forEach(a=>a.cancel());
       const ease="cubic-bezier(.16,1,.3,1)";
-      app.animate([{opacity:0},{opacity:1}],{duration:340,easing:"ease-out"});
-      ttl.animate([{opacity:0,transform:`translateY(${dir*10}px)`},{opacity:1,transform:"none"}],{duration:480,easing:ease});
-      [...app.children].slice(0,9).forEach((el,i)=>el.animate([{opacity:0,transform:`translateY(${dir*22}px) scale(.985)`},{opacity:1,transform:"none"}],{duration:620,easing:ease,delay:i*55,fill:"backwards"}));   /* блоки раздела всплывают каскадом */
+      app.animate([{opacity:0},{opacity:1}],{duration:300,easing:"ease-out"});
+      ttl.animate([{opacity:0,transform:`translateY(${dir*10}px)`,filter:"blur(4px)"},{opacity:1,transform:"none",filter:"blur(0)"}],{duration:560,easing:ease});
+      [...app.children].slice(0,8).forEach((el,i)=>el.animate([{opacity:0,transform:`translateY(${dir*26}px) scale(.985)`,filter:"blur(5px)"},{opacity:1,transform:"none",filter:"blur(0)"}],{duration:760,easing:ease,delay:40+i*65,fill:"backwards"}));   /* блоки раздела всплывают каскадом */
       const fb=$("#fab");if(fb.style.display==="block")fb.animate([{transform:"scale(.6)",opacity:0},{transform:"scale(1)",opacity:1}],{duration:340,easing:"cubic-bezier(.34,1.3,.64,1)",delay:80,fill:"backwards"})}
   }catch(e){app.getAnimations().forEach(a=>a.cancel());ttl.getAnimations().forEach(a=>a.cancel());tab=t;render()}
   finally{navBusy=false;if(navPend){const [pt,pb]=navPend;navPend=null;if(pt!==tab)go(pt,pb)}}}
