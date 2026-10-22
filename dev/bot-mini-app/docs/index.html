@@ -1274,7 +1274,6 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-saved{background:var(--grn);color:#fff}
 
 /* ---------- Карточка платежа: чистая шапка (статус, сумма, дата), ученик, сгруппированное распределение ---------- */
-@keyframes pnIn{from{opacity:0;transform:translateY(14px)}}
 #sheet.on .pk>*{animation:pnIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.04s + var(--i,0)*70ms)}
 #sheet.on .pk [data-cnt]{animation:cntgo .01s both}
 .pk-top{position:relative;overflow:hidden;margin-top:-4px;min-height:150px;padding:18px 18px 20px;border-radius:26px 26px 0 0;color:#fff;background:radial-gradient(130px 120px at 86% 50%,#ffc93c73,transparent 72%),radial-gradient(90% 70% at 0 100%,#b6f25a40,transparent 65%),linear-gradient(135deg,#24A872,#0B5A43 62%,#073D30)}
@@ -1314,14 +1313,61 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pk-r small{display:block;margin-top:1px;color:var(--hint);font-size:12px}
 .pk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .pk .btns{margin-top:14px}
-.pn-go{position:relative;overflow:hidden}
 .pn-go span{position:relative;z-index:1}
-.pn-go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 32%,#ffffff30 47%,#ffffff58 50%,#ffffff30 53%,transparent 68%);transform:translateX(-120%);animation:pkShine 1.15s cubic-bezier(.4,0,.2,1) .35s both}
-@keyframes pkShine{to{transform:translateX(120%)}}
 @media (prefers-reduced-motion:reduce){#sheet.on .pk>*,.pk-ck,.pk-ck path,.pk-bar i,.pk-v{animation:none}}
 /* дождь: слои и изоляция, чтобы падение монет не зависело от перерисовок страницы */
 #rain{contain:layout style paint}
 .pn-c.big,.pn-bn{will-change:transform,opacity;backface-visibility:hidden}
+
+/* ---------- Новая оплата: яркая форма, табло суммы, монеты и денежный дождь ---------- */
+.pn{display:block}
+#sheet.on .pn>*{animation:pnIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.04s + var(--i,0)*55ms)}
+@keyframes pnIn{from{opacity:0;transform:translateY(16px)}}
+.pn label{font-weight:700}
+.pn-hero{position:relative;overflow:hidden;min-height:108px;margin:-4px 0 14px;padding:16px 124px 16px 18px;border-radius:24px;color:#fff;background:radial-gradient(120px 110px at 82% 34%,#ffc93c80,transparent 72%),radial-gradient(90% 70% at 0 100%,#b6f25a47,transparent 65%),radial-gradient(70% 60% at 55% 0,#2dd4bf4a,transparent 70%),linear-gradient(135deg,#24A872,#0B5A43 62%,#073D30);box-shadow:0 16px 30px -16px #0B5A43}
+.pn .pn-hero h3{margin:2px 0 4px;padding:0;font-size:23px;line-height:1.15;color:#fff;white-space:nowrap}
+.pn-hero .sub{margin:0;color:#ffffffd9;font-size:13.5px}
+.pn-v{position:absolute;right:4px;bottom:-6px;height:118px;width:auto;pointer-events:none;filter:drop-shadow(0 8px 8px #0006);transform-origin:50% 90%;animation:vsin .95s cubic-bezier(.34,1.56,.64,1) .25s both,hcb 3.4s ease-in-out 1.3s infinite}
+.pn-fl{position:absolute;width:17px;height:17px;font-size:10px;opacity:.85;animation:pnFl 3.6s ease-in-out var(--d,0s) infinite}
+@keyframes pnFl{50%{transform:translateY(-10px) rotateY(180deg)}100%{transform:translateY(0) rotateY(360deg)}}
+.pn-c{display:inline-grid;place-items:center;flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FFF3B0,#FFC93C 55%,#E39A12);box-shadow:inset 0 0 0 2px #C98708,0 2px 4px -1px #0005;color:#9A5F00;font:800 12px/1 system-ui,sans-serif}
+.pn-c.mini{width:19px;height:19px;font-size:10.5px}
+.pn-c.fly{position:fixed;z-index:300;pointer-events:none}
+.pn-c.big{position:fixed;z-index:200;width:34px;height:34px;font-size:18px;pointer-events:none}
+.pn-amt{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 14px;padding:12px 16px 12px 18px;border-radius:22px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 14px 26px -20px #0B5A43}
+.pn-amt small{display:block;color:var(--hint);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+#pn-big{display:block;margin-top:2px;font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1;white-space:nowrap;font-variant-numeric:tabular-nums;transform-origin:0 60%;background:linear-gradient(180deg,#2BB67F,#0B5A43);-webkit-background-clip:text;background-clip:text;color:transparent;transition:opacity .25s}
+#pn-big.zero{opacity:.35}
+#pn-big.tick{animation:pnTick .38s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pnTick{40%{transform:scale(1.07)}}
+.pn-stack{position:relative;flex:0 0 66px;height:74px}
+.pn-stack i{position:absolute;left:9px;bottom:calc(var(--k)*8px + 4px);width:48px;height:17px;border-radius:50%;background:linear-gradient(180deg,#FFE9A0,#F2BC2E);box-shadow:0 4px 0 #C98708,inset 0 0 0 1.5px #E5A417}
+.pn-stack i.new{animation:pnDrop .55s cubic-bezier(.34,1.56,.64,1) both;animation-delay:calc(var(--k)*40ms)}
+@keyframes pnDrop{from{opacity:0;transform:translateY(-36px) scale(.85)}}
+#pnst button.on{background:linear-gradient(135deg,#2BB67F,#0B5A43);color:#fff;box-shadow:0 8px 16px -10px #0B5A43}
+.pn-q{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.pn-q button{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 6px 11px;border-radius:18px;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;color:var(--tx);background:color-mix(in srgb,var(--t) 15%,var(--card));box-shadow:0 0 0 1.5px color-mix(in srgb,var(--t) 42%,transparent);transition:transform .15s,background .2s,box-shadow .2s,color .2s}
+.pn-q button:active{transform:scale(.95)}
+.pn-q .cs{display:flex;height:19px}.pn-q .cs .pn-c+.pn-c{margin-left:-7px}
+.pn-q button.on{color:var(--tc);background:linear-gradient(135deg,color-mix(in srgb,var(--t) 72%,#fff),var(--t));box-shadow:0 12px 22px -12px var(--t);animation:pnPop .42s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pnPop{40%{transform:scale(1.07)}}
+.pn #pna{margin-top:6px;padding:14px 16px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--ln);font-size:20px;font-weight:800;transition:box-shadow .2s}
+.pn #pna:focus{outline:0;box-shadow:0 0 0 2px #25A375,0 0 0 6px #25A37530}
+.pn-go{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;height:56px;border-radius:20px;font-size:17px;font-weight:800;color:#fff!important;background:linear-gradient(135deg,#2BB67F,#0B5A43)!important;box-shadow:0 16px 28px -14px #0B5A43,inset 0 1px 0 #ffffff55;transition:transform .15s}
+.pn-go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 35%,#ffffff45 50%,transparent 65%);transform:translateX(-120%);animation:pnShine 3.2s ease-in-out 1.1s infinite}
+@keyframes pnShine{40%,100%{transform:translateX(120%)}}
+.pn-go:active{transform:scale(.98)}
+.pn-go.busy{pointer-events:none}.pn-go.busy .pn-c{animation:pnSpin .7s linear infinite}.pn-go.busy span{opacity:.85}
+@keyframes pnSpin{to{transform:rotateY(360deg)}}
+#rain{position:fixed;inset:0;z-index:200;overflow:hidden;pointer-events:none;transition:opacity .5s}#rain.out{opacity:0}
+.pn-bn{position:fixed;z-index:200;width:56px;height:30px;border-radius:5px;display:grid;place-items:center;pointer-events:none;background:linear-gradient(135deg,#5BD39A,#1E8F69 60%,#0B5A43);box-shadow:0 5px 10px -3px #0008,inset 0 0 0 1.5px #ffffff70}
+.pn-bn::before{content:"";position:absolute;inset:3px;border-radius:3px;border:1px dashed #ffffff6e}
+.pn-bn i{position:relative;font:800 12px/18px system-ui,sans-serif;font-style:normal;width:19px;height:19px;border-radius:50%;text-align:center;color:#fff;background:#ffffff30;box-shadow:inset 0 0 0 1.5px #ffffff90}
+.pn-pop{position:absolute;z-index:250;left:50%;top:32%;width:250px;margin-left:-125px;padding:14px 20px 16px;border-radius:26px;text-align:center;color:#fff;background:linear-gradient(135deg,#2BB67F,#0B5A43);box-shadow:0 22px 44px -14px #0B5A43,0 0 0 1px #ffffff45,0 0 60px #ffc93c66;animation:pnPopIn .7s cubic-bezier(.34,1.56,.64,1) .12s both}
+.pn-pop small{display:block;font-size:12.5px;font-weight:700;opacity:.9;letter-spacing:.04em;text-transform:uppercase}
+.pn-pop b{display:block;margin-top:2px;font-size:36px;line-height:1.15;font-weight:800;font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#fff 30%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
+@keyframes pnPopIn{from{opacity:0;transform:scale(.5) translateY(26px)}}
+@media (prefers-reduced-motion:reduce){#sheet.on .pn>*,.pn-v,.pn-fl,.pn-go::after,.pn-pop,#pn-big.tick,.pn-stack i.new,.pn-q button.on{animation:none}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
@@ -2053,27 +2099,65 @@ function pay(){
 
 /* ---------- Новая оплата (быстрые суммы только подставляют значение в поле;
    оплата вносится ИСКЛЮЧИТЕЛЬНО по кнопке «Внести оплату») ---------- */
-const PAY_QUICK=[3000,5000,10000];
+const PAY_QUICK=[3000,5000,10000],PN_TONE=["#F2BC2E","#25A375","#2B63C9"];
+let pnShown=0,pnCoins=0,pnRaf=0;
+const pnCoin=c=>`<span class="pn-c${c?" "+c:""}" aria-hidden="true">₽</span>`;
 function paySetAm(a,b){const i=$("#pna");if(!i)return;i.value=a;
-  if(b&&b.parentNode)b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
+  if(b&&b.parentNode)b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+  payPrev();coinBurst(b,$("#pn-big"),Math.min(9,3+Math.round(a/2500)))}
+/* табло суммы: число плавно «докручивается», стопка монет растёт вместе с суммой */
+function payPrev(){const big=$("#pn-big"),inp=$("#pna");if(!big)return;
+  const v=Math.max(0,parseInt(inp&&inp.value,10)||0),from=pnShown;pnShown=v;big.classList.toggle("zero",!v);cancelAnimationFrame(pnRaf);
+  if(REDUCE||from===v)big.textContent=money(v);
+  else{const T0=performance.now(),D=420;(function st(n){const k=Math.min(1,(n-T0)/D);big.textContent=money(Math.round(from+(v-from)*(1-Math.pow(1-k,3))));if(k<1)pnRaf=requestAnimationFrame(st)})(T0);
+    big.classList.remove("tick");void big.offsetWidth;big.classList.add("tick")}
+  const n=!v?0:v<1500?1:v<3000?2:v<5000?3:v<8000?4:v<12000?5:6,st=$("#pn-stack");
+  if(st&&n!==pnCoins){const old=pnCoins;pnCoins=n;st.innerHTML=Array.from({length:n},(_,i)=>`<i class="${i>=old&&!REDUCE?"new":""}" style="--k:${i}"></i>`).join("")}}
+/* монеты слетаются с нажатой кнопки к табло суммы */
+function coinBurst(a,b,n){if(REDUCE||!a||!b||!a.getBoundingClientRect)return;
+  const A=a.getBoundingClientRect(),B=b.getBoundingClientRect(),x0=A.left+A.width/2,y0=A.top+A.height/2,dx=B.left+B.width*.3-x0,dy=B.top+B.height/2-y0;
+  for(let i=0;i<n;i++){const c=document.createElement("span");c.className="pn-c fly";c.textContent="₽";c.style.cssText=`left:${x0-11}px;top:${y0-11}px`;document.body.appendChild(c);
+    const sx=(Math.random()-.5)*90,up=-(36+Math.random()*54),fin=()=>c.remove();
+    c.animate([{transform:"translate(0,0) scale(.4) rotateY(0)",opacity:0},
+      {transform:`translate(${sx}px,${up}px) scale(1.05) rotateY(360deg)`,opacity:1,offset:.35},
+      {transform:`translate(${dx}px,${dy}px) scale(.6) rotateY(900deg)`,opacity:.9}],
+      {duration:600+Math.random()*280,delay:i*42,easing:"cubic-bezier(.3,.7,.3,1)",fill:"both"}).finished.then(fin,fin)}}
+/* «денежный дождь»: монеты и купюры сыплются на весь экран + крупная плашка с суммой */
+function moneyRain(v){if(REDUCE)return;
+  try{tg.HapticFeedback&&tg.HapticFeedback.notificationOccurred("success")}catch(e){}
+  const o=document.createElement("div");o.id="rain";document.body.appendChild(o);
+  const W=innerWidth,H=innerHeight,N=Math.min(46,Math.round(W/8.5));
+  for(let i=0;i<N;i++){const note=i%3==0,e=document.createElement("span");e.className=note?"pn-bn":"pn-c big";e.innerHTML=note?"<i>₽</i>":"₽";
+    const sz=note?.9+Math.random()*.4:.8+Math.random()*.6,dr=(Math.random()-.5)*170,rot=(Math.random()<.5?-1:1)*(360+Math.random()*540);
+    e.style.cssText=`left:${Math.random()*W}px;top:-70px`;o.appendChild(e);
+    e.animate([{transform:`translate(0,0) scale(${sz}) rotate(0) rotateY(0)`,opacity:0},{opacity:1,offset:.07},
+      {transform:`translate(${dr}px,${H+120}px) scale(${sz}) rotate(${rot*.35}deg) rotateY(${rot}deg)`,opacity:1,offset:.93},
+      {transform:`translate(${dr*1.05}px,${H+170}px) scale(${sz}) rotate(${rot*.4}deg)`,opacity:0}],
+      {duration:1700+Math.random()*1300,delay:Math.random()*750,easing:"cubic-bezier(.35,.1,.7,.9)",fill:"both"})}
+  const pop=document.createElement("div");pop.className="pn-pop";pop.innerHTML=`<small>Оплата принята</small><b>+${money(v)}</b>`;o.appendChild(pop);
+  setTimeout(()=>{try{pop.animate([{opacity:1,transform:"none"},{opacity:0,transform:"translateY(-18px) scale(.92)"}],{duration:380,easing:"ease-in",fill:"forwards"})}catch(e){}},1500);   // плашка уходит, когда открывается карточка платежа
+  setTimeout(()=>o.classList.add("out"),3400);setTimeout(()=>o.remove(),3950)}
 function fabGo(){tab=="p"?payNew():tab=="s"?studNew():form()}
 function payNew(sid){
   if(!act().length)return toast("Сначала добавьте ученика");
   // ученик выбирается в этом окне; фильтр списка подставляем, только если он среди активных, иначе берём первого
-  const ids=act().map(s=>s.id),cur_=ids.includes(+sid)?+sid:ids.includes(+pst)?+pst:ids[0];
-  open(`<h3>Новая оплата</h3><p class="sub">Выберите ученика и сумму</p>
-  <label>Ученик</label><div class="stc" id="pnst">${act().map(s=>`<button type="button" data-v="${s.id}" class="${s.id==cur_?"on":""}" onclick="payPickSt(this)">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}</div>
-  <label>Быстрая сумма</label><div class="chips" id="pnchips" style="margin-bottom:10px">${PAY_QUICK.map(a=>`<button type="button" class="pill" onclick="paySetAm(${a},this)">${a.toLocaleString("ru-RU")}</button>`).join("")}</div>
-  <label>Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500" oninput="document.querySelectorAll('#pnchips button').forEach(x=>x.classList.remove('on'))"></label>
-  <div class="btns"><button class="btn pri" onclick="payAdd()">Внести оплату</button></div>`);
+  const ids=act().map(s=>s.id),cur_=ids.includes(+sid)?+sid:ids.includes(+pst)?+pst:ids[0];pnShown=0;pnCoins=0;
+  const fl=[[66,10,0],[90,6,1.2],[62,80,.7],[94,70,1.9],[78,2,.4]].map(([x,y,d])=>`<span class="pn-c pn-fl" style="left:${x}%;top:${y}px;--d:${d}s">₽</span>`).join("");
+  open(`<div class="pn"><div class="pn-hero" style="--i:0">${fl}<h3>Новая оплата</h3><p class="sub">Выберите ученика и сумму</p><img class="pn-v" src="${VSH}" alt=""></div>
+  <div style="--i:1"><label>Ученик</label><div class="stc" id="pnst">${act().map(s=>`<button type="button" data-v="${s.id}" class="${s.id==cur_?"on":""}" onclick="payPickSt(this)">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}</div></div>
+  <div class="pn-amt" style="--i:2"><div><small>К внесению</small><b id="pn-big" class="zero">0 ₽</b></div><div class="pn-stack" id="pn-stack" aria-hidden="true"></div></div>
+  <div style="--i:3"><label>Быстрая сумма</label><div class="pn-q" id="pnchips">${PAY_QUICK.map((a,i)=>`<button type="button" style="--t:${PN_TONE[i]};--tc:${i?"#fff":"#0E2250"}" onclick="paySetAm(${a},this)"><span class="cs">${pnCoin("mini").repeat(i+1)}</span>${a.toLocaleString("ru-RU")}</button>`).join("")}</div></div>
+  <label style="--i:4">Или введите сумму<input id="pna" type="number" inputmode="numeric" placeholder="Например, 4500" oninput="document.querySelectorAll('#pnchips button').forEach(x=>x.classList.remove('on'));payPrev()"></label>
+  <div class="btns" style="--i:5"><button class="btn pri pn-go" onclick="payAdd()">${pnCoin("mini")}<span>Внести оплату</span></button></div></div>`);
 }
 function payPickSt(b){b.parentNode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))}
 async function payAdd(a){
   const sel=$("#pnst button.on"),sid=sel?+sel.dataset.v:0,v=a||parseInt($("#pna").value,10);
   if(!sid){const c=$("#pnst");if(c){c.scrollIntoView({block:"center",behavior:"smooth"});c.animate([{transform:"translateX(0)"},{transform:"translateX(-6px)"},{transform:"translateX(6px)"},{transform:"translateX(0)"}],{duration:260})}return toast("Выберите ученика")}
   if(!v||v<=0)return toast("Введите сумму больше нуля");
-  const r=await api("/api/payment/add",{student_id:sid,amount:v});if(!r)return;
-  close_();
+  const go=$(".pn-go");if(go)go.classList.add("busy");
+  const r=await api("/api/payment/add",{student_id:sid,amount:v});if(!r){if(go)go.classList.remove("busy");return}
+  close_();moneyRain(v);
   const inFeed=tab=="p"&&!!r.id;
   if(inFeed){   // чтобы новая оплата точно появилась в ленте, снимаем мешающие фильтры
     if(pty=="debt")pty="all";if(pst!="all"&&pst!=sid)pst="all";
@@ -2266,7 +2350,7 @@ async function voiceDone(r){const a=r.action,i=r.info||{};
     voiceWeek(i.day);await foldInto(i.day,+i.sid,i.time);
     toast(i.skipped?"Часть повторов не поставлена — время занято: "+i.skipped:a=="move_lesson"?"Занятие перенесено":"Занятие добавлено");return}
   if(a=="cancel_lesson"&&i.day){   // занятие в ячейке гаснет и исчезает
-    await voiceFold();voiceWeek(i.day);render();
+    await voiceFold();moneyRain(i.amount);voiceWeek(i.day);render();
     const el=$(view=="m"?`.d[data-k="${i.day}"]`:`.ls[data-day="${i.day}"][data-sid="${i.sid}"][data-t="${i.time}"]`)||$(`.d[data-k="${i.day}"]`);
     if(el){el.scrollIntoView({block:"center",inline:"center"});
       if(!REDUCE&&view!="m"&&el.animate)try{await el.animate([{transform:"none",opacity:1},{transform:"scale(.55)",opacity:0}],{duration:460,easing:"cubic-bezier(.5,0,.75,0)",fill:"forwards"}).finished}catch(e){}
