@@ -1483,6 +1483,14 @@ body.ec-nb{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
 .ec-er.ec-ok{background:rgba(31,154,91,.2);border-color:var(--grn);cursor:default}
 .ec-er.ec-ok b{display:none}
 @keyframes ecPing{0%,100%{transform:scale(1)}55%{transform:scale(1.18)}}
+/* === Полноэкранные «Съёмка» и «Превью» — как в макете: убрать общую шапку (☰ ИИ-проверка), контент во всю ширину/до низа === */
+body:has(.ec-view),body:has(.ec-hd){padding-top:0!important}
+body:has(.ec-view) #top,body:has(.ec-view) #burger,body:has(.ec-hd) #top,body:has(.ec-hd) #burger{display:none!important}
+body:has(.ec-view){padding:0!important;margin:0;height:100dvh;overflow:hidden}
+body:has(.ec-view) #app{height:100dvh;display:flex;flex-direction:column;padding:0}
+body:has(.ec-view) .ec-top{flex:none;margin:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 8px}
+body:has(.ec-view) .ec-view{flex:1;width:100%;margin:0;border-radius:0;aspect-ratio:auto;height:auto}
+body:has(.ec-hd) .ec-hd{margin-top:0;padding-top:calc(env(safe-area-inset-top,0px) + 12px)}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
