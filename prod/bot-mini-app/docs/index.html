@@ -1506,6 +1506,31 @@ body:has(.ec-view) .ec-top .ec-back{box-sizing:border-box;height:36px;flex:0 1 8
 body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .ec-shut{border-radius:50%;animation:camPulse 1.6s ease-out infinite}
 @media (prefers-reduced-motion:reduce){.ec-shut{animation:none}}
+/* === ИИ-проверка · превью: блок «Ученик» — редизайн (аватар отделён от имени, выбранный ученик подсвечен, кнопка сохранения) === */
+.ec-sb{padding:14px;border-radius:22px;background:linear-gradient(180deg,var(--card),color-mix(in srgb,var(--card) 94%,var(--yel)));box-shadow:0 0 0 1px var(--ln),0 14px 28px -20px var(--sh)}
+.ec-sb h3{margin:0 0 12px;align-items:center}
+.ec-sbt{display:inline-flex;align-items:center;gap:9px;font-size:16px;font-weight:900}
+.ec-sbi{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(145deg,#0B2556,#1B4AA8);color:#FFD766;box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
+.ec-sbi svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.ec-sbh{font-size:11.5px;font-weight:700;color:var(--hint);text-align:right}
+.ec-sb .ec-stu{gap:10px}
+.ec-sc{display:inline-flex;align-items:center;gap:10px;max-width:100%;height:48px;padding:0 16px 0 7px;border-radius:99px;border:1.5px solid var(--ln);background:var(--bg);color:var(--tx);font:800 14px/1 "Nunito",system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.3,.9,.4,1.2),background .25s,border-color .25s,box-shadow .25s,color .25s}
+.ec-sc:active{transform:scale(.96)}
+.ec-sa{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,var(--c1,#0F2E6E),var(--c2,#3B6FD8));color:#fff;font:900 15px/1 "Nunito",system-ui,sans-serif;box-shadow:0 0 0 2px var(--card),0 5px 10px -4px rgba(15,46,110,.55)}
+.ec-sn{min-width:0;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ec-sk{display:none;flex:none;width:19px;height:19px;border-radius:50%;background:#FFD766;color:#0E2250;place-items:center;margin-right:-6px}
+.ec-sk svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.ec-sc.on{background:linear-gradient(145deg,#0B2556,#1B4AA8);border-color:rgba(255,201,60,.75);color:#fff;box-shadow:0 12px 22px -14px rgba(15,46,110,.9),inset 0 1px 0 rgba(255,255,255,.18)}
+.ec-sc.on .ec-sa{box-shadow:0 0 0 2px #FFD766}
+.ec-sc.on .ec-sk{display:grid}
+.ec-sc.nw{background:transparent;border-style:dashed;border-color:var(--hint);color:var(--hint)}
+.ec-sc.nw .ec-sa{background:color-mix(in srgb,var(--hint) 16%,transparent);color:var(--hint);box-shadow:none;font-size:22px;font-weight:700}
+.ec-sb .ec-save{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;padding:15px;border-radius:16px;background:linear-gradient(135deg,#0B2556,#1B4AA8);color:#fff;font-size:15px;box-shadow:0 14px 24px -14px rgba(15,46,110,.9),inset 0 1px 0 rgba(255,255,255,.2);transition:transform .16s,box-shadow .25s}
+.ec-sb .ec-save:active{transform:scale(.98)}
+.ec-sb .ec-save svg{flex:none;width:19px;height:19px;fill:none;stroke:#FFD766;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.ec-sb .ec-save.ec-saved{background:linear-gradient(135deg,#17804B,#2FBF7A);box-shadow:0 14px 24px -14px rgba(23,128,75,.9),inset 0 1px 0 rgba(255,255,255,.25)}
+.ec-sb .ec-save.ec-saved svg{stroke:#fff}
+@media (prefers-reduced-motion:reduce){.ec-sc,.ec-sb .ec-save{transition:none}}
 /* виджет правки «Вишенка» (ecVS → .ecvs в шторке #sheet) — поверх карточки ошибки .ec-mod (z-index:80), иначе уходит под неё */
 #sheet:has(.ecvs){z-index:95!important}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
@@ -2947,15 +2972,16 @@ ${c.why?`<p><b>Почему:</b> ${esc(c.why)}</p>`:""}${c.tip?`<p class="ec-ktp
 function ecGauge(sc){const C=277,fill=Math.max(0,Math.min(100,sc.percent))*C/100;   /* шкала итогового балла */
   return `<div class="ec-gauge"><svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="44" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="9"/><circle cx="52" cy="52" r="44" fill="none" stroke="#FFD766" stroke-width="9" stroke-linecap="round" stroke-dasharray="${Math.round(fill)} ${C}"/></svg><div><b>${sc.got}</b><small>из ${sc.max}</small></div></div>`}
 function ecStuChip(v){ecSid=+v||null;if(tab=="ai"&&ecStep===3)render()}   /* тап по чипсу ученика — выбрать без сохранения */
-function ecStuBlock(){   /* блок «Ученик» из макета: чипсы учеников + «Сохранить за учеником» */
+function ecStuBlock(){   /* блок «Ученик»: карточки-чипсы с аватаром и именем + «Сохранить за учеником» */
   const list=act().slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
-  const hue=s=>["#E8294F","#1F9A5B","#0F2E6E","#C98A00"][(s.id||0)%4];
-  const chip=(id,name,on)=>`<button type="button" class="ec-chip${on?" on":""}" onclick="ecStuChip(${id||0})"><span class="ec-av" style="background:${id?hue({id}):"#E8294F"}">${esc((name||"?").trim().charAt(0).toUpperCase())}</span>${esc(name)}</button>`;
+  const hue=s=>[["#E8294F","#FF7A59"],["#1F9A5B","#5BD08F"],["#0F2E6E","#3B6FD8"],["#C98A00","#FFC93C"]][(s.id||0)%4];
+  const ok='<i class="ec-sk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i>';
+  const chip=(id,name,on)=>{const h=hue({id});return `<button type="button" class="ec-sc${on?" on":""}" aria-pressed="${on?"true":"false"}" onclick="ecStuChip(${id||0})"><span class="ec-sa" style="--c1:${h[0]};--c2:${h[1]}">${esc((name||"?").trim().charAt(0).toUpperCase())}</span><span class="ec-sn">${esc(name)}</span>${ok}</button>`};
   const top=list,cur=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);   /* все ученики: в макете было два демо-чипса, здесь их нельзя обрезать */
   const chips=top.map(s=>chip(s.id,s.name,ecSid==s.id)).join("")
     +(cur&&!top.some(s=>s.id==cur.id)?chip(cur.id,cur.name,true):"")
-    +`<button type="button" class="ec-chip" onclick="ecStuPick('save')"><span class="ec-av pl">+</span>Новый</button>`;
-  return `<div class="ec-blk"><h3>Ученик</h3><div class="ec-stu">${chips}</div><button class="ec-save${ecSaved?" ec-saved":""}" onclick="ecSave()">${ecSaveLabel()}</button></div>`}
+    +`<button type="button" class="ec-sc nw" onclick="ecStuPick('save')"><span class="ec-sa">+</span><span class="ec-sn">Другой</span></button>`;
+  return `<div class="ec-blk ec-sb"><h3><span class="ec-sbt"><span class="ec-sbi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.8-3.6 3.9-5.6 7.5-5.6s6.7 2 7.5 5.6"/></svg></span>Ученик</span><span class="ec-sbh">кому засчитать работу</span></h3><div class="ec-stu">${chips}</div><button class="ec-save${ecSaved?" ec-saved":""}" onclick="ecSave()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4h11a1 1 0 011 1v15l-6.5-4-6.5 4V5a1 1 0 011-1z"/></svg><span>${ecSaveLabel()}</span></button></div>`}
 function ecResult(){
   const r=ecRes||ecNrm(null),sc=r.score;
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
