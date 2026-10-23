@@ -126,6 +126,7 @@ JPG = base64.b64encode(_buf.getvalue()).decode()
 import essaycheck, kimi, yavision
 real_ask_json, real_key = kimi.ask_json, kimi.API_KEY
 real_recognize, real_stream = yavision.recognize_many, kimi.ask_stream
+yavision.API_KEY = "x"   # боевой пайплайн требует оба ключа (bot.api_essay_check_run)
 essaycheck.DEMO_DELAY = 0   # демо-стадии в тестах — без пауз
 
 PAGE = {"text": "Автор поднимает проблему влеяния книги. Я считаю что книга важна.",
@@ -158,6 +159,12 @@ async def fake_stream_none(msgs, **kw):
 async def fake_stream_junk(msgs, **kw):
     yield "text", "не JSON вовсе"
 
+async def fake_ask_json_none(msgs, **kw):
+    return None
+
+async def fake_ask_json_empty(msgs, **kw):
+    return {}
+
 async def fake_criteria(kind, fallback=""):
     return fallback
 
@@ -179,8 +186,6 @@ async def pipeline():
     assert e1["page"] == 0 and abs(e1["x"] - 47.5) < 0.3 and abs(e1["y"] - 7.5) < 0.3, e1
     ok("пайплайн: 5 стадий + стрим мышления, разбор нормализуется, координаты — из OCR")
 
-    async def fake_ask_json_none(msgs, **kw):
-        return None
     kimi.ask_json = fake_ask_json_none                              # повтор после пустого/не-JSON тоже пуст
     kimi.ask_stream = fake_stream_none
     assert [e async for e in essaycheck.run(["x"], [], "oge")][-1] == ("err", "net")
@@ -264,8 +269,6 @@ async def main():
         kimi.API_KEY = "test"
         ok("run без подключённого ИИ → событие off")
 
-        async def fake_ask_json_empty(msgs, **kw):
-            return {}
         yavision.recognize_many, kimi.ask_stream = fake_recognize, fake_stream
         r = await c.post("/api/essay_check/run", json={"id": d["id"], "kind": "ege"}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
