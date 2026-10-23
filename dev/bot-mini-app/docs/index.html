@@ -1472,6 +1472,17 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ecvs .fq,.ecvs .fq span{min-width:0;max-width:100%}
 .ecvs .act{flex:none}
 body.ec-nb{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
+/* === ИИ-проверка · шапки «Съёмка»/«Превью» + значки ошибок → макет essay-check.html (только кнопки хедеров и значки ошибок) === */
+.ec-lab{flex:1;min-width:0;text-align:center;font:900 15px/34px "Nunito",system-ui,sans-serif;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
+.ec-hd{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:8px;padding:12px 14px 8px;align-items:center}
+.ec-round{position:absolute;top:8px;right:8px;z-index:4;width:34px;height:34px;border:0;border-radius:50%;background:var(--acc);color:var(--on);font:900 15px "Nunito",system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.35)}
+.ec-er{color:inherit;font-weight:normal;background:rgba(214,69,69,.22);border-bottom:2px solid var(--red);border-radius:3px;position:relative;cursor:pointer;padding:0 1px}
+.ec-er b{position:absolute;top:-16px;left:-6px;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font:900 11px/19px "Nunito",system-ui,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.4);animation:ecPing 1.8s ease-out 3 both}
+.ec-er.sel{background:rgba(255,201,60,.6);border-color:#c98e00}
+.ec-er.sel b{background:#c98e00}
+.ec-er.ec-ok{background:rgba(31,154,91,.2);border-color:var(--grn);cursor:default}
+.ec-er.ec-ok b{display:none}
+@keyframes ecPing{0%,100%{transform:scale(1)}55%{transform:scale(1.18)}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
