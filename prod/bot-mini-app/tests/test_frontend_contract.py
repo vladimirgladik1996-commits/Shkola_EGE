@@ -62,4 +62,15 @@ ok(f"все {len(calls)} вызовов api() из index.html совпадают
 pl = [c for c in calls if c[0] == "/api/pdf_link"]
 assert pl and all(m == "GET" for _, m, _ in pl)
 ok("/api/pdf_link зовётся GET-ом (start в query-строке)")
+# --- ИИ-проверка: боевая сборка без мок-заглушки + баннер демо-режима (баг-репорт 001) ---
+import re as _re
+m = _re.search(r"const EC_MOCK\s*=\s*(true|false)", html)
+assert m, "в index.html нет переключателя EC_MOCK"
+assert m.group(1) == "false", "EC_MOCK=true — экран разбора снова подменяет живой разбор моками (баг-репорт 001)"
+ok("EC_MOCK=false: разбор берётся из /api/essay_check/run, а не из локального мока")
+assert "ec-demo" in html and "Демо-режим" in html, "нет баннера демо-режима на экране разбора"
+assert "demo:!!s.demo" in html.replace(" ", "").replace("demo:!!s.demo", "demo:!!s.demo") or "demo:!!s.demo" in html.replace(" ", ""),     "ecNrm не пропускает флаг demo — баннер демо-режима не покажется"
+assert "recommendations:EC_MOK_RECS,demo:true" in html.replace(" ", "").replace("recommendations: EC_MOK_RECS, demo: true", "recommendations:EC_MOK_RECS,demo:true"),     "отладочный мок не помечен demo:true"
+ok("баннер «Демо-режим» есть, флаг demo проходит через ecNrm, мок помечен demo:true")
+
 print("ALL FRONTEND CONTRACT TESTS PASSED")

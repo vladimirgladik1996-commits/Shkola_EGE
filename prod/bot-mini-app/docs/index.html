@@ -2906,7 +2906,7 @@ const EC_MOK_RECS=[
  {title:"Свяжите примеры между собой",text:"Добавьте фразу-переход между двумя примерами-иллюстрациями: так вы раскроете их смысловую связь.",badge:"+1 К2"},
  {title:"Закрепите дефисные наречия и союзы",text:"Повторите «во-первых», «в-третьих» и слитное «поэтому» — в таких словах допущено 3 из 4 орфографических ошибок.",badge:"+1 орфография"},
  {title:"Выделяйте вводные слова запятыми",text:"«Таким образом», «следовательно», «например» отделяются запятыми с двух сторон.",badge:"+1 пунктуация"}];
-function ecMockRes(){return{task:"",text:EC_MOK_TEXT,errors:EC_MOK_ERRORS,criteria:EC_MOK_CRIT,recommendations:EC_MOK_RECS}}
+function ecMockRes(){return{task:"",text:EC_MOK_TEXT,errors:EC_MOK_ERRORS,criteria:EC_MOK_CRIT,recommendations:EC_MOK_RECS,demo:true}}   /* отладочный мок — тоже помечен как демо */
 function ecMockRun(){   /* локальный мок: те же стадии, что у живого стрима, фото никуда не уходят */
   const id=++ecRunId;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();ecThink="";
   if(tab=="ai"&&ecStep===2)render();
@@ -2951,7 +2951,7 @@ function ecNrm(r){const s=r&&typeof r=="object"?r:{};
     .slice(0,3).map(x=>({title:String(x.title).trim(),text:String(x.text||"").trim(),badge:String(x.badge||"").trim()}));
   const sc=s.score&&typeof s.score=="object"?s.score:{},got=crit.reduce((a,c)=>a+c.got,0),max=crit.reduce((a,c)=>a+c.max,0);
   const pct=max?Math.round(got*100/max):0;
-  return{task:String(s.task||"").trim(),text:String(s.text||"").trim(),errors:errs,criteria:crit,recommendations:recs,
+  return{task:String(s.task||"").trim(),text:String(s.text||"").trim(),errors:errs,criteria:crit,recommendations:recs,demo:!!s.demo,   /* баннер «Демо-режим»: данные не выдаются за настоящие */
     score:{got:got,max:max,percent:pct,level:String(sc.level||"").trim()||ecLevel(pct)}}}
 function ecPl(n){const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?"баллов":b>1&&b<5?"балла":b===1?"балл":"баллов"}
 function ecPot(){   /* «потенциал +N баллов»: сумма ожидаемых эффектов рекомендаций (badge «+1 К2» → +1) */
