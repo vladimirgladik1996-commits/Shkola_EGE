@@ -29,7 +29,8 @@ act = re.search(r'<div class="act" id="cha">(.*?)</div>', body, re.S)
 assert act, "нет контейнера #cha"
 btns = re.findall(r"<button\b[^>]*>", act.group(1))
 assert len(btns) == 3 and 'id="micb"' in btns[0] and 'id="cok"' in btns[1] and 'id="cno"' in btns[2], btns
-assert len(re.findall(r"<button\b", body)) == 3
+zone = re.search(r'<div class="zone">(.*?)</div>\s*<div class="act"', body, re.S).group(1)
+assert len(re.findall(r"<button\b", body)) == 5 and 'class="rx"' in zone and 'class="rd"' in zone   # + ✕ и ✓ капсулы записи
 ok("в окне ровно три кнопки в одном контейнере: микрофон, «Применить», «Отмена»")
 assert all("inert" in b for b in btns[1:]) and "inert" not in btns[0]
 ok("до команды «Применить»/«Отмена» скрыты и недоступны с клавиатуры (inert)")
@@ -69,7 +70,7 @@ ok("при новой записи старая расшифровка очищ�
 vc_ = re.search(r"async function voiceConfirm\(\)\{(.*?)\n(?=/\* «Выполнить»)", html, re.S).group(1)
 assert "voice_confirm" in vc_ and "voiceDone(r)" in vc_ and "voiceFold" not in vc_.split("voiceDone")[0]
 ok("после ответа сервера «Применить» передаёт результат в voiceDone (окно не закрывается раньше времени)")
-assert re.search(r"if\(!\(r&&r\.ok\)\)\{chrSay\(", vc_)
+assert re.search(r"if\(!\(r&&r\.ok\)\)\{[^}]*chrSay\(", vc_) and "close_()" not in vc_.split("voiceDone")[0]
 ok("при ошибке окно остаётся открытым и показывает причину")
 vf = re.search(r"async function voiceFold\(\)\{(.*?)\n(?=function voiceWeek)", html, re.S).group(1)
 assert "REDUCE" in vf and ".animate(" in vf and vf.rstrip().endswith("close_()}")
@@ -126,3 +127,48 @@ for w in ("Новое занятие", "Перенос занятия", "Отм�
     assert w in hf.group(1), w
 assert "function ckDots" in html and "function ckGo" in html
 ok("на вкладке «Расписание» над кнопкой — слайдер: карточки «Новое занятие» / «Перенос занятия» / «Отмена занятия» с точками")
+
+# --- «Применить»: без перелива кнопок, карточка остаётся на месте, на кнопке индикатор -----
+assert vc_.lstrip().startswith("chrBusy(true)") and "chrBtns(false)" not in vc_.split("voiceDone")[0].split("if(!(r&&r.ok))")[0]
+assert "function chrBusy" in html and ".chs.bz .act .ok::before" in html and "@keyframes vspin" in html
+ok("«Применить»: окно не схлопывается, на кнопке крутится индикатор «Выполняю…», остальные кнопки приглушены и недоступны")
+# --- автопрокрутка слайдера примеров: сама листает, останавливается при касании, не играет при записи -----
+ca = re.search(r"function ckAuto\(\)\{(.*?)\n(?=function ckGo)", html, re.S).group(1)
+assert "REDUCE" in ca and "touchstart" in ca and "setInterval" in ca and 'contains("rc")' in ca
+assert "ckAuto()" in re.search(r"function chatOpen\(\)\{.*?\n(?=/\*)", html, re.S).group(0)
+ok("слайдер примеров листается сам (раз в ~4 с, по кругу), замолкает при касании и во время записи, выключен при «уменьшить анимацию»")
+# --- запись — один в один как в «Чате с ИИ»: капсула, слева ✕ (сброс), таймер и волна, справа золотая ✓; нижней кнопки «Готово» нет ---
+assert "const bw=6,gp=5" not in html and html.count("const W=[{f:.021") == 2   # волна есть и в чате (chEqStart), и в виджете (voiceToggle)
+assert body.count('onclick="voiceStop(false)"') == 1 and body.count('onclick="voiceStop(true)"') == 1
+assert zone.index('class="rx"') > zone.index('id="eq"') and 'id="eqt"' in zone
+assert re.search(r"\.chs\.rc \.zone\{display:flex;[^}]*min-height:76px[^}]*box-shadow:0 0 0 2px var\(--yel\)[^}]*animation:aicRecGlow", html)
+assert re.search(r"\.chs \.rd\{[^}]*linear-gradient\(145deg,var\(--gold1\),var\(--gold2\)\)", html) and re.search(r"\.chs \.rx\{order:1", html) and re.search(r"\.chs \.rd\{order:4", html)
+assert ".chs.rc .act{display:none}" in html
+ok("запись: капсула 76px с жёлтым кольцом, слева ✕ (сброс), таймер и волна, справа золотая ✓ — как в «Чате с ИИ»; зелёной кнопки «Готово» под ней нет")
+# --- «замок тишины»: звук за запись ни разу не поднялся над шумом — на сервер не уходит -------------
+vs = re.search(r"function voiceStop\(done\)\{.*?\n(?=/\* свернули)", html, re.S).group(0)
+assert "SIL_PK" in html and "me.pk=Math.max(me.pk||0,lvl)" in html and "quiet" in vs and "chrSay(NO_SPEECH)" in vs
+assert vs.index("if(quiet)") < vs.index("voiceSend(new Blob(ch")
+ok("тишина: если пик громкости записи ниже шума, запись не отправляется и сразу звучит «Не услышал речи в записи — похоже, вы молчали»")
+# --- кнопки: общая раскладка и премиальные анимации ------------------------------------------------
+for w in (".chs.hk .act button>span{flex:1", "@keyframes btnRise", "@keyframes btnShine", "@keyframes btnDraw", "@keyframes micBreath",
+          ".chs.hk .act button:active{transform:scale(.955)"):
+    assert w in html, w
+assert re.search(r"@media \(prefers-reduced-motion:reduce\)\{\.chs\.rc \.zone,\.chs\.rc \.rx,\.chs\.rc \.rd,\.chs\.hk \.act button[^\n]*animation:none", html)
+ok("кнопки: значок слева с одинаковым отступом, подпись по центру остатка; появление по очереди, блик, «рисование» значков, нажатие; при «уменьшить анимацию» всё выключено")
+# --- аватар Вишенки не прячется на низких экранах, а встаёт в одну строку с именем -------
+assert ".chs.hk .chb,.chs.hk h3{display:none}" not in html
+assert re.search(r"@media \(max-height:780px\)\{[^@]*\.chs\.hk \.chb\{display:inline-block", html)
+ok("на низких экранах аватар остаётся: маленький, в одной строке с именем «Вишенка»")
+# --- коллизия классов: оверлей конфетти не должен называться так же, как состояние кнопок подтверждения (.cf) ---
+assert re.search(r"\.confetti\{[^}]*position:fixed", html)
+assert not re.search(r"(?<![\w-])\.cf\s*\{[^}]*position\s*:\s*fixed", html)
+ok("конфетти — класс .confetti, а не .cf: кнопки «Применить/Отмена» (.act.cf) не затрагиваются оверлеем")
+
+# --- заголовок «Вы сказали:» — того же размера, шрифта и цвета, что «Пример:» / «Проверьте:» / «Назовите:» ---
+ct = re.search(r"\.chs \.ck-t\{([^}]*)\}", html).group(1)
+cb = re.search(r"\.chs\.cfm \.chh::before,\.chs\.hk \.chh::before\{([^}]*)\}", html).group(1)
+for prop in ("font-size:24px", "font-weight:800", "color:var(--tx)", "line-height:1.15"):
+    assert prop in ct and prop in cb, prop
+assert 'content:"Вы сказали:"' in cb and "text-transform:none" in cb
+ok("заголовок «Вы сказали:» — тот же размер (24px), жирность и цвет, что у «Пример:» и «Проверьте:»")

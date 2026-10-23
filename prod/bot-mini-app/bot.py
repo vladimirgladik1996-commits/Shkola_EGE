@@ -1389,8 +1389,12 @@ async def ai_voice(m: Message):
         return
     async with thinking(m, True):              # и распознавание, и ответ — оба долгие
         data, mime = await tg_audio(m)
-        text = await whisper.transcribe(data, mime, prompt=stt_prompt())
+        src = m.voice or m.audio
+        text = await whisper.transcribe(data, mime, prompt=stt_prompt(), dur=getattr(src, "duration", None))
         res = await assist.handle_chat(m.from_user.id, text, voice=True) if text else None
+    if text == "":                                  # распознавание сработало, но речи в записи нет
+        await say(m, whisper.NO_SPEECH_MSG)
+        return
     if res is None:
         await say(m, "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом.")
         return
@@ -1940,6 +1944,14 @@ def voice_audio(j):
     except binascii.Error:
         raise ValueError
 
+def voice_dur(j):
+    """Длительность записи в секундах, присланная мини-аппом (необязательна и не доверяется слепо)."""
+    try:
+        d = float(j.get("dur"))
+    except (TypeError, ValueError):
+        return None
+    return d if 0 < d <= 600 else None
+
 def stt_prompt():
     """Подсказка Whisper перед распознаванием: имена учеников — чтобы речь с именами не искажалась.
     Пустая строка, если учеников нет или база недоступна — распознавание работает и без подсказки."""
@@ -1957,7 +1969,7 @@ def voice_snapshot():
     t = today.isoformat()
     out = [f"Сегодня {dmy(t)}, {WD_FULL[today.weekday()]}.", ""]
     info = {r["id"]: r for r in q("select id, grade, subject from students")}
-    st = stats()
+    st = [x for x in stats() if not x["deleted"]]   # архивные (и их копии-дубли) модели не показываем вовсе
     out.append(f"Ученики (всего {len(st)}):")
     for s in st[:50]:
         i = info.get(s["id"])
@@ -1971,9 +1983,9 @@ def voice_snapshot():
         bal = s["paid"] - s["spent"]
         if s["price"]:
             bits.append(f"долг {money(-bal)}" if bal < 0 else f"предоплата {money(bal)}" if bal > 0 else "без долга и предоплаты")
-        out.append(f"#{s['id']} {s['name']}" + (" (в архиве)" if s["deleted"] else "") + " · " + " · ".join(bits))
+        out.append(f"#{s['id']} {s['name']}" + " · " + " · ".join(bits))
     rows = q("select l.day, l.time, coalesce(l.dur,60) dur, s.name from lessons l join students s on s.id=l.student_id "
-             "where l.day>=? order by l.day, l.time limit 40", t)
+             "where l.day>=? and coalesce(s.deleted,0)=0 order by l.day, l.time limit 40", t)
     out += ["", f"Ближайшие занятия (от {dmy(t)}, до 40 штук):"]
     out += [f"{dmy(l['day'])} {l['time']} — {l['name']}, {l['dur']} мин" for l in rows] or ["занятий нет"]
     pays = q("select coalesce(sum(amount),0) s, count(*) n from payments where created>=?",
@@ -1981,7 +1993,7 @@ def voice_snapshot():
     out += ["", f"Оплаты за 7 дней: {pays['n']} шт. на {money(pays['s'])}."]
     return "\n".join(out)[:4000]
 
-async def voice_handle(uid, ctx, audio, mime, text):
+async def voice_handle(uid, ctx, audio, mime, text, dur=None):
     """Запрос Вишенки из мини-аппа: аудио → текст (Whisper), дальше разбор команды с учётом
     контекста страницы (Kimi): ответ, уточняющий вопрос или предложение действия с подтверждением."""
     where = ctx["tab_name"] + (f" · {ctx['screen']}" if ctx["screen"] else "")
@@ -1990,7 +2002,9 @@ async def voice_handle(uid, ctx, audio, mime, text):
         if not whisper.enabled():
             return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Голос не распознаётся: "
                     "на сервере не задан WHISPER_API_KEY. Напишите текстом."}
-        heard = await whisper.transcribe(audio, mime, prompt=stt_prompt()) or ""
+        heard = await whisper.transcribe(audio, mime, prompt=stt_prompt(), dur=dur)
+        if heard == "":                             # речи в записи нет — честно говорим об этом, а не выдумываем команду
+            return {"stage": "stub", "reply": whisper.NO_SPEECH_MSG}
         if not heard:
             return {"stage": "stub", "reply": "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом."}
         text = heard
@@ -2015,7 +2029,7 @@ async def api_voice(request):
     if audio is None and not text:
         raise ValueError
     uid = user_id(request)
-    res = await voice_handle(uid, ctx, audio, mime, (text or "").strip())
+    res = await voice_handle(uid, ctx, audio, mime, (text or "").strip(), dur=voice_dur(j))
     log.info("voice: tg_id=%s tab=%s screen=%s audio=%sB stage=%s", uid, ctx["tab"], ctx["screen"], len(audio or b""), res.get("stage"))
     return web.json_response({"ok": True, "context": ctx, **res})
 
@@ -2050,8 +2064,11 @@ async def api_stt(request):
         raise ValueError
     if not whisper.enabled():
         return web.json_response({"ok": True, "text": "", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
-    heard = " ".join((await whisper.transcribe(audio, mime, prompt=stt_prompt()) or "").split())
+    raw = await whisper.transcribe(audio, mime, prompt=stt_prompt(), dur=voice_dur(j))
+    heard = " ".join((raw or "").split())
     log.info("stt: audio=%sB mime=%s chars=%s", len(audio), mime, len(heard))
+    if raw == "":                                   # речи в записи нет
+        return web.json_response({"ok": True, "text": "", "reply": whisper.NO_SPEECH_MSG})
     return web.json_response({"ok": True, "text": heard[:4000]})
 
 # ---------- «Спросить у Вишенки» по выделенному фрагменту материала ----------
@@ -2171,7 +2188,10 @@ async def api_fragment(request):
     if not text:
         if not whisper.enabled():
             return web.json_response({"ok": True, "stage": "stub", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY."})
-        heard = " ".join((await whisper.transcribe(audio, mime, prompt=stt_prompt()) or "").split())
+        raw = await whisper.transcribe(audio, mime, prompt=stt_prompt(), dur=voice_dur(j))
+        heard = " ".join((raw or "").split())
+        if raw == "":                               # речи в записи нет
+            return web.json_response({"ok": True, "stage": "stub", "reply": whisper.NO_SPEECH_MSG})
         if not heard:
             return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись — нажмите кнопку и скажите ещё раз."})
         text = heard[:500]

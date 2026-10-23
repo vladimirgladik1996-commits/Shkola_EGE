@@ -42,7 +42,7 @@ class AssistError(Exception):
 # ---------- нормализация: модель может выдать что угодно, в базу попадает только каноника ----------
 DAY_FMT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATE_RU = re.compile(r"^(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?$")
-TIME_FMT = re.compile(r"^(\d{1,2})(?::?(\d{2}))?$")
+TIME_FMT = re.compile(r"^(\d{1,2})(?:[:.,\-\s]?(\d{2}))?$")   # 17 | 1700 | 17:00 | 17.00 | 17 00 | 17-00 | 17,00
 
 
 def norm_day(x, today=None):
@@ -73,7 +73,7 @@ def norm_day(x, today=None):
 
 
 def norm_time(x):
-    """'12' | '12:00' | '12.00' | '9:05' → 'HH:MM'. Иначе None."""
+    """'12' | '12:00' | '12.00' | '12 00' | '9:05' | '1700' → 'HH:MM'. Иначе None."""
     if isinstance(x, float) and x.is_integer():
         x = int(x)                       # модель могла вернуть время числом (15.0)
     if not isinstance(x, str) and not isinstance(x, int):
@@ -254,10 +254,13 @@ def canon_name(raw):
 
 def find_student(val):
     """id или имя → dict ученика. AssistError, если не найден или имя неоднозначно.
-    Голос искажает имена — кроме точного совпадения подбирается самое похожее имя базы."""
+    Голос искажает имена — кроме точного совпадения подбирается самое похожее имя базы.
+    Учитываются ТОЛЬКО действующие ученики — те, что есть в приложении сейчас: удалённые (deleted=1) не находятся
+    ни по имени, ни по номеру, ни «на всякий случай» запасным поиском. Несколько действующих записей с одним и
+    тем же именем — это не «несколько похожих»: берём самую свежую."""
     if isinstance(val, dict):                     # модель могла вернуть уже разобранный объект
         val = val.get("id") if val.get("id") is not None else val.get("name")
-    rows = bot.q("select id, name, grade, subject, price, coalesce(deleted,0) deleted from students")
+    rows = bot.q("select id, name, grade, subject, price from students where coalesce(deleted,0)=0")
     if isinstance(val, int) or (isinstance(val, str) and val.strip().isdigit()):
         sid = int(val)
         for r in rows:
@@ -267,19 +270,23 @@ def find_student(val):
     name = (val or "").strip().lower()
     if not name:
         raise AssistError("Не понял, о каком ученике речь. Назовите имя.")
-    exact = [r for r in rows if r["name"].strip().lower() == name]
-    if len(exact) == 1:
-        return dict(exact[0])
-    soft = [r for r in rows if name in r["name"].strip().lower() or r["name"].strip().lower() in name]
-    if len(soft) == 1:
-        return dict(soft[0])
-    if len(soft) > 1:
-        raise AssistError("Нашёл несколько похожих: " + ", ".join(r["name"] for r in soft[:5]) + ". Назовите имя точнее.")
+    norm = lambda r: r["name"].strip().lower()
+    newest = lambda cands: dict(max(cands, key=lambda r: r["id"]))   # одно имя → один человек: самая свежая запись
+    exact = [r for r in rows if norm(r) == name]
+    if exact:
+        return newest(exact)
+    soft = [r for r in rows if name in norm(r) or norm(r) in name]
+    if soft:
+        names = []
+        for r in soft:                             # уникальные имена, порядок сохраняем
+            if norm(r) not in [n.lower() for n in names]:
+                names.append(r["name"].strip())
+        if len(names) == 1:
+            return newest(soft)
+        raise AssistError("Нашёл несколько похожих: " + ", ".join(names[:5]) + ". Назовите имя точнее.")
     best, second = name_match(val, [r["name"] for r in rows])
     if best[1] and (best[0] >= 0.72 or (best[0] >= 0.6 and best[0] - second[0] >= 0.15)):
-        for r in rows:
-            if r["name"] == best[1]:
-                return dict(r)
+        return newest([r for r in rows if r["name"] == best[1]])
     raise AssistError(f"Ученика «{val}» не нашёл. Назовите имя ещё раз — или скажите «добавить нового ученика».")
 
 
@@ -287,8 +294,8 @@ ASK = {"student": "Как зовут ученика?", "name": "Как зову�
        "subject": "Какие занятия (предмет)?", "price": "Какая цена за занятие?",
        "day": "На какой день запланировать?", "time": "Во сколько?",
        "new_day": "На какой день перенести?", "new_time": "На какое время перенести?",
-       "amount": "Какая сумма оплаты?", "dur": "Сколько минут длится занятие?",
-       "error_id": "Какой номер ошибки исправляем?", "replacement": "На что заменить фрагмент?"}
+       "amount": "Какая сумма оплаты?",
+       "error_id": "Какой номер ошибки исправляем?", "replacement": "На что заменить фрагмент?"}     # длительность не спрашиваем никогда: 60 минут, пока человек сам не назвал другую
 
 
 def prepare(params, action):
@@ -468,6 +475,9 @@ PROMPT = (
     "занятие по умолчанию РАЗОВОЕ, регулярность нельзя выводить из контекста или предполагать;\n"
     "move_lesson: {day, time, new_day, new_time, dur} — где day/time это текущее занятие;\n"
     "cancel_lesson: {day, time};\n"
+    "Длительность занятия НЕ переспрашивай и не проверяй: по умолчанию 60 минут; dur указывай, только если человек сам назвал другую. "
+    "Не переспрашивай то, что человек уже сказал (даже если расслышал неуверенно) — подставь это в params, на экране подтверждения он "
+    "сам поправит; переспрос допустим только по тому, чего в речи нет совсем.\n"
     "add_payment: {student, amount}.\n"
     "check — 0–2 коротких вопроса-переспроса про то, что распознано неуверенно (имя ученика, дата, время, "
     "сумма, класс, цена): например «Цена 3000 за занятие, верно?» или «Ученик — Иван Петров?». Пустой список — "
@@ -563,12 +573,52 @@ def question_for(need, action, asked):
     return qs[0][1] if qs else None
 
 
-def next_check(task, asked):
-    """Следующий переспрос неуверенно распознанного (из check модели) — уже спрошенное не повторяем."""
+# какие поля бывают у каждого действия (по ним решаем, «своё» ли поле в переспросе модели)
+ACTION_FIELDS = {"add_student": {"name", "grade", "subject", "price"},
+                 "add_lesson": {"student", "day", "time", "dur", "regular"},
+                 "move_lesson": {"student", "day", "time", "new_day", "new_time", "dur"},
+                 "cancel_lesson": {"day", "time"},
+                 "add_payment": {"student", "amount"}}
+# про какое поле переспрос (по ключевым словам вопроса); порядок важен — первое совпадение
+CHECK_KEYS = (("dur", r"минут|длительн|продолжительн|сколько длится"),
+              ("regular", r"регуляр|повтор|кажд\w+ недел|еженедел"),
+              ("amount", r"сумм|оплат|заплат|внес|рубл|₽"),
+              ("price", r"цен|стоимост"),
+              ("grade", r"класс"),
+              ("subject", r"предмет"),
+              ("time", r"во сколько|врем[яеи]|час|\d{1,2}[:.]\d{2}"),
+              ("day", r"дат[уаыой]|день|дня|числ|когда|понедельник|вторник|сред[уаы]|четверг|пятниц|суббот|воскресен"),
+              ("student", r"ученик|имя|зовут|кто|фамили"))
+CHECK_ALIASES = {"time": ("time", "new_time"), "day": ("day", "new_day"), "student": ("student", "name")}
+
+
+def check_wanted(question, action, params):
+    """Нужно ли задавать этот переспрос. Нет, если: вопрос про длительность или регулярность (всегда 60 минут и
+    разовое, пока человек сам не сказал иное); поле чужого действия («Во сколько?» при записи оплаты); ответ уже
+    известен — даже неуверенный: он подставлен и виден в карточке «Проверьте», где его можно поправить голосом;
+    любой вопрос «верно ли я расслышал…» — подтверждение по сказанному, а оно одно, финальное, кнопками.
+    Спрашиваем только то, по чему данных нет."""
+    q = (question or "").lower()
+    field = next((f for f, rx in CHECK_KEYS if re.search(rx, q)), None)
+    if field in ("dur", "regular"):
+        return False
+    if field is None:
+        return False                                   # вопрос не про недостающее поле («Вы сказали три тысячи, верно?») — это подтверждение, а оно одно: финальная карточка
+    mine = [f for f in CHECK_ALIASES.get(field, (field,)) if f in ACTION_FIELDS.get(action, ())]
+    if not mine:
+        return False                                   # поле чужого действия
+    return any((params or {}).get(f) in (None, "", [], {}) for f in mine)   # хоть по одному пункту данных нет
+
+
+def next_check(task, asked, action=None, params=None):
+    """Следующий переспрос неуверенно распознанного (из check модели) — уже спрошенное не повторяем,
+    известное и чужое отбрасываем (см. check_wanted)."""
     if len(asked) >= 6:
         return None                                  # диалог затянулся — выходим на подтверждение
+    action = action or task.get("action")
+    params = params if params is not None else task.get("params")
     for c in task.get("check") or []:
-        if c and c not in asked:
+        if c and c not in asked and check_wanted(c, action, params):
             return c
     return None
 
@@ -953,7 +1003,7 @@ def _app_flow(uid, task, prev, text, images=None, docs=None):
         _keep(uid, phase="clarify", task=_task_state(action, merge_params(raw, params), asked),
               text=text, images=images, docs=docs)
         return {"reply": q + ANSWER_HINT, "buttons": [("❌ Отмена", "ai:cancel")]}
-    chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
+    chk = next_check(task, asked, action, params)      # модель не уверена, что расслышала верно — переспрос, но только по тому, чего нет
     if chk:
         asked.append(chk)
         _keep(uid, phase="clarify", task=_task_state(action, merge_params(raw, params), asked),
@@ -1093,7 +1143,7 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
         asked.append(q)
         _keep(uid, phase="page", task=_task_state(action, merge_params(raw, params), asked))
         return {"stage": "clarify", "reply": q, "confirm": None}
-    chk = next_check(task, asked)                      # модель не уверена, что расслышала верно — переспрос
+    chk = next_check(task, asked, action, params)      # модель не уверена, что расслышала верно — переспрос, но только по тому, чего нет
     if chk:
         asked.append(chk)
         _keep(uid, phase="page", task=_task_state(action, merge_params(raw, params), asked))

@@ -414,11 +414,10 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 .chs.cfm .chr{display:none}
 .chs.cfm .chb{width:56px;height:56px;margin-bottom:6px}
 .chs.cfm .chh{margin:8px 14px 18px;font-size:18px;font-weight:600;line-height:1.4;color:color-mix(in srgb,var(--tx) 70%,transparent);text-align:left}
-.chs.cfm .chh::before{margin-bottom:5px;font-size:14px}
+.chs.cfm .chh::before,.chs.hk .chh::before{content:"Вы сказали:";margin-bottom:8px;font-size:24px;font-weight:800;line-height:1.15;letter-spacing:0;text-transform:none;color:var(--tx)}   /* заголовок — как «Проверьте:» и «Пример:» */
 .chs.hk .mic svg{width:24px;height:24px}
 /* стартовый экран «Ученики»: кнопка по ширине текста, крупная, ближе к примеру */
 .chs.hk .zone{min-height:16px;margin:0 14px 16px;transition:min-height .3s ease}
-.chs.hk.rc .zone{min-height:72px}
 .chs.hk .act{width:auto;max-width:none;margin:0 14px}
 .chs.hk .act:not(.cf) .mic{padding:22px 24px;font-size:19px;gap:12px}
 .chs.hk .act:not(.cf) .mic svg{width:28px;height:28px}
@@ -439,7 +438,75 @@ body{max-width:none;padding-left:calc(10px + env(safe-area-inset-left,0px));padd
 /* под окном виджета плавающей кнопки Вишенки нет — запас снизу 86px не нужен, иначе экран подтверждения не помещается */
 #sheet .sh:has(.chs.hk){padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
 /* низкие экраны: убираем аватар и имя, чтобы подсказка/подтверждение и кнопки помещались без прокрутки */
-@media (max-height:780px){.chs.hk .chb,.chs.hk h3{display:none}.chs.hk .chk,.chs.hk .cff{border-top:0}.chs.hk .ck-s::before{display:none}.chs.cfm .cff{margin-top:6px;padding-top:10px}.chs.cfm .cf-r{padding:5px 0}.chs.cfm .chh{margin:4px 14px 12px}}
+/* ===== эквалайзер записи — по образцу поля записи «Чата с ИИ»: капсула с жёлтым кольцом, таймер слева, волна справа ===== */
+/* ===== запись — один в один как в «Чате с ИИ»: капсула 76px с жёлтым кольцом; слева ✕ (сброс), таймер и волна, справа золотая ✓ ===== */
+.chs .rx,.chs .rd{display:none;flex:none;width:56px;height:56px;padding:0;border:0;border-radius:50%;place-items:center;-webkit-tap-highlight-color:transparent;transition:transform .2s var(--aicsp)}
+.chs .rx{order:1;color:var(--tx);background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.chs .rd{order:4;color:var(--yon);background:linear-gradient(145deg,var(--gold1),var(--gold2));box-shadow:0 10px 20px -8px rgba(245,179,22,.95),inset 0 1px 0 rgba(255,255,255,.55)}
+.chs .rx svg,.chs .rd svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.chs .rx:active,.chs .rd:active{transform:scale(.9)}
+.chs .eqt{display:none;order:2;flex:none;min-width:38px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--acc)}
+.chs.rc .zone{display:flex;flex-direction:row;align-items:center;gap:10px;min-height:76px;padding:0 10px;border-radius:38px;background:var(--card);box-shadow:0 0 0 2px var(--yel),0 18px 40px -16px rgba(15,46,110,.5);animation:aicRecGlow 1.7s ease-out infinite}
+.chs.rc .eq{position:static;order:3;flex:1;min-width:0;width:auto;height:56px}
+.chs.rc .rx,.chs.rc .rd{display:grid;animation:capIn .55s var(--aicsp) .2s backwards}
+.chs.rc .eqt{display:block}
+.chs.rc .act{display:none}
+.chs.rc .zone>:not(.eq):not(.eqt):not(.rx):not(.rd){display:none}   /* пустые «Вы сказали»/ответ/карточка не должны занимать место в капсуле */
+.chs.hk .zone{transition:min-height .35s var(--aicsp)}
+@keyframes capIn{from{transform:scale(.4);opacity:0}}
+/* ===== кнопки: значок в кружке прижат к левому краю (одинаковый отступ у всех), подпись по центру оставшегося места ===== */
+.chs.hk .act.cf .ok,.chs.hk .act.cf .no,.chs.hk .act.cf .mic,.chs.hk .act:not(.cf) .mic{justify-content:flex-start;gap:0;padding-left:10px;padding-right:14px}
+.chs.hk .act button>span{flex:1;min-width:0;text-align:center;padding-left:6px;overflow:hidden;text-overflow:ellipsis}
+.chs.hk .act.cf .ok svg,.chs.hk .act.cf .no svg{box-sizing:content-box;width:20px;height:20px;padding:6px}
+.chs.hk .act.cf .mic svg{box-sizing:content-box;width:22px;height:22px;padding:5px}
+.chs.hk .act:not(.cf) .mic svg{box-sizing:content-box;width:26px;height:26px;padding:7px;border-radius:50%;background:rgba(255,255,255,.14)}
+/* ===== премиальная анимация кнопок ===== */
+@keyframes btnRise{from{opacity:0;transform:translateY(16px) scale(.94)}}
+@keyframes btnShine{0%,55%{transform:translateX(-140%) skewX(-18deg)}100%{transform:translateX(330%) skewX(-18deg)}}
+@keyframes btnDraw{to{stroke-dashoffset:0}}
+@keyframes micBreath{0%,100%{box-shadow:0 10px 22px -10px var(--sh)}50%{box-shadow:0 16px 34px -10px color-mix(in srgb,var(--acc) 55%,transparent)}}
+.chs.hk .act.cf .ok{animation:btnRise .6s var(--e) .04s backwards;position:relative}
+.chs.hk .act.cf .no{animation:btnRise .6s var(--e) .12s backwards}
+.chs.hk .act.cf .mic{animation:btnRise .6s var(--e) .2s backwards}
+.chs.hk .act.cf .mic.rec{animation:micPulse 1.6s ease-out infinite}
+.chs.hk .act.cf .ok::after{content:"";position:absolute;top:0;bottom:0;left:0;width:38%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.38),transparent);transform:translateX(-140%) skewX(-18deg);animation:btnShine 5s ease-in-out .9s infinite;pointer-events:none}
+.chs.bz .act .ok::after{display:none}
+.chs.hk .act.cf .ok svg path,.chs.hk .act.cf .no svg path{stroke-dasharray:34;stroke-dashoffset:34;animation:btnDraw .5s ease .32s forwards}
+.chs.hk .act:not(.cf) .mic:not(.rec){animation:micBreath 3.6s ease-in-out infinite}
+.chs.hk .act button{transition:flex-grow .5s var(--e),padding .5s var(--e),margin .5s var(--e),opacity .22s ease,background .25s,transform .22s cubic-bezier(.3,1.5,.5,1),filter .2s ease}
+.chs.hk .act button:active{transform:scale(.955);filter:brightness(.96)}
+@media (hover:hover){.chs.hk .act button:hover{filter:brightness(1.04)}}
+@media (prefers-reduced-motion:reduce){.chs.rc .zone,.chs.rc .rx,.chs.rc .rd,.chs.hk .act button,.chs.hk .act button::after,.chs.hk .act svg path,.chs.hk.rc .zone{animation:none!important;stroke-dashoffset:0!important}}
+/* ===== стартовая кнопка «Голосовая команда»: компактнее, градиент, золотой значок-кружок (как ✓ в чате), редкий блик ===== */
+.chs.hk .act:not(.cf){justify-content:center}
+.chs.hk .act:not(.cf) .mic{flex:0 1 292px;min-height:60px;padding:0 24px 0 10px;font-size:17px;font-weight:800;letter-spacing:.01em;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 84%,#fff),var(--acc));
+  box-shadow:0 18px 32px -16px color-mix(in srgb,var(--acc) 85%,transparent),inset 0 1px 0 rgba(255,255,255,.2)}
+.chs.hk .act:not(.cf) .mic svg{box-sizing:content-box;width:20px;height:20px;padding:9px;border-radius:50%;color:var(--yon);stroke:var(--yon);
+  background:linear-gradient(145deg,var(--gold1),var(--gold2));box-shadow:0 8px 14px -6px rgba(245,179,22,.9),inset 0 1px 0 rgba(255,255,255,.55)}
+.chs.hk .act:not(.cf) .mic::after{content:"";position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent);transform:translateX(-140%) skewX(-18deg);animation:btnShine 6.5s ease-in-out 1.4s infinite;pointer-events:none}
+@keyframes micBreath{0%,100%{box-shadow:0 14px 28px -16px color-mix(in srgb,var(--acc) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.2)}50%{box-shadow:0 20px 38px -14px color-mix(in srgb,var(--acc) 62%,transparent),inset 0 1px 0 rgba(255,255,255,.2)}}
+@media (max-height:780px){   /* низкие экраны: аватар и имя встают в одну строку, остальное плотнее — чтобы всё помещалось без прокрутки */
+  .chs.hk .chb{display:inline-block;width:44px;height:44px;margin:0 10px 0 0;vertical-align:middle;box-shadow:0 0 0 3px var(--yel)}
+  .chs.hk h3{display:inline-block;vertical-align:middle;margin:0;font-size:20px}
+  .chs.hk .chk{margin-top:12px;padding-top:14px}.chs.hk .ck-s::before{margin-bottom:12px}
+  .chs.cfm .cff{margin-top:12px;padding-top:12px}.chs.cfm .cf-r{padding:5px 0}.chs.cfm .chh{margin:4px 14px 12px}}
+@media (max-height:700px){
+  .chs.rc .zone{min-height:66px}.chs .rx,.chs .rd{width:48px;height:48px}.chs .rx svg,.chs .rd svg{width:24px;height:24px}
+  #sheet .sh:has(.chs.hk){padding-top:12px}
+  .chs.cfm .cf-r{padding:4px 0}.chs.cfm .chh{font-size:16px;margin:2px 14px 10px}
+  .chs.hk .act.cf .ok,.chs.hk .act.cf .no,.chs.hk .act.cf .mic{min-height:56px}.chs.hk .act.cf .mic{margin-top:10px}
+  .chs.hk .act:not(.cf) .mic{min-height:54px}
+  .chs .ck-l{margin-bottom:10px;gap:6px}.chs.hk .ck-c .ck-l{margin-bottom:12px}
+    .chs.hk .chb{width:36px;height:36px;margin-right:8px;box-shadow:0 0 0 2.5px var(--yel)}.chs.hk h3{font-size:18px}
+  .chs.hk .chk{margin-top:6px;padding-top:8px}.chs.hk .ck-s::before{margin-bottom:8px}.chs.hk .ck-d{margin-top:8px}
+  .chs.hk .ck-c{padding:10px 14px 12px}.chs.hk .ck-c .ck-t{margin-bottom:6px;font-size:20px}.chs.hk .ck-c .ck-l{gap:4px}.chs.hk .ck-c .ck-lb{margin-bottom:6px}.chs.hk .ck-c .ck-m{padding:8px 14px 9px}.chs.hk .ck-sl{padding-bottom:2px}.chs.hk .ck-c .ck-l{margin-bottom:8px}.chs.hk .ck-d{margin-top:6px}}
+/* выполнение команды: карточка не схлопывается, на «Применить» индикатор, остальное приглушено */
+.chs.bz .act .no,.chs.bz .act .mic{opacity:.45}
+.chs.bz .act .ok svg{display:none}
+.chs.bz .act .ok::before{content:"";flex:none;width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;animation:vspin .8s linear infinite}
+@keyframes vspin{to{transform:rotate(360deg)}}
+.chs.nt .act button{transition:none!important}
 .chs.hk.rc .act.cf .mic{margin-top:0}
 .chs .ck-l{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .chs .ck-l li{display:flex;align-items:center;gap:14px;font-size:20px;font-weight:700;line-height:1.2;color:var(--tx)}
@@ -2330,6 +2397,17 @@ var vfrag=null;   // режим «Спросить у Вишенки»: {fragmen
 function ckDots(e){const k=[...e.children],x=e.scrollLeft+k[0].offsetLeft;let b=0,m=1e9;   // слайдер примеров: какая карточка сейчас перед глазами
   k.forEach((c,i)=>{const d=Math.abs(c.offsetLeft-x);if(d<m){m=d;b=i}});
   document.querySelectorAll("#ckd b").forEach((d,i)=>d.classList.toggle("on",i===b))}
+var ckT=0;
+function ckCur(e){const k=[...e.children],x=e.scrollLeft+k[0].offsetLeft;let b=0,m=1e9;k.forEach((c,i)=>{const d=Math.abs(c.offsetLeft-x);if(d<m){m=d;b=i}});return b}
+/* автопрокрутка примеров: сама листает каждые ~4 с по кругу; останавливается, как только человек тронул слайдер или точки,
+   стоит на паузе во время записи; выключена при «уменьшить анимацию» */
+function ckAuto(){clearInterval(ckT);const e=$("#cks");if(!e||REDUCE)return;
+  let off=false;const halt=()=>{off=true;clearInterval(ckT)};
+  ["touchstart","pointerdown","wheel","keydown"].forEach(t=>e.addEventListener(t,halt,{passive:true,once:true}));
+  document.querySelectorAll("#ckd b").forEach(b=>b.addEventListener("click",halt,{once:true}));
+  ckT=setInterval(()=>{const c=$("#cks");if(!c||off){clearInterval(ckT);return}
+    const w=document.querySelector(".chs");if(!w||w.classList.contains("rc"))return;
+    ckGo((ckCur(c)+1)%c.children.length)},4200)}
 function ckGo(i){const e=$("#cks");if(!e||!e.children[i])return;   // плавность руками: вызов прокрутки с объектом-параметрами кидает TypeError в старом WebView (test_apk_shell)
   const to=e.children[i].offsetLeft-e.children[0].offsetLeft,from=e.scrollLeft,t0=performance.now();
   e.style.scrollSnapType="none";
@@ -2340,12 +2418,12 @@ function chatHint(){   // подсказка над кнопкой — по вк
   if(tab==="p"&&!scr)return '<div class="chk" id="chk"><div class="ck-t">Назовите:</div><ol class="ck-l"><li><i>1</i>Имя ученика</li><li><i>2</i>Сумму оплаты</li></ol><div class="ck-x"><div class="ck-t">Пример:</div><div class="ck-m"><span>Настя,</span> <span>4.000 рублей</span></div></div></div>';
   if(tab==="c"&&!scr)return '<div class="chk ck-s" id="chk"><div class="ck-sl" id="cks" role="region" aria-label="Примеры команд" onscroll="ckDots(this)"><div class=\"ck-c\"><div class=\"ck-t\">Новое занятие</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>Имя ученика</li><li><i>2</i>День</li><li><i>3</i>Время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Настя, четверг, 17:00</span></div></div><div class=\"ck-c\"><div class=\"ck-t\">Перенос занятия</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>Имя ученика</li><li><i>2</i>Старое время</li><li><i>3</i>Новое время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Настя, с четверга 17:00 на пятницу 18:00</span></div></div><div class=\"ck-c\"><div class=\"ck-t\">Отмена занятия</div><div class=\"ck-lb\">Назовите:</div><ol class=\"ck-l\"><li><i>1</i>День</li><li><i>2</i>Время</li></ol><div class=\"ck-lb\">Пример:</div><div class=\"ck-m\"><span>Отмени четверг, 17:00</span></div></div></div><div class="ck-d" id="ckd"><b class="on" onclick="ckGo(0)"></b><b onclick="ckGo(1)"></b><b onclick="ckGo(2)"></b></div></div>';
   return ""}
-function chatOpen(){if($("#sheet.on .chs")){close_();return}vfrag=null;vctx=voiceCtx();open(`<div class="chs${chatHint()?" hk":""}"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3>${chatHint()||"<p>Нажмите кнопку и скажите команду.</p>"}<div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+function chatOpen(){if($("#sheet.on .chs")){close_();return}vfrag=null;vctx=voiceCtx();open(`<div class="chs${chatHint()?" hk":""}"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Вишенка</h3>${chatHint()||"<p>Нажмите кнопку и скажите команду.</p>"}<div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas><span class="eqt" id="eqt" aria-hidden="true"></span><button type="button" class="rx" aria-label="Отменить запись" onclick="voiceStop(false)">${X_I}</button><button type="button" class="rd" aria-label="Готово — отправить запись" onclick="voiceStop(true)">${OK_I}</button>
   <div class="cff" id="cff" hidden></div>
   <div class="chh" id="chh" aria-live="polite"></div>
   <p class="chr" id="chr" aria-live="polite"></p>
   <div class="pr" id="chp" aria-hidden="true"><i></i></div></div>
-  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">${OK_I}<span>Применить</span></button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">${X_I}<span>Отмена</span></button></div></div>`)}
+  <div class="act" id="cha"><button type="button" class="mic" id="micb" onclick="voiceToggle()">${MIC_I}<span>Голосовая команда</span></button><button type="button" class="ok" id="cok" onclick="voiceConfirm()" inert aria-hidden="true">${OK_I}<span>Применить</span></button><button type="button" class="no" id="cno" onclick="voiceCancel()" inert aria-hidden="true">${X_I}<span>Отмена</span></button></div></div>`);ckAuto()}
 /* ---------- «Спросить у Вишенки»: выделили текст в варианте → виджет просит голосом уточнить задачу → ответ приходит в чат с ботом ---------- */
 function fragOpen(a){
   const t=String(a.text||"").replace(/\r/g,"").replace(/[ \t\u00a0]+/g," ").trim().slice(0,3000),m=MATS.find(x=>x.id===a.cat),n=Number(a.n);
@@ -2355,7 +2433,7 @@ function fragOpen(a){
   open(`<div class="chs frg"><div class="chb"><img src="${$("#tmk").src}" alt=""></div><h3>Спросить у Вишенки</h3>
   <blockquote class="fq"><span>${esc(q).replace(/\n+/g," ")}</span><small>${k} ${w} · вариант ${n}, ${esc(m.s)}</small></blockquote>
   <p>Что сделать с этим фрагментом? Нажмите кнопку и скажите — например, «перепиши» или «найди аргументы получше».</p>
-  <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas>
+  <div class="zone"><canvas class="eq" id="eq" aria-hidden="true"></canvas><span class="eqt" id="eqt" aria-hidden="true"></span><button type="button" class="rx" aria-label="Отменить запись" onclick="voiceStop(false)">${X_I}</button><button type="button" class="rd" aria-label="Готово — отправить запись" onclick="voiceStop(true)">${OK_I}</button>
   <div class="cff" id="cff" hidden></div>
   <div class="chh" id="chh" aria-live="polite"></div>
   <p class="chr" id="chr" aria-live="polite"></p>
@@ -2371,9 +2449,11 @@ function chrBtns(confirm){const a=$("#cha");if(!a)return;confirm=!!confirm;a.cla
   for(const [id,off] of [["cok",!confirm],["cno",!confirm]]){const b=$("#"+id);if(b){b.inert=off;off?b.setAttribute("aria-hidden","true"):b.removeAttribute("aria-hidden")}}
   micLabel()}
 function chrHeard(t){const e=$("#chh");if(!e)return;e.classList.remove("on");e.textContent=t?"«"+t+"»":"";if(t){void e.offsetWidth;e.classList.add("on")}}
-async function voiceConfirm(){chrFields(null);chrBtns(false);chrSay("Выполняю…");chrProg(1);
+function chrNoTr(){const w=document.querySelector(".chs");if(!w)return;w.classList.add("nt");setTimeout(()=>w.classList.remove("nt"),800)}   // без перелива кнопок при схлопывании
+function chrBusy(on){const w=document.querySelector(".chs"),a=$("#cha"),sp=$("#cok span");if(w)w.classList.toggle("bz",on);if(a)a.inert=on;if(sp)sp.textContent=on?"Выполняю…":"Применить"}
+async function voiceConfirm(){chrBusy(true);chrProg(1);   // карточка и кнопки остаются на месте: на «Применить» крутится индикатор, окно не схлопывается
   let r=null;try{r=await api("/api/voice_confirm",{})}catch(e){}
-  if(!(r&&r.ok)){chrSay(r&&r.reply?r.reply:"Не получилось выполнить");chrProg(0);return}   // ошибка: окно остаётся, причина — в строке ответа
+  if(!(r&&r.ok)){chrBusy(false);chrNoTr();chrFields(null);chrBtns(false);chrSay(r&&r.reply?r.reply:"Не получилось выполнить");chrProg(0);return}   // ошибка: окно остаётся, причина — в строке ответа
   chrProg(2);
   try{await voiceDone(r)}catch(e){close_();try{await load()}catch(_){}}}
 /* «Выполнить»: виджет плавно сворачивается, а на странице играет анимация того, что сделал помощник */
@@ -2408,7 +2488,7 @@ async function voiceDone(r){const a=r.action,i=r.info||{};
     const el=$(`.srow[onclick="card(${i.sid})"]`);
     if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),800)}return}
   await voiceFold();await load()}
-async function voiceCancel(){chrFields(null);chrBtns(false);
+async function voiceCancel(){chrNoTr();chrFields(null);chrBtns(false);
   let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
   chrSay(r&&r.reply?r.reply:"Отменил — ничего не менял")}
 /* «Открыть материал»: Вишенка сама переходит на страницу «Материалы» и открывает нужный вариант
@@ -2527,16 +2607,16 @@ async function voiceToggle(){
   const tick=t=>{if(vc!==me)return;
     const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr)}
     g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
-    let lvl;if(data){me.an.getByteTimeDomainData(data);let q=0;for(let i=0;i<data.length;i++){const d=(data[i]-128)/128;q+=d*d}lvl=Math.min(1,Math.sqrt(q/data.length)*5)}
+    let lvl;if(data){me.an.getByteTimeDomainData(data);let q=0;for(let i=0;i<data.length;i++){const d=(data[i]-128)/128;q+=d*d}lvl=Math.min(1,Math.sqrt(q/data.length)*5);me.pk=Math.max(me.pk||0,lvl)}   // pk — самый громкий момент записи: по нему отличаем пустую запись
     else lvl=.45+.3*Math.sin(t/260)*Math.sin(t/710+1);   // микрофон есть, но анализатор не поднялся — волна рисуется синтетической
-    me.lv[0]=(me.lv[0]||0)*.75+Math.max(.08,lvl)*.25;const amp=me.lv[0]*(h/2-4);
+    me.lv[0]=(me.lv[0]||0)*.75+Math.max(.08,lvl)*.25;const amp=me.lv[0]*(h/2-4);   // та же волна, что в поле записи «Чата с ИИ»
     const gr=g.createLinearGradient(0,0,w,0);gr.addColorStop(0,c1);gr.addColorStop(.5,c2);gr.addColorStop(1,c1);
     g.lineCap="round";g.lineJoin="round";g.strokeStyle=gr;
-    W.forEach(o=>{g.globalAlpha=o.al;g.lineWidth=o.w;g.beginPath();
-      for(let x=0;x<=w;x+=2){const env=Math.pow(Math.sin(Math.PI*x/w),1.6),y=h/2+Math.sin(x*o.f*3+t*o.s*3+o.p)*amp*o.a*env;x?g.lineTo(x,y):g.moveTo(x,y)}
-      g.stroke()});g.globalAlpha=1;
+    W.forEach(o=>{g.globalAlpha=o.al;g.lineWidth=o.w;g.beginPath();for(let x=0;x<=w;x+=2){const env=Math.pow(Math.sin(Math.PI*x/w),1.6),y=h/2+Math.sin(x*o.f*3+t*o.s*3+o.p)*amp*o.a*env;x?g.lineTo(x,y):g.moveTo(x,y)}g.stroke()});g.globalAlpha=1;
+    const sec=Math.floor((Date.now()-(me.t0||(me.t0=Date.now())))/1000);if(sec!==me.tl){me.tl=sec;const e=$("#eqt");if(e)e.textContent=Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0")}
     me.raf=requestAnimationFrame(tick)};
   me.raf=requestAnimationFrame(tick)}
+const NO_SPEECH="Не услышал речи в записи — похоже, вы молчали.",SIL_PK=.08;   // pk < .08 ≈ громкость фонового шума (RMS < 0,016)
 function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.raf);clearTimeout(v.lim);
   const ctx0=vctx||voiceCtx(),A=window.Android||{};
   if(v.native){   // нативная запись: обёртка отдаёт готовый файл — веб-стек записи не участвует
@@ -2546,7 +2626,8 @@ function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.
     else if(done)toast("Не получилось записать голос — попробуйте ещё раз")}
   else{
   if(v.rec&&v.rec.state!=="inactive"){const rec=v.rec,ch=v.ch,dur=(Date.now()-v.t0)/1000;
-    rec.onstop=()=>{if(done&&ch.length)voiceSend(new Blob(ch,{type:rec.mimeType||"audio/webm"}),ctx0,dur)};try{rec.stop()}catch(e){}}
+    const quiet=!!v.an&&v.pk!==undefined&&v.pk<SIL_PK;   // анализатор есть, а звука за запись не было — отправлять нечего
+    rec.onstop=()=>{if(!done||!ch.length)return;if(quiet){chrSay(NO_SPEECH);return}voiceSend(new Blob(ch,{type:rec.mimeType||"audio/webm"}),ctx0,dur)};try{rec.stop()}catch(e){}}
   }   // общий поток микрофона НЕ останавливается — иначе следующая запись снова спросит разрешение
   {const c=$("#eq");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height)}micUi(false);
   if(done&&!v.rec&&!v.native)toast("Запись звука не поддерживается — команда не сохранится")}

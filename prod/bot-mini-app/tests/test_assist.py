@@ -234,16 +234,21 @@ async def main():
         ok("новый ученик: имя как продиктовано (Ваня — Ваня), класс и цена переспрашиваются, подтверждение — в конце")
         await assist.handle_reply(107, "ai:cancel")
 
-        # --- 9. неуверенно распознанное переспрашивается (check) до подтверждения ---
+        # --- 9. переспрос (check) — только по тому, чего нет; известное сразу идёт в карточку «Проверьте» ---
         pay_before = payments()
+        jtask(kind="app", action="add_student", params={"name": "Лёва Тестов", "grade": "8", "price": 900},
+              check=["Какой предмет у Лёвы?"])
+        r = await assist.handle_chat(108, "добавь Лёву, восьмой класс, девятьсот")
+        assert "предмет" in r["reply"].lower() and "Применить" not in str(r["buttons"])      # предмета в речи нет — спрашиваем
+        jtask(kind="app", action="add_student", params={"name": "Лёва Тестов", "grade": "8", "price": 900, "subject": "физика"})
+        r = await assist.handle_chat(108, "физика")
+        assert "Применить" in str(r["buttons"]) and "физика" in r["reply"]
+        await assist.handle_reply(108, "ai:cancel")
         jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 3000},
-              check=["Сумма 3000, верно?"])
+              check=["Сумма 3000, верно?", "Во сколько?"])
         r = await assist.handle_chat(108, "запиши оплату Анне")
-        assert "3000" in r["reply"] and "Применить" not in str(r["buttons"]) and payments() == pay_before
-        jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 3000})
-        r = await assist.handle_chat(108, "да, три тысячи")
-        assert "Применить" in str(r["buttons"]) and "3 000" in r["reply"] and payments() == pay_before
-        ok("модель переспрашивает неуверенное, кнопки «Применить»/«Отмена» — только когда всё уверенно")
+        assert "Применить" in str(r["buttons"]) and "3 000" in r["reply"] and payments() == pay_before   # сумма известна → без переспроса, сразу карточка; «Во сколько?» при оплате — чужое поле
+        ok("переспрос — только по тому, чего нет (предмет); известная сумма и чужой вопрос «Во сколько?» не задаются, всё видно в карточке")
 
         # --- 10. поправка голосом после подтверждения пересобирает задачу ---
         jtask(kind="app", action="add_payment", params={"student": ANNA, "amount": 2500})
