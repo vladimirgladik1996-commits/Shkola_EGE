@@ -122,49 +122,84 @@ from PIL import Image
 _buf = io.BytesIO(); Image.new("RGB", (4, 4), "#fff").save(_buf, format="JPEG")
 JPG = base64.b64encode(_buf.getvalue()).decode()
 
-# --- 7. пайплайн essaycheck: стадии, нормализация, сбои (kimi замокан, как в test_chat) ---
-import essaycheck, kimi
+# --- 7. пайплайн essaycheck (боевой путь): OCR yavision + стрим kimi, нормализация, сбои ---
+import essaycheck, kimi, yavision
 real_ask_json, real_key = kimi.ask_json, kimi.API_KEY
+real_recognize, real_stream = yavision.recognize_many, kimi.ask_stream
 essaycheck.DEMO_DELAY = 0   # демо-стадии в тестах — без пауз
 
-async def fake_ocr_ok(msgs, **kw):
-    if kw.get("images"):
-        return {"essay": "Автор поднимает проблему влеяния книги.", "task": "Условие: по тексту…"}
-    return {"errors": [
-        {"type": "Орфография", "found": "влеяния", "correct": "влияния", "why": "проверка гласной", "src": "Розенталь, §…"},
-        {"type": "Неведомый тип", "found": "считаю что", "correct": "считаю, что", "why": "запятая перед «что»", "src": "…"},
-        {"type": "Пунктуация", "found": ""},                       # без фрагмента — мимо
-    ], "criteria": [
-        {"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""},
-        {"name": "К2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"},   # зажмётся до 6
-    ], "recommendations": [{"title": "r1", "text": "t1", "badge": "+1"}]}
+PAGE = {"text": "Автор поднимает проблему влеяния книги. Я считаю что книга важна.",
+        "words": [{"t": "влеяния", "x1": 40, "y1": 5, "x2": 55, "y2": 10},
+                  {"t": "считаю", "x1": 12, "y1": 20, "x2": 25, "y2": 25},
+                  {"t": "что", "x1": 27, "y1": 20, "x2": 35, "y2": 25}]}
+PAGE_T = {"text": "Условие: по тексту…", "words": [{"t": "Условие:", "x1": 5, "y1": 5, "x2": 20, "y2": 10}]}
 
-async def fake_none(msgs, **kw):
-    return None
+ANALYSIS = {"errors": [
+    {"type": "Орфография", "found": "влеяния", "correct": "влияния", "why": "проверка гласной", "src": "Розенталь, §…"},
+    {"type": "Неведомый тип", "found": "считаю что", "correct": "считаю, что", "why": "запятая перед «что»", "src": "…"},
+    {"type": "Пунктуация", "found": ""},                       # без фрагмента — мимо
+], "criteria": [
+    {"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""},
+    {"name": "К2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"},   # зажмётся до 6
+], "recommendations": [{"title": "r1", "text": "t1", "badge": "+1"}]}
 
-async def fake_empty(msgs, **kw):
-    return {"essay": "  "} if kw.get("images") else {}
+async def fake_recognize(imgs):
+    return [PAGE] if imgs == ["img1"] else ([PAGE_T] if imgs == ["img2"] else [PAGE, PAGE_T])
+
+async def fake_stream(msgs, **kw):
+    yield "think", "думаю над ошибками"
+    yield "text", json.dumps(ANALYSIS, ensure_ascii=False)
+
+async def fake_stream_none(msgs, **kw):
+    if False:
+        yield None
+    return
+
+async def fake_stream_junk(msgs, **kw):
+    yield "text", "не JSON вовсе"
+
+async def fake_criteria(kind, fallback=""):
+    return fallback
 
 async def pipeline():
-    essaycheck.DEMO = False                    # живой пайплайн — с замоканным kimi
-    kimi.API_KEY = "test"; kimi.ask_json = fake_ocr_ok
+    essaycheck.DEMO = False                    # живой пайплайн — с замоканными yavision и kimi
+    kimi.API_KEY = "test"; yavision.recognize_many = fake_recognize
+    kimi.ask_stream = fake_stream; essaycheck.fipicache.criteria = fake_criteria
     evs = [e async for e in essaycheck.run(["img1"], ["img2"], "ege")]
     assert evs[0] == ("status", "Собрала 2 фото в одно сочинение"), evs[0]
     kinds = [k for k, _ in evs]
-    assert kinds.count("status") == 5 and kinds[-1] == "done", kinds
+    assert kinds.count("status") == 5 and kinds.count("think") == 1 and kinds[-1] == "done", kinds
     res = dict(evs)["done"]
-    assert res["text"] == "Автор поднимает проблему влеяния книги." and res["task"] == "Условие: по тексту…"
+    assert res["text"] == PAGE["text"] and res["task"] == PAGE_T["text"]
     assert [e["i"] for e in res["errors"]] == [1, 2]               # мимо-запись отсеяна, номера подряд
     assert res["errors"][1]["type"] == "Речь"                      # неизвестный тип → «Речь»
     assert res["criteria"][1]["got"] == 6                          # зажато в максимум критерия
     assert res["score"] == {"got": 7, "max": 7, "percent": 100, "level": "Отлично"}
-    ok("пайплайн: 5 стадий, разбор нормализуется (типы, нумерация, баллы, итог)")
+    e1 = res["errors"][0]                                          # координаты — из разметки OCR
+    assert e1["page"] == 0 and abs(e1["x"] - 47.5) < 0.3 and abs(e1["y"] - 7.5) < 0.3, e1
+    ok("пайплайн: 5 стадий + стрим мышления, разбор нормализуется, координаты — из OCR")
 
-    kimi.ask_json = fake_none
+    async def fake_ask_json_none(msgs, **kw):
+        return None
+    kimi.ask_json = fake_ask_json_none                              # повтор после пустого/не-JSON тоже пуст
+    kimi.ask_stream = fake_stream_none
     assert [e async for e in essaycheck.run(["x"], [], "oge")][-1] == ("err", "net")
-    kimi.ask_json = fake_empty
+    kimi.ask_stream = fake_stream_junk
+    assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "net")
+    async def fake_recognize_empty(imgs):
+        return [{"text": "  ", "words": []}]
+    yavision.recognize_many = fake_recognize_empty
+    kimi.ask_stream = fake_stream
     assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "empty")
-    ok("сбои этапов: модель молчит → err/net, пустое распознавание → err/empty")
+    class Boom(yavision.VisionError):
+        pass
+    async def fake_recognize_fail(imgs):
+        raise yavision.VisionError("http")
+    yavision.recognize_many = fake_recognize_fail
+    assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "http")
+    ok("сбои этапов: модель молчит → err/net, кривой JSON → err/net, пустой OCR → err/empty, сбой OCR → err/http")
+    yavision.recognize_many, kimi.ask_stream = real_recognize, real_stream
+    kimi.ask_json = real_ask_json
 
 asyncio.run(pipeline())
 
@@ -174,6 +209,7 @@ async def demo():
     async def boom(*a, **kw):
         raise AssertionError("демо-режим не должен ходить в API")
     kimi.ask_json = boom
+    yavision.recognize_many = boom
     evs = [e async for e in essaycheck.run(["img1", "img2"], [], "ege")]
     kinds = [k for k, _ in evs]
     assert evs[0] == ("status", "Собрала 2 фото в одно сочинение"), evs[0]
@@ -228,7 +264,9 @@ async def main():
         kimi.API_KEY = "test"
         ok("run без подключённого ИИ → событие off")
 
-        kimi.ask_json = fake_ocr_ok
+        async def fake_ask_json_empty(msgs, **kw):
+            return {}
+        yavision.recognize_many, kimi.ask_stream = fake_recognize, fake_stream
         r = await c.post("/api/essay_check/run", json={"id": d["id"], "kind": "ege"}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert r.status == 200 and [e["t"] for e in evs].count("status") == 5 and evs[-1]["t"] == "done", evs
@@ -236,28 +274,30 @@ async def main():
         assert res["score"]["max"] == 7 and res["errors"][0]["found"] == "влеяния"
         assert {"text", "task", "errors", "criteria", "recommendations", "score"} <= set(res), sorted(res)
         assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Отлично"
-        assert set(res["errors"][0]) == {"i", "type", "found", "correct", "why", "src"}, sorted(res["errors"][0])
+        assert {"i", "type", "found", "correct", "why", "src", "page", "x", "y"} <= set(res["errors"][0]), sorted(res["errors"][0])
         assert set(res["criteria"][0]) == {"name", "got", "max", "why", "tip"}
         assert set(res["recommendations"][0]) == {"title", "text", "badge"}
         ok("run: 5 стадий и нормализованный разбор в done.result (схема экрана результата)")
 
-        kimi.ask_json = fake_none
+        kimi.ask_stream, kimi.ask_json = fake_stream_none, fake_ask_json_none
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert evs[-1] == {"t": "fail", "why": "net"}, evs
 
-        kimi.ask_json = fake_empty                       # пустой разбор — тоже честный сбой, а не падение фронта
+        kimi.ask_stream, kimi.ask_json = fake_stream_junk, fake_ask_json_empty   # пустой разбор — честный сбой
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert evs[-1] == {"t": "fail", "why": "empty"}, evs
         ok("пустое распознавание/разбор → fail/empty")
 
-        kimi.ask_json = fake_ocr_ok                      # «Повторить» после сбоя: тот же сеанс проверяется заново
+        kimi.ask_stream, kimi.ask_json = fake_stream, real_ask_json   # «Повторить» после сбоя: тот же сеанс заново
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert evs[-1]["t"] == "done" and evs[-1]["result"]["text"], evs[-1]
         ok("повторный run по тому же сеансу работает (кнопка «Повторить» на экране сбоя)")
 
+        yavision.recognize_many, kimi.ask_stream = real_recognize, real_stream
+        kimi.ask_json = real_ask_json
         # --- 9. демо-режим (по умолчанию): run работает без ключа API, ошибки с координатами ---
         essaycheck.DEMO = True
         kimi.API_KEY = ""

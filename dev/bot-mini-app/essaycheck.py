@@ -1,14 +1,19 @@
 """«ИИ-проверка»: пайплайн разбора сочинения по фото (пуш 5 из PUSH-PLAN.md).
 
-Этапы: сборка фото → распознавание рукописи и чтение задания (vision; текст
-сохраняется ВМЕСТЕ С ОШИБКАМИ ученика, ничего не исправляется) → поиск ошибок
-и разбор по критериям ФИПИ (строгий JSON). Модель — kimi, как в «Чате с ИИ».
+Этапы (боевой режим, EC_LIVE=1): сборка фото → распознавание рукописи через
+yavision (модель handwritten; текст сохраняется ВМЕСТЕ С ОШИБКАМИ ученика,
+ничего не исправляется) и чтение задания тем же OCR → поиск ошибок и разбор
+по критериям ФИПИ (лёгкая модель kimi, строгий JSON, мышление стримится).
+Координаты ошибок привязываются к словам OCR ДЕТЕРМИНИРОВАННО кодом (не
+моделью). Критерии ФИПИ подставляются из кэша fipicache (ошибка кэша никогда
+не ломает проверку — фолбэк CRITERIA ниже).
 
-События генератора run(): ("status", "текст этапа") → … → ("done", result) или
-("err", "net|http|empty"). Сбой этапа — событие, а не падение: бот переводит его
-в {"t":"fail"} для клиента (см. bot.api_essay_check_run). result нормализуется
+События генератора run(): ("status", "текст этапа") | ("think", «дельта
+мышления Кими» — стрим «Вишенка думает…» на прелоадере) → … → ("done", result)
+или ("err", "net|http|empty"). Сбой этапа — событие, а не падение: бот переводит
+его в {"t":"fail"} для клиента (см. bot.api_essay_check_run). result нормализуется
 в _result(): типы ошибок из закрытого списка, нумерация подряд, итог баллов
-считается по критериям — модели не доверяется её собственный «итог».
+считается по критериям кодом — модели не доверяется её собственный «итог».
 
 ДЕМО-РЕЖИМ (по умолчанию ВКЛЮЧЁН): фото НЕ отправляются ни в какой API.
 Пайплайн проигрывается локально: те же стадии, тот же формат разбора, но
@@ -16,9 +21,9 @@
 координатами (page/x/y) для наложения поверх реальных фото ученика.
 Реальное подключение API — ТОЛЬКО по явной команде владельца: EC_LIVE=1.
 """
-import asyncio, logging, os
+import asyncio, json, logging, os, re
 
-import kimi
+import fipicache, kimi, yavision
 
 DEMO = os.getenv("EC_LIVE", "").strip() != "1"   # выключается только командой владельца (EC_LIVE=1)
 try:
@@ -95,6 +100,14 @@ DEMO_RECS = [
 ]
 
 WHAT = {"ege": "сочинения ЕГЭ", "oge": "эссе для ОГЭ"}
+# Уточнение контекста фото (ТЗ: «с уточнением в промте»): сам промт OCR не принимает —
+# Yandex Vision распознаёт фото без подсказок, поэтому контекст «сочинение ЕГЭ / эссе
+# ОГЭ» уходит в промт анализа Кими и в логи этапа (см. run()).
+CONTEXT = {"ege": "фото рукописного текста на русском: сочинение ЕГЭ",
+           "oge": "фото рукописного текста на русском: эссе для ОГЭ"}
+# Пустой src у ошибки не пропускается — подставляется этот шаблон (ТЗ: обоснование
+# с источником обязательно у каждой ошибки).
+SRC_TEMPLATE = "Справочник по русскому языку (источник не указан)"
 CRITERIA = {
     "ege": "К1 Формулировка проблемы (0–1), К2 Комментарий (0–6), К3 Позиция автора (0–1), "
            "К4 Отношение к позиции (0–1), Речевые нормы (0–2), Орфография (0–3), Пунктуация (0–3) — итого 17",
@@ -102,28 +115,34 @@ CRITERIA = {
            "(орфография, пунктуация, речевые нормы) — с актуальными максимумами ФИПИ для эссе ОГЭ",
 }
 
-OCR_PROMPT = """Ты распознаёшь рукописные работы учеников.
-Передано {n} фото: первые {w} — страницы сочинения по порядку{tail}.
-Перепиши текст сочинения В ТОЧНОСТИ как написано рукой: сохраняй все ошибки,
-пропуски и пунктуацию — ничего не исправляй и не стилизуй. Страницы соедини
-в один текст.
-Верни СТРОГО JSON: {{"essay":"…","task":"…"}} — task: условие задания и опорный
-текст с фото задания (если фото задания нет — пустая строка)."""
+TASK_BLOCK = "Условие задания и опорный текст (распознаны с фото задания):\n{task}"
+# Задания нет (пользователь явно выбрал «Продолжить без») — жёсткая запретная формулировка.
+TASK_MISSING = ("Условия и опорного текста нет — НЕ ВЫДУМЫВАЙ их и не используй "
+                "несуществующий контекст.")
 
 ANALYSIS_PROMPT = """Ты — опытный проверяющий {what} по русскому языку (критерии ФИПИ).
-Ниже условие задания и распознанный текст работы ученика (ошибки сохранены как есть).
-1) Найди ошибки: орфографические, пунктуационные и речевые. Для каждой укажи фрагмент
-   текста (found — дословно из работы), исправление (correct), краткое правило (why)
-   и источник (src — например «Розенталь, §…» или «Правила орфографии и пунктуации, §…»).
-2) Разбери по критериям ФИПИ: {criteria}. Для каждого критерия — набранные баллы (got),
-   максимум (max), обоснование (why) и совет (tip), если балл не максимальный.
+Контекст работы: {context}.
+{task_block}
+Ниже распознанный текст работы ученика — ошибки сохранены как есть, ничего не исправляй.
+1) Найди ошибки: орфографические, пунктуационные и речевые. Для каждой ОБЯЗАТЕЛЬНО укажи:
+   found — фрагмент работы ДОСЛОВНО, как написано учеником;
+   correct — исправленный вариант;
+   why — краткое правило, по которому это ошибка;
+   src — источник теории: «Розенталь, §…» / «Лопатин, §…» / «Критерии ФИПИ, К…».
+   Поле src НЕ оставляй пустым.
+2) Разбери по критериям ФИПИ: {criteria}. По каждому критерию — карточка потерь баллов:
+   name, got (набрано), max (максимум), why (обоснование), tip (совет, если балл не максимальный).
    Шкала ошибок: 0 ошибок — максимум, 1–2 — минус один балл, 3–4 — половина,
    5 и больше — 0 (орфография и пунктуация); речевые: 0 ошибок — максимум,
    1–2 — половина, 3 и больше — 0.
 3) Составь до трёх рекомендаций: title (короткий заголовок), text (что сделать),
    badge (ожидаемый эффект, например «+1 К2»).
+4) Координаты ошибок (page/x/y) бери из переданной ниже разметки слов OCR:
+   page — индекс фото работы (0, 1, 2…), x/y — центр слова в процентах от размера фото.
+   Если фрагмент не найден в разметке — не придумывай координаты.
+Не выдумывай фактов, которых нет в работе/задании.
 Верни СТРОГО JSON:
-{{"errors":[{{"type":"Орфография|Пунктуация|Речь","found":"…","correct":"…","why":"…","src":"…"}}],
+{{"errors":[{{"type":"Орфография|Пунктуация|Речь","found":"…","correct":"…","why":"…","src":"…","page":0,"x":0.0,"y":0.0}}],
   "criteria":[{{"name":"…","got":n,"max":n,"why":"…","tip":"…"}}],
   "recommendations":[{{"title":"…","text":"…","badge":"…"}}]}}"""
 
@@ -199,36 +218,182 @@ async def _demo(w, t):
                            "recommendations": DEMO_RECS}, DEMO_TEXT, DEMO_TASK)
 
 
+def _norm(s):
+    """Нормализация для поиска фрагмента в словах OCR: ё→е, регистр, только буквы/цифры."""
+    return re.sub(r"[^0-9a-zа-я]+", "", (s or "").lower().replace("ё", "е"))
+
+
+def _close(a, b):
+    """Нечёткое совпадение токенов: равны или расхождение ≤1 символа (вставка/замена/удаление)."""
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1 or not a or not b:
+        return False
+    if len(a) > len(b):
+        a, b = b, a                      # a — короче
+    # b длиннее ровно на 1: либо вставка в b, либо замена равной длины (тут не бывает)
+    for i in range(len(b)):
+        if a == b[:i] + b[i + 1:]:       # удаление одного символа из b
+            return True
+    return False
+
+
+def _lev1(a, b):
+    """Расстояние Левенштейна ≤1 (равны / одна вставка / одна замена / одно удаление)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la > lb:
+        a, b = b, a                                  # a короче или равна
+    if la == lb:
+        return sum(1 for x, y in zip(a, b) if x != y) <= 1
+    for i in range(lb):                              # одна вставка в b
+        if a == b[:i] + b[i + 1:]:
+            return True
+    return False
+
+
+def _bind_coords(a, pages):
+    """Детерминированная привязка ошибок к словам OCR: found → боксы слов (page/x/y в %).
+    Поиск посимвольный по нормализованному тексту страницы (ё→е, без пунктуации), поэтому
+    «считаю, что», «во-первых» и «Во первых» находятся даже при разном разбиении на слова;
+    нечёткое совпадение — при расхождении ≤1 символа. Координаты проставляются ТОЛЬКО из
+    разметки OCR (модель их не даёт); фрагмент не найден — без оверлея.
+    pages — [{"text","words":[{t,x1,y1,x2,y2}]}] по страницам работы (индекс = page)."""
+    prepared = []
+    for pi, pg in enumerate(pages):
+        ws, text, idx = [], "", []
+        for w in (pg.get("words") or []):
+            t = _norm(w.get("t"))
+            if not t:
+                continue
+            ws.append(w)
+            text += t
+            idx += [len(ws) - 1] * len(t)
+        prepared.append((pi, text, idx, ws))
+    for e in (a.get("errors") or []):
+        if not isinstance(e, dict):
+            continue
+        needle = _norm(e.get("found"))
+        best = None                                  # (page, первое слово, последнее слово)
+        for pi, text, idx, ws in prepared:
+            if not needle or not text:
+                continue
+            n = len(needle)
+            pos, ln = -1, 0
+            i = text.find(needle)                    # 1) точное совпадение
+            if i >= 0:
+                pos, ln = i, n
+            else:                                    # 2) нечёткое: ≤1 символ расхождения
+                for L in (n - 1, n, n + 1):
+                    if L <= 0:
+                        continue
+                    for j in range(0, len(text) - L + 1):
+                        if _lev1(needle, text[j:j + L]):
+                            pos, ln = j, L
+                            break
+                    if pos >= 0:
+                        break
+            if pos >= 0:
+                best = (pi, ws[idx[pos]], ws[idx[pos + ln - 1]])
+                break
+        if not best:
+            e.pop("page", None); e.pop("x", None); e.pop("y", None)   # координат нет — оверлея нет
+            continue
+        pi, w1, w2 = best
+        x1 = min(float(w1["x1"]), float(w2["x1"])); x2 = max(float(w1["x2"]), float(w2["x2"]))
+        y1 = min(float(w1["y1"]), float(w2["y1"])); y2 = max(float(w1["y2"]), float(w2["y2"]))
+        e["page"], e["x"], e["y"] = pi, round((x1 + x2) / 2, 1), round((y1 + y2) / 2, 1)
+
+
+def _parse_json(text):
+    """Ответ модели → dict: вырезаем JSON из текста (терпимо к ```json и постороннему тексту)."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t, flags=re.I).strip()
+    try:
+        j = json.loads(t)
+        return j if isinstance(j, dict) else None
+    except ValueError:
+        pass
+    i, j = t.find("{"), t.rfind("}")
+    if i < 0 or j <= i:
+        return None
+    try:
+        d = json.loads(t[i:j + 1])
+        return d if isinstance(d, dict) else None
+    except ValueError:
+        return None
+
+
+def _msg(kind, task, essay, criteria_text):
+    """Сборка промта анализа: контекст работы (ЕГЭ/ОГЭ), задание или жёсткий запрет его выдумывать."""
+    task_block = TASK_BLOCK.format(task=task) if task else TASK_MISSING
+    return (ANALYSIS_PROMPT.format(what=WHAT[kind], context=CONTEXT[kind],
+                                   criteria=criteria_text, task_block=task_block)
+            + "\n\nТекст работы (транскрипция OCR, ошибки сохранены):\n" + essay)
+
+
 async def run(w, t, kind="ege"):
     """Пайплайн проверки: w — страницы работы, t — фото задания (base64 jpeg).
-    Асинхронный генератор событий: status → … → done(result) | err(why)."""
+    Асинхронный генератор событий: status | think (стрим мышления Кими) → done(result) | err(why).
+
+    Боевой путь: Yandex Vision OCR (handwritten) транскрибирует фото работы и задания,
+    лёгкая Kimi анализирует текст и разметку слов; мышление Кими стримится событиями
+    ("think", …) — фронт показывает его от лица Вишенки. Стриминг мышления Яндекс невозможен:
+    API Vision его не отдаёт (по ТЗ допустимо стримить только Кими)."""
     kind = kind if kind in WHAT else "ege"
     if DEMO:                                   # фото не уходят в API — только локальный демо-разбор
         async for ev in _demo(w, t):
             yield ev
         return
     yield "status", "Собрала %d фото в одно сочинение" % (len(w) + len(t))
-    tail = ", остальные %d — условие задания и опорный текст" % len(t) if t else " (фото задания нет)"
-    rec = await kimi.ask_json(
-        [{"role": "user", "content": OCR_PROMPT.format(n=len(w) + len(t), w=len(w), tail=tail)}],
-        images=w + t, max_tokens=8000)
-    if not isinstance(rec, dict):
-        log.warning("essaycheck: модель не ответила на распознавание")
-        yield "err", "net"
+    try:
+        pages = await yavision.recognize_many(w)
+    except yavision.VisionError as e:
+        log.warning("essaycheck: OCR работы не прошёл (%s)", e.code)
+        yield "err", e.code
         return
-    if not _s(rec.get("essay")):
-        log.warning("essaycheck: распознавание дало пустой текст")
+    essay = "\n\n".join(_s(p.get("text")) for p in pages).strip()
+    if not essay:
+        log.warning("essaycheck: OCR работы дал пустой текст")
         yield "err", "empty"
         return
-    essay, task = _s(rec["essay"]), _s(rec.get("task"))
     yield "status", "Распознан рукописный текст"
-    if t:
+    task = ""
+    if t:                                      # фото задания — условие и опорный текст
+        try:
+            tpages = await yavision.recognize_many(t)
+        except yavision.VisionError as e:
+            log.warning("essaycheck: OCR задания не прошёл (%s)", e.code)
+            yield "err", e.code
+            return
+        task = "\n\n".join(_s(p.get("text")) for p in tpages).strip()
         yield "status", "Прочитано задание и опорный текст"
-    yield "status", "Проверены орфография и пунктуация"
-    msg = (ANALYSIS_PROMPT.format(what=WHAT[kind], criteria=CRITERIA[kind])
-           + "\n\nУсловие задания:\n" + (task or "(фото задания не было)")
-           + "\n\nТекст работы:\n" + essay)
-    a = await kimi.ask_json([{"role": "user", "content": msg}])
+    yield "status", "Проверены орфографию и пунктуацию"
+    criteria_text = await fipicache.criteria(kind, CRITERIA[kind])
+    msg = _msg(kind, task, essay, criteria_text)
+    parts, err = [], None
+    async for ev, v in kimi.ask_stream([{"role": "user", "content": msg}],
+                                       json_mode=True, thinking=True):
+        if ev == "think":                      # стрим мышления Кими — на прелоадер от лица Вишенки
+            yield "think", v
+        elif ev == "text":
+            parts.append(v)
+        else:
+            err = v
+            break
+    if err:
+        log.warning("essaycheck: анализ не прошёл (%s)", err)
+        yield "err", err if err in ("net", "http", "empty") else "net"
+        return
+    a = _parse_json("".join(parts))
+    if not a:                                  # один повтор: модель вернула не-JSON
+        log.warning("essaycheck: разбор не разобрался как JSON — повтор")
+        a = await kimi.ask_json([{"role": "user", "content": msg}])
     if not isinstance(a, dict):
         log.warning("essaycheck: модель не ответила на разбор")
         yield "err", "net"
@@ -237,5 +402,9 @@ async def run(w, t, kind="ege"):
         log.warning("essaycheck: разбор пустой")
         yield "err", "empty"
         return
+    for e in a.get("errors") or []:            # пустой src не пропускаем — подставляем шаблон
+        if isinstance(e, dict) and not _s(e.get("src")):
+            e["src"] = SRC_TEMPLATE
+    _bind_coords(a, pages)                     # координаты ошибок — только из разметки OCR
     yield "status", "Сверяю с критериями ФИПИ…"
     yield "done", _result(a, essay, task)

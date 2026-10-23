@@ -60,6 +60,8 @@ def _box(bbox, w, h):
     verts = ((bbox or {}).get("vertices")) or []
     xs, ys = [], []
     for v in verts:
+        if not isinstance(v, dict):
+            continue
         try:
             xs.append(float(v.get("x", 0)))
             ys.append(float(v.get("y", 0)))
