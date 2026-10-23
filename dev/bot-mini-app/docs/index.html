@@ -2951,7 +2951,7 @@ function ecStuBlock(){   /* блок «Ученик» из макета: чип�
   const list=act().slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
   const hue=s=>["#E8294F","#1F9A5B","#0F2E6E","#C98A00"][(s.id||0)%4];
   const chip=(id,name,on)=>`<button type="button" class="ec-chip${on?" on":""}" onclick="ecStuChip(${id||0})"><span class="ec-av" style="background:${id?hue({id}):"#E8294F"}">${esc((name||"?").trim().charAt(0).toUpperCase())}</span>${esc(name)}</button>`;
-  const top=list.slice(0,2),cur=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);
+  const top=list,cur=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);   /* все ученики: в макете было два демо-чипса, здесь их нельзя обрезать */
   const chips=top.map(s=>chip(s.id,s.name,ecSid==s.id)).join("")
     +(cur&&!top.some(s=>s.id==cur.id)?chip(cur.id,cur.name,true):"")
     +`<button type="button" class="ec-chip" onclick="ecStuPick('save')"><span class="ec-av pl">+</span>Новый</button>`;
