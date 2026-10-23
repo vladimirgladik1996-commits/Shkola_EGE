@@ -1491,6 +1491,15 @@ body:has(.ec-view) #app{height:100dvh;display:flex;flex-direction:column;padding
 body:has(.ec-view) .ec-top{flex:none;margin:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 8px}
 body:has(.ec-view) .ec-view{flex:1;width:100%;margin:0;border-radius:0;aspect-ratio:auto;height:auto}
 body:has(.ec-hd) .ec-hd{margin-top:0;padding-top:calc(env(safe-area-inset-top,0px) + 12px)}
+/* === ИИ-проверка · (1) экран обработки без шапки: нет ☰ и названия раздела === */
+body:has(.ec-run) #top,body:has(.ec-run) #burger{display:none!important}
+body:has(.ec-run){padding-top:calc(env(safe-area-inset-top,0px) + 20px)!important}
+/* === ИИ-проверка · (2, 3) шапка превью: «Назад», «Ошибки», «ФИПИ» и Т/П — один ряд, одна высота (36px) === */
+.ec-hd .ec-back,.ec-hd .ec-chip{box-sizing:border-box;height:36px;flex:0 1 84px;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:2px;padding:0;font-size:13px;line-height:1}
+.ec-hd .ec-back{border:1.5px solid transparent}
+.ec-hd .ec-back svg{width:16px;height:16px;margin-left:-3px}
+.ec-hd .ec-round{position:static;flex:none;box-sizing:border-box;width:36px;height:36px;display:inline-grid;place-items:center;padding:0;box-shadow:none}
+.ec-hd .ec-round svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 /* виджет правки «Вишенка» (ecVS → .ecvs в шторке #sheet) — поверх карточки ошибки .ec-mod (z-index:80), иначе уходит под неё */
 #sheet:has(.ecvs){z-index:95!important}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
@@ -2806,7 +2815,7 @@ function ecProc(){
   const tail=ecState==="run"?`<div class="ec-note">Проверка идёт — обычно это занимает минуту</div>`
     :ecState==="off"?`<div class="ec-note">ИИ пока не подключён: администратору нужно задать KIMI_API_KEY. После подключения проверка заработает.</div>`
     :`<div class="ec-note ec-err2">${ecWhyMsg()}</div><button class="ec-go" onclick="ecRetry()">Повторить</button>`;
-  return `<div class="ec-mid"><img class="ec-mas" src="${EC_MAS}" alt="Вишенка"><h2>${head}</h2>
+  return `<div class="ec-mid${ecState==="run"?" ec-run":""}"><img class="ec-mas" src="${EC_MAS}" alt="Вишенка"><h2>${head}</h2>
 <div class="ec-bar"><i id="ec-bar" style="width:${ecBarW()}%"></i></div>
 <div class="ec-log" id="ec-log">${ecLogHtml()}</div></div>${tail}`}
 /* --- мок-разбор (отладка интерфейса): тестовые данные из макета essay-check —
@@ -2949,7 +2958,7 @@ function ecResult(){
   <button type="button" class="ec-chip${ecTab=="e"?" on":""}" id="ec-te" onclick="ecTabSet('e')">Ошибки</button>
   <button type="button" class="ec-chip${ecTab=="f"?" on":""}" id="ec-tf" onclick="ecTabSet('f')">ФИПИ</button>
   <span class="ec-spr"></span>
-  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="Т — фото рукописи ученика, П — печатный текст с разбором" aria-label="Вид текста: фото рукописи или печатный текст">${ecFix?"П":"Т"}</button>
+  <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="${ecTgLbl(ecFix)}" aria-label="${ecTgLbl(ecFix)}">${ecTgIcon(ecFix)}</button>
 </div>
 ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
@@ -2965,12 +2974,17 @@ function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вк�
   ve.classList.toggle("ec-hid",ecTab!="e");vf.classList.toggle("ec-hid",ecTab!="f");
   te.classList.toggle("on",ecTab=="e");tf.classList.toggle("on",ecTab=="f");
   ecRelabel()   /* на «ФИПИ» бейджи становятся категориями и места горят «под критерий» */}
+/* значки Т/П: Т — пишущая ручка (рукописный текст ученика), П — печатная литера «Т» с засечками (печатный текст) */
+function ecTgIcon(fix){return fix
+  ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8V5h14v3M12 5v14M8.5 19h7"/></svg>'
+  :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>'}
+function ecTgLbl(fix){return fix?"Печатный текст — нажмите, чтобы вернуться к фото рукописи":"Фото рукописи — нажмите, чтобы показать печатный текст"}
 function ecFixTgl(){ecFixSet(!ecFix)}   /* Т/П (tgl макета): листаем «фото рукописи / печатный текст»; состояние не запекается в onclick,
    иначе повторное нажатие присылало ту же константу и кнопка зависала на «П» */
 function ecFixSet(v){ecFix=!!v;ecErrClose();   /* Т — фото рукописи ученика, П — печатный текст (карточки ошибок остаются в обоих) */
   const d=$("#ec-desk"),b=$("#ec-tg");
   if(!d||!b){if(tab=="ai"&&ecStep===3)render();return}
-  d.innerHTML=ecDeskHtml();ecRelabel();b.textContent=ecFix?"П":"Т"}
+  d.innerHTML=ecDeskHtml();ecRelabel();b.innerHTML=ecTgIcon(ecFix);b.title=ecTgLbl(ecFix);b.setAttribute("aria-label",ecTgLbl(ecFix))}
 /* --- модалка ошибки: фрагмент → ошибка → обоснование → источники + действия «Удалить/Исправить ошибку» (макет essay-check); Esc, × и клик по фону --- */
 const EC_KIND={"Орфография":"Нарушение правописания","Пунктуация":"Нарушение пунктуации","Речь":"Речевая ошибка"};
 let ecCur=0;   /* номер ошибки, открытой в модалке — для действий fx/dl */
