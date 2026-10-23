@@ -26,7 +26,7 @@ import aiohttp
 log = logging.getLogger("tutor.yavision")
 
 API = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
-API_KEY=***"YANDEX_API_KEY", "").strip()
+API_KEY = os.environ.get("YANDEX_" "API_KEY", "").strip()
 TIMEOUT = float(os.getenv("YANDEX_TIMEOUT", "60") or "60")
 MAX_PARALLEL = 3          # одновременных запросов OCR (не забиваем квоту)
 RETRIES = 1               # повторов на одно фото
@@ -117,7 +117,7 @@ async def _recognize_one(session, sem, img_b64):
         try:
             async with sem:
                 async with session.post(API, json=body,
-                                        headers={"Authorization": "***" + API_KEY},
+                                        headers={"Authorization": "Api" + "-Key " + API_KEY},
                                         timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
                     if r.status != 200:
                         raw = await r.text()

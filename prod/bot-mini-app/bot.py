@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, essaycheck, kimi, matlib, whisper
+import assist, auth, chatfiles, essaycheck, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -2632,7 +2632,9 @@ async def api_essay_check_run(request):
     async def send(ev):
         await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
 
-    if not kimi.enabled() and not essaycheck.DEMO:   # демо-режиму ключ API не нужен — фото никуда не уходят
+    if not essaycheck.DEMO and (not kimi.enabled() or not yavision.enabled()):
+        # демо-режиму ключи API не нужны — фото никуда не уходят; боевому нужны оба:
+        # KIMI_API_KEY (анализ) и YANDEX_API_KEY (распознавание рукописи)
         await send({"t": "off"})
         await resp.write_eof()
         return resp
@@ -2641,6 +2643,8 @@ async def api_essay_check_run(request):
     async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
         if ev_kind == "status":
             await send({"t": "status", "v": v})
+        elif ev_kind == "think":                    # стрим мышления Кими — от лица Вишенки на прелоадере
+            await send({"t": "think", "v": v})
         elif ev_kind == "err":
             log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
             await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
