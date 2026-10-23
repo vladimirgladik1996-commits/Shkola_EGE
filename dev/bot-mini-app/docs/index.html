@@ -2348,7 +2348,7 @@ const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
 function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
 function stu(){
   const gs=stuGrades(),all=act(),debt=all.filter(s=>s.b<0).length,pre=all.filter(s=>s.b>0).length;
-  return `<div class="s-head"><h2>Ученики</h2><span class="s-cnt">${all.length}</span><span class="sp"></span>${debt?`<span class="s-tag neg">${debt} с долгом</span>`:""}${pre?`<span class="s-tag pos">${pre} наперёд</span>`:""}</div>
+  return `${debt||pre?`<div class="s-head"><span class="sp"></span>${debt?`<span class="s-tag neg">${debt} с долгом</span>`:""}${pre?`<span class="s-tag pos">${pre} наперёд</span>`:""}</div>`:""}
   <div class="sbar"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
   <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></div><div id="slist">${stuList()}</div>`}
 function stuUpd(){$("#slist").innerHTML=stuList()}
