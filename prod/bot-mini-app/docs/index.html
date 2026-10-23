@@ -1500,6 +1500,12 @@ body:has(.ec-run){padding-top:calc(env(safe-area-inset-top,0px) + 20px)!importan
 .ec-hd .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .ec-hd .ec-round{position:static;flex:none;box-sizing:border-box;width:36px;height:36px;display:inline-grid;place-items:center;padding:0;box-shadow:none}
 .ec-hd .ec-round svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+/* === ИИ-проверка · «Съёмка»: «Назад» — как на превью (84×36, слева 14px, тот же отступ сверху), затвор светится как в «Чате с ИИ» (camPulse) === */
+body:has(.ec-view) .ec-top{gap:8px;padding-top:calc(env(safe-area-inset-top,0px) + 12px)}
+body:has(.ec-view) .ec-top .ec-back{box-sizing:border-box;height:36px;flex:0 1 84px;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:2px;padding:0;font-size:13px;line-height:1;border:1.5px solid transparent}
+body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
+.ec-shut{border-radius:50%;animation:camPulse 1.6s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.ec-shut{animation:none}}
 /* виджет правки «Вишенка» (ecVS → .ecvs в шторке #sheet) — поверх карточки ошибки .ec-mod (z-index:80), иначе уходит под неё */
 #sheet:has(.ecvs){z-index:95!important}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
