@@ -1219,6 +1219,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-spr{flex:1}
 .ec-round{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--acc);color:var(--on);font:900 15px "Nunito",system-ui,sans-serif;cursor:pointer}
 .ec-hid{display:none}
+.ec-demo{background:rgba(232,41,79,.12);border:1.5px solid #E8294F;color:#B3142F;border-radius:14px;padding:10px 12px;font:800 12.5px "Nunito",system-ui,sans-serif;margin:0 0 10px}
 .ec-desk{background:var(--card);border-radius:18px;box-shadow:0 0 0 1px var(--ln);padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .ec-er{border-bottom:2px solid #E8294F;color:#B3142F;font-weight:700;cursor:pointer}
 .ec-er b{font-size:9px;vertical-align:super;color:#E8294F;margin-left:1px}
@@ -2739,7 +2740,7 @@ function soon(){return `<h2>${NAMES[tab]||""}</h2><div class="empty0"><div class
    → экран результата: текст с ошибками, модалка ошибки, вкладки «Ошибки / ФИПИ», балл и рекомендации.
    Дизайн-макет раздела: dev/mockups/essay-check.html */
 const EC_MAX=12;   /* фото на одну проверку: страницы работы + задание */
-const EC_MOCK=true;   /* ОТЛАДКА ИНТЕРФЕЙСА: разбор — локальный мок поверх реальных фото, API Кимы НЕ вызываем.
+const EC_MOCK=false;   /* ОТЛАДКА ИНТЕРФЕЙСА: разбор — локальный мок поверх реальных фото, API Кимы НЕ вызываем.
    Настоящий API подключается ТОЛЬКО в будущем: EC_MOCK=false → живой путь ecUpload/ecRun (upload + стрим run) */
 const EC_MOK_DELAY=700;   /* шаг мок-этапов на экране обработки, мс */
 const EC_STAGES=["Распознан рукописный текст","Прочитано задание и опорный текст","Проверены орфография и пунктуацию","Сверяю с критериями ФИПИ…"];   /* этапы пайплайма — по ним отмечаются реальные статусы стрима */
@@ -3028,6 +3029,7 @@ function ecResult(){
   <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="${ecTgLbl(ecFix)}" aria-label="${ecTgLbl(ecFix)}">${ecTgIcon(ecFix)}</button>
 </div>
 ${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
+${ecRes&&ecRes.demo?`<div class="ec-demo">⚠️ Демо-режим: разбор демонстрационный, фото не отправлялись в ИИ</div>`:""}
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>

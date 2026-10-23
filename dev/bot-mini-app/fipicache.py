@@ -78,7 +78,7 @@ async def _fetch(url):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=FETCH_TIMEOUT)) as s:
             async with s.post(kimi.BASE + "/tools/fetch", json=body,
-                              headers={"Authorization": "***" + kimi.API_KEY}) as r:
+                              headers={"Authorization": "Bearer " + kimi.API_KEY}) as r:
                 if r.status != 200:
                     log.warning("fipicache: tools/fetch HTTP %s", r.status)
                     return None

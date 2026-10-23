@@ -214,8 +214,10 @@ async def _demo(w, t):
             await asyncio.sleep(DEMO_DELAY)
         yield "status", s
     await asyncio.sleep(DEMO_DELAY)
-    yield "done", _result({"errors": DEMO_ERRORS, "criteria": DEMO_CRITERIA,
-                           "recommendations": DEMO_RECS}, DEMO_TEXT, DEMO_TASK)
+    res = _result({"errors": DEMO_ERRORS, "criteria": DEMO_CRITERIA,
+                   "recommendations": DEMO_RECS}, DEMO_TEXT, DEMO_TASK)
+    res["demo"] = True   # фронт показывает баннер «Демо-режим» — данные не выдаются за настоящие
+    yield "done", res
 
 
 def _norm(s):
@@ -374,7 +376,9 @@ async def run(w, t, kind="ege"):
         task = "\n\n".join(_s(p.get("text")) for p in tpages).strip()
         yield "status", "Прочитано задание и опорный текст"
     yield "status", "Проверены орфографию и пунктуацию"
-    criteria_text = await fipicache.criteria(kind, CRITERIA[kind])
+    extra = await fipicache.criteria(kind, "")   # актуальные документы ФИПИ (кэш 30 дней),
+    criteria_text = CRITERIA[kind] + (("\n\nДополнительно — актуальные материалы ФИПИ с fipi.ru:\n" + extra)
+                                      if extra else "")   # базовые критерии всегда в промте
     msg = _msg(kind, task, essay, criteria_text)
     parts, err = [], None
     async for ev, v in kimi.ask_stream([{"role": "user", "content": msg}],
