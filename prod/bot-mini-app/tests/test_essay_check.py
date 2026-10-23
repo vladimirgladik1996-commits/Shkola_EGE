@@ -81,10 +81,10 @@ assert re.search(r"r\.errors\.filter\(x=>x&&x\.i==i\)\[0\];if\(!e\)return", html
     "повторный тап по фрагменту/мусорный номер ошибки должен быть безопасен"
 ok("защита результата: пустой результат нормализуется (ecNrm), повторные тапы не палят экран")
 
-# --- 5д. демо-оверлей: тестовые ошибки поверх фото ученика ---
+# --- 5д. оверлей ошибок поверх фото ученика ---
 for s_ in ("function ecPhotoMode(", "function ecPhotoDesk(", "function ecDeskHtml(", "ec-ovl", "ec-page"):
     assert s_ in html, f"нет оверлея ошибок поверх фото: {s_}"
-ok("оверлей: тестовые ошибки поверх фото ученика (маркеры с координатами page/x/y)")
+ok("оверлей: ошибки с координатами поверх фото ученика (маркеры page/x/y)")
 
 # --- 6. API приёма фото: маршрут и поведение ---
 import asyncio, base64, hashlib, hmac, io, json, sqlite3, time
@@ -127,7 +127,6 @@ import essaycheck, kimi, yavision
 real_ask_json, real_key = kimi.ask_json, kimi.API_KEY
 real_recognize, real_stream = yavision.recognize_many, kimi.ask_stream
 yavision.API_KEY = "x"   # боевой пайплайн требует оба ключа (bot.api_essay_check_run)
-essaycheck.DEMO_DELAY = 0   # демо-стадии в тестах — без пауз
 
 PAGE = {"text": "Автор поднимает проблему влеяния книги. Я считаю что книга важна.",
         "words": [{"t": "влеяния", "x1": 40, "y1": 5, "x2": 55, "y2": 10},
@@ -169,7 +168,6 @@ async def fake_criteria(kind, fallback=""):
     return fallback
 
 async def pipeline():
-    essaycheck.DEMO = False                    # живой пайплайн — с замоканными yavision и kimi
     kimi.API_KEY = "test"; yavision.recognize_many = fake_recognize
     kimi.ask_stream = fake_stream; essaycheck.fipicache.criteria = fake_criteria
     evs = [e async for e in essaycheck.run(["img1"], ["img2"], "ege")]
@@ -208,31 +206,9 @@ async def pipeline():
 
 asyncio.run(pipeline())
 
-async def demo():
-    """Демо-режим (по умолчанию): API не вызывается вовсе, разбор — тестовый."""
-    essaycheck.DEMO = True
-    async def boom(*a, **kw):
-        raise AssertionError("демо-режим не должен ходить в API")
-    kimi.ask_json = boom
-    yavision.recognize_many = boom
-    evs = [e async for e in essaycheck.run(["img1", "img2"], [], "ege")]
-    kinds = [k for k, _ in evs]
-    assert evs[0] == ("status", "Собрала 2 фото в одно сочинение"), evs[0]
-    assert kinds.count("status") == 4 and kinds[-1] == "done", kinds   # без фото задания стадий 4
-    res = dict(evs)["done"]
-    assert len(res["errors"]) == 7 and res["score"] == {"got": 12, "max": 17, "percent": 71, "level": "\u0425\u043e\u0440\u043e\u0448\u043e"}, res["score"]
-    assert all({"x", "y", "page"} <= set(e) for e in res["errors"]), res["errors"][0]
-    evs = [e async for e in essaycheck.run(["img1"], ["img2"], "oge")]
-    kinds = [k for k, _ in evs]
-    assert kinds.count("status") == 5 and kinds[-1] == "done", kinds   # со фото задания стадий 5
-    kimi.ask_json = real_ask_json
-    ok("\u0434\u0435\u043c\u043e-\u0440\u0435\u0436\u0438\u043c: API \u043d\u0435 \u0432\u044b\u0437\u044b\u0432\u0430\u0435\u0442\u0441\u044f, 7 \u0442\u0435\u0441\u0442\u043e\u0432\u044b\u0445 \u043e\u0448\u0438\u0431\u043e\u043a \u0441 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u0430\u043c\u0438 (\u043e\u0432\u0435\u0440\u043b\u0435\u0439), \u0431\u0430\u043b\u043b 12/17")
-
-asyncio.run(demo())
 
 
 async def main():
-    essaycheck.DEMO = False
     app = bot.make_app()
     async with TestClient(TestServer(app)) as c:
         r = await c.post("/api/essay_check/upload", json={"w": [{"d": JPG}], "t": []})
@@ -301,20 +277,6 @@ async def main():
 
         yavision.recognize_many, kimi.ask_stream = real_recognize, real_stream
         kimi.ask_json = real_ask_json
-        # --- 9. демо-режим (по умолчанию): run работает без ключа API, ошибки с координатами ---
-        essaycheck.DEMO = True
-        kimi.API_KEY = ""
-        async def boom2(*a, **kw):
-            raise AssertionError("демо-режим не должен ходить в API")
-        kimi.ask_json = boom2
-        r = await c.post("/api/essay_check/run", json={"id": d["id"], "kind": "ege"}, headers=H)
-        evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
-        assert evs[-1]["t"] == "done" and len(evs[-1]["result"]["errors"]) == 7, evs[-1]
-        res = evs[-1]["result"]
-        assert {"x", "y", "page"} <= set(res["errors"][0])
-        assert res["score"] == {"got": 12, "max": 17, "percent": 71, "level": "Хорошо"}
-        ok("демо-режим: run без ключа API, тестовые ошибки с координатами для оверлея поверх фото")
-        essaycheck.DEMO = False
 
         # --- 10. standalone-вход (APK вне Telegram, tg_id=0): «ИИ-проверка» работает как из мини-аппа ---
         # «Готово» на экране фото уходит в /api/essay_check/upload с X-Session (uid=0), дальше — run:

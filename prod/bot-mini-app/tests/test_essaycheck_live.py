@@ -3,7 +3,6 @@
 import asyncio, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ.update(BOT_TOKEN="***", LOG_LEVEL="CRITICAL")
-os.environ.pop("EC_LIVE", None)
 sys.path.insert(0, ROOT)
 import essaycheck
 def ok(c): print("  ✓", c)
@@ -52,9 +51,10 @@ assert a["errors"][0]["page"] == 0 and abs(a["errors"][0]["x"] - 43.5) < 0.2
 ok("_bind_coords(): координаты модели перезаписываются координатами OCR")
 
 # ---------- 5. промты: ЕГЭ/ОГЭ и task_missing ----------
-m = essaycheck._msg("ege", "", essaycheck.DEMO_TEXT, essaycheck.CRITERIA["ege"])
-assert "сочинение ЕГЭ" in m and essaycheck.TASK_MISSING in m and essaycheck.DEMO_TEXT in m
-m = essaycheck._msg("oge", "Опорный текст: …", essaycheck.DEMO_TEXT, essaycheck.CRITERIA["oge"])
+ESSAY = "Автор поднимает проблему влияния книги на человека."
+m = essaycheck._msg("ege", "", ESSAY, essaycheck.CRITERIA["ege"])
+assert "сочинение ЕГЭ" in m and essaycheck.TASK_MISSING in m and ESSAY in m
+m = essaycheck._msg("oge", "Опорный текст: …", ESSAY, essaycheck.CRITERIA["oge"])
 assert "эссе для ОГЭ" in m and "Опорный текст: …" in m and essaycheck.TASK_MISSING not in m
 assert "НЕ ВЫДУМЫВАЙ" in m or "не придумывай" in m.lower()
 ok("_msg(): контекст ЕГЭ/ОГЭ, блок задания или запрет выдумывать, текст работы в промте")
@@ -79,11 +79,10 @@ def run_pipeline():
     async def fake_criteria(kind, fallback=""):
         return fallback
     orig = (essaycheck.yavision.recognize_many, essaycheck.kimi.ask_stream,
-            essaycheck.fipicache.criteria, essaycheck.DEMO)
+            essaycheck.fipicache.criteria)
     essaycheck.yavision.recognize_many = fake_recognize
     essaycheck.kimi.ask_stream = fake_stream
     essaycheck.fipicache.criteria = fake_criteria
-    essaycheck.DEMO = False
     async def go():
         out = []
         async for ev in essaycheck.run(["w1"], ["t1"], "oge"):
@@ -93,7 +92,7 @@ def run_pipeline():
         return asyncio.run(go())
     finally:
         (essaycheck.yavision.recognize_many, essaycheck.kimi.ask_stream,
-         essaycheck.fipicache.criteria, essaycheck.DEMO) = orig
+         essaycheck.fipicache.criteria) = orig
 
 evs = run_pipeline()
 kinds = [k for k, _ in evs]

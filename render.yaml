@@ -81,10 +81,10 @@ services:
         value: "https://api.openai.com/v1" # для Groq: https://api.groq.com/openai/v1
 
       # --- «ИИ-проверка»: боевой пайплайн (Yandex Vision OCR handwritten + лёгкая Kimi) ---
-      # YANDEX_API_KEY вводится в панели Render (секрет, как KIMI_API_KEY).
-      # EC_LIVE=1 — фото уходят в API; =0 — демо-режим (фото никуда не отправляются).
-      - key: EC_LIVE
-        value: "1"
+      # YANDEX_API_KEY — секрет из Yandex Cloud (роль ai.vision.ocr.user), вводится в панели
+      # Render, как KIMI_API_KEY. Без него при EC_LIVE=1 проверка не стартует (фронт покажет «off»).
+      - key: YANDEX_API_KEY
+        sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
 
       # --- обычные настройки ---
       # Render сам выдаёт PORT — bot.py его читает (os.getenv("PORT", "8080")).
@@ -151,9 +151,9 @@ services:
         value: "https://api.moonshot.ai/v1"
       - key: WHISPER_BASE_URL
         value: "https://api.openai.com/v1"
-      # «ИИ-проверка»: YANDEX_API_KEY — в панели (секрет); EC_LIVE=1 — фото уходят в API
-      - key: EC_LIVE
-        value: "1"
+      # «ИИ-проверка»: YANDEX_API_KEY — в панели (секрет, как KIMI_API_KEY); EC_LIVE=1 — фото уходят в API
+      - key: YANDEX_API_KEY
+        sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
       - key: CURRENCY
         value: "₽"
       - key: APP_ENV

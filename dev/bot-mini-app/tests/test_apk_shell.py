@@ -31,7 +31,7 @@ for side in ("dev", "prod"):
         f"{side}: фрейм материала должен пересоздаваться, а не перезагружаться (about:blank-навигация)"
     assert "scrollTo({" not in html, \
         f"{side}: scrollTo({behavior:...}) кидает TypeError в старом WebView — только scrollTo(0,0)"
-    assert "demoData" not in html and "Демо-режим" not in html, \
+    assert "demoData" not in html and "Демо-режим" not in html and "EC_MOK" not in html, \
         f"{side}: демо-данные не должны подменять реальные (занятия/оплаты уходили чужим ученикам)"
     assert 'cache:"no-store"' in html, f"{side}: /api/* без cache:no-store — WebView может отдать старые данные"
     ok(f"{side}: страница открывает материалы без навигаций и не подменяет данные демо-режимом")

@@ -2642,9 +2642,8 @@ async def api_essay_check_run(request):
     async def send(ev):
         await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
 
-    if not essaycheck.DEMO and (not kimi.enabled() or not yavision.enabled()):
-        # демо-режиму ключи API не нужны — фото никуда не уходят; боевому нужны оба:
-        # KIMI_API_KEY (анализ) и YANDEX_API_KEY (распознавание рукописи)
+    if not kimi.enabled() or not yavision.enabled():
+        # проверке нужны оба ключа: KIMI_API_KEY (анализ) и YANDEX_API_KEY (распознавание рукописи)
         await send({"t": "off"})
         await resp.write_eof()
         return resp
