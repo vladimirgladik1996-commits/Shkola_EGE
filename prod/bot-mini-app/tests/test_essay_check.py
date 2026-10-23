@@ -316,6 +316,21 @@ async def main():
         ok("демо-режим: run без ключа API, тестовые ошибки с координатами для оверлея поверх фото")
         essaycheck.DEMO = False
 
+        # --- 10. standalone-вход (APK вне Telegram, tg_id=0): «ИИ-проверка» работает как из мини-аппа ---
+        # «Готово» на экране фото уходит в /api/essay_check/upload с X-Session (uid=0), дальше — run:
+        # и загрузка, и запуск обязаны принимать uid 0, как это делают сохранение/история (bot.ec_uid).
+        yavision.recognize_many, kimi.ask_stream = fake_recognize, fake_stream
+        kimi.API_KEY = "test"
+        H0 = {"X-Session": auth.issue_token(auth.STANDALONE_UID)}
+        r = await c.post("/api/essay_check/upload", json={"w": [{"d": JPG}], "t": [{"d": JPG}]}, headers=H0)
+        d0 = await r.json()
+        assert r.status == 200 and d0["n_w"] == 1 and d0["n_t"] == 1 and bot.EC_CHECKS[d0["id"]][0] == 0, (r.status, d0)
+        r = await c.post("/api/essay_check/run", json={"id": d0["id"], "kind": "ege"}, headers=H0)
+        evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+        assert r.status == 200 and evs[-1]["t"] == "done" and evs[-1]["result"]["text"], (r.status, evs[-1])
+        ok("standalone (APK, tg_id=0): «Готово» принимает фото, run выдаёт разбор — как из Telegram")
+        yavision.recognize_many, kimi.ask_stream = real_recognize, real_stream
+
         kimi.ask_json = real_ask_json; kimi.API_KEY = real_key
         ok("сбой модели → fail/net (фронт увидит честный отказ)")
 

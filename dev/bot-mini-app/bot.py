@@ -2575,6 +2575,16 @@ EC_TTL = 30 * 60                                 # полчаса — как п�
 EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
 
 
+def ec_uid(request):
+    """Кто работает с «ИИ-проверкой»: тот же идентификатор, что у user_id, но без требования
+    «только Telegram» — загрузка фото, запуск, сохранение и история доступны и standalone-входу
+    (uid 0, APK вне Telegram; см. auth.STANDALONE_UID). Без входа сюда не попасть: guarded → 403."""
+    uid = user_id(request)
+    if not isinstance(uid, int) or uid < 0:
+        raise ValueError
+    return uid
+
+
 @guarded
 async def api_essay_check_upload(request):
     """Приём фото для «ИИ-проверки» (пуш 4). Принимает наборы w/t [{n, d, mime}],
@@ -2586,9 +2596,9 @@ async def api_essay_check_upload(request):
         return web.json_response({"error": "bad"}, status=400)
     if not isinstance(j, dict):
         return web.json_response({"error": "bad"}, status=400)
-    uid = user_id(request)
+    uid = ec_uid(request)                        # uid 0 (standalone/APK) — такой же пользователь, как из Telegram
     w, t = j.get("w"), j.get("t")
-    if not isinstance(uid, int) or uid <= 0 or not isinstance(w, list) or not isinstance(t, list):
+    if not isinstance(w, list) or not isinstance(t, list):
         return web.json_response({"error": "bad"}, status=400)
     if (not w and not t) or len(w) + len(t) > EC_MAX_PHOTOS:
         return web.json_response({"error": "bad"}, status=400)
@@ -2619,9 +2629,9 @@ async def api_essay_check_run(request):
         raise ValueError
     if not isinstance(j, dict):
         raise ValueError
-    uid, cid = user_id(request), j.get("id")
+    uid, cid = ec_uid(request), j.get("id")      # uid 0 (standalone/APK) — запуск проверки доступен и ему
     rec = EC_CHECKS.get(cid) if isinstance(cid, str) else None
-    if not rec or not isinstance(uid, int) or uid <= 0:
+    if not rec:
         raise ValueError
     if rec[0] != uid:                              # чужой сеанс проверки не трогаем
         return web.json_response({"error": "forbidden"}, status=403)
@@ -2676,15 +2686,6 @@ def ec_result(raw):
     if not (r["errors"] or r["criteria"]):
         raise ValueError
     return r
-
-
-def ec_uid(request):
-    """Кто работает с историей: тот же идентификатор, что у user_id, но без требования «только Telegram» —
-    сохранение и история доступны и standalone-входу (uid 0). Без входа сюда не попасть: guarded → 403."""
-    uid = user_id(request)
-    if not isinstance(uid, int) or uid < 0:
-        raise ValueError
-    return uid
 
 
 @guarded
