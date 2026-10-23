@@ -80,8 +80,8 @@ assert re.search(r'add_lesson.*?foldInto\(i\.day', vd, re.S) and "move_lesson" i
 ok("занятие добавлено/перенесено → окно «летит» в ячейку расписания (foldInto)")
 assert re.search(r'a=="add_payment".*?tab="p".*?fresh=i\.pid.*?payCard\(i\.pid', vd, re.S)
 ok("оплата → вкладка «Оплаты», новая запись вспыхивает в ленте (fresh), затем карточка распределения")
-assert re.search(r'a=="cancel_lesson".*?\.animate\(', vd, re.S) and re.search(r'a=="add_student".*?classList\.add\("pop"\)', vd, re.S)
-ok("отмена занятия — ячейка гаснет; новый ученик — вспыхивает в списке")
+assert re.search(r'a=="cancel_lesson".*?\.animate\(', vd, re.S) and re.search(r'a=="add_student".*?freshSt=i\.sid.*?stuFresh\(i\.sid\)', vd, re.S)
+ok("отмена занятия — ячейка гаснет; новый ученик — строка раскрывается с бейджем «Новый»")
 assert "voiceFold()" in vd and vd.rstrip().endswith("await voiceFold();await load()}")
 ok("для остальных действий — сворачивание виджета и обновление данных")
 # --- прогресс обработки: голос ушёл → сервер думает → ответ ---------------------------------------

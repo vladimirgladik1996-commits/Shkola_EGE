@@ -294,14 +294,37 @@ input,select{box-shadow:0 0 0 1px var(--ln)}
 .s-tag.pos{background:color-mix(in srgb,var(--grn) 12%,transparent);color:var(--grn)}
 .sbar{position:sticky;top:0;z-index:6;padding:8px 0;margin:0 0 4px;background:var(--bg)}
 /* строка ученика */
-.srow{transition:transform .15s;gap:12px;padding:11px 13px;margin-bottom:8px;box-shadow:0 1px 2px rgba(15,46,110,.06)}
+/* чипсина ученика: аватар · имя / класс + предмет. Строго два ряда текста, каждый в одну строку; цена, число занятий и баланс — в карточке.
+   Статус оплаты — плашка справа без сумм */
+.srow{transition:transform .15s;gap:13px;padding:11px 14px 11px 13px;margin-bottom:10px;border-radius:30px;background:linear-gradient(95deg,color-mix(in srgb,var(--yel) 9%,var(--card)),var(--card) 42%);box-shadow:0 0 0 1px var(--ln),0 12px 22px -18px rgba(15,46,110,.55)}
 .srow:active{transform:scale(.985)}
-.srow .av{width:44px;height:44px;font-size:16px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
-.srow .chev{flex:none;align-self:center;opacity:.25;font-size:22px;line-height:1;font-weight:700}
-.gt{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--yel);color:var(--yon);font-size:11px;font-weight:800;vertical-align:1px}
-.bp{flex:none;padding:5px 10px;border-radius:99px;background:var(--bg);color:var(--hint);font-size:12px;font-weight:800;white-space:nowrap}
-.bp.neg{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
-.bp.pos{background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn)}
+.srow .av{position:relative;width:48px;height:48px;font-size:16px;box-shadow:0 0 0 2px var(--card),0 0 0 3.5px color-mix(in srgb,var(--yel) 80%,transparent),0 6px 12px -6px rgba(15,46,110,.5)}
+.srow .info{display:flex;flex-direction:column;gap:3px}
+.srow .nm{display:flex;align-items:center;gap:6px;min-width:0}
+.srow .nm b{flex:0 1 auto;min-width:0;font-size:16.5px;font-weight:800;letter-spacing:-.01em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow small{display:flex;align-items:center;gap:6px;min-width:0;line-height:1.25;white-space:nowrap}
+.srow small .sj{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.srow small.no .sj{opacity:.65}
+.srow .chev{display:none}
+/* статус оплаты: компактная плашка справа без сумм — «Все оплачено» (зелёная, в т.ч. при предоплате) или «Есть долги» (красная); без цены статус не показываем */
+.stp{flex:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px 4px 7px;border-radius:99px;font-size:11.5px;font-weight:800;line-height:1.2;white-space:nowrap;background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--grn) 24%,transparent)}
+.stp.dn{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 24%,transparent)}
+.stp svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.gt{flex:none;display:inline-block;padding:1px 8px;border-radius:99px;background:var(--yel);color:var(--yon);font-size:11px;font-weight:800;line-height:1.5}
+.nw{flex:none;padding:1px 8px;border-radius:99px;background:var(--grn);color:#fff;font-size:11px;font-weight:800;line-height:1.5;animation:snTag .6s cubic-bezier(.3,1.7,.5,1) .9s backwards}
+/* новый ученик: строка раскрывается, аватар «выстреливает», имя выезжает, по строке проходит блик и жёлтое кольцо */
+.srow.st-new{position:relative;overflow:hidden;animation:snIn .7s cubic-bezier(.2,1.15,.3,1) .22s backwards,snRing 2.2s ease-out .5s}
+.srow.st-new::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 30%,color-mix(in srgb,var(--yel) 55%,transparent) 50%,transparent 70%);transform:translateX(-110%);animation:snShine 1s ease-out .8s forwards}
+.srow.st-new .av{animation:snAv .7s cubic-bezier(.3,1.6,.5,1) .45s backwards}
+.srow.st-new .info{animation:snTx .55s cubic-bezier(.22,1,.36,1) .6s backwards}
+.srow.st-new .chev{animation:snTx .55s cubic-bezier(.22,1,.36,1) .75s backwards}
+@keyframes snIn{from{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin-bottom:0;transform:translateY(-22px) scale(.94)}to{max-height:96px}}
+@keyframes snRing{0%{box-shadow:0 0 0 2px var(--yel),0 0 0 0 color-mix(in srgb,var(--yel) 70%,transparent)}60%{box-shadow:0 0 0 2px var(--yel),0 0 0 14px transparent}100%{box-shadow:0 0 0 1px var(--ln),0 12px 22px -18px rgba(15,46,110,.55)}}
+@keyframes snShine{to{transform:translateX(110%)}}
+@keyframes snAv{from{transform:scale(0) rotate(-40deg)}to{transform:none}}
+@keyframes snTx{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes snTag{from{opacity:0;transform:scale(.3)}}
+@media (prefers-reduced-motion:reduce){.srow.st-new,.srow.st-new::before,.srow.st-new .av,.srow.st-new .info,.srow.st-new .chev,.nw{animation:none!important}.srow.st-new::before{display:none}.srow.st-new{box-shadow:0 0 0 2px var(--yel)}}
 .empty0{text-align:center;background:var(--card);border-radius:24px;padding:28px 18px 20px;box-shadow:0 0 0 1px var(--ln)}
 .empty0 .e0i{font-size:38px;margin-bottom:6px}.empty0 b{display:block;font-size:17px;font-weight:800}
 .empty0 p{color:var(--hint);margin:4px 0 16px}
@@ -1404,6 +1427,63 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .pk .btns{margin-top:14px}
 .pn-go span{position:relative;z-index:1}
 @media (prefers-reduced-motion:reduce){#sheet.on .pk>*,.pk-ck,.pk-ck path,.pk-bar i,.pk-v{animation:none}}
+/* ---------- Карточка ученика: шапка-баланс по статусу, быстрые действия, плитки, сгруппированные списки ---------- */
+#sheet.on .sk>*{animation:pnIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.03s + var(--i,0)*60ms)}
+#sheet.on .sk [data-cnt]{animation:cntgo .01s both}
+.sk-hero{--g1:#1B4DA8;--g2:#0F2E6E;--g3:#081C45;position:relative;overflow:hidden;padding:20px 16px 16px;border-radius:26px;color:#fff;background:radial-gradient(150px 130px at 92% 6%,#ffc93c66,transparent 70%),radial-gradient(90% 70% at 0 100%,#ffffff14,transparent 65%),linear-gradient(145deg,var(--g1),var(--g2) 58%,var(--g3));box-shadow:0 18px 32px -20px var(--g3),inset 0 1px 0 #ffffff47,inset 0 0 0 1px #ffffff14}
+.sk-hero.sk-pos,.sk-hero.sk-zero{--g1:#24A872;--g2:#0B5A43;--g3:#073D30}
+.sk-hero.sk-neg{--g1:#D8564F;--g2:#A02A33;--g3:#5E1220}
+.sk-hero::after{content:"";position:absolute;right:-44px;top:-44px;width:170px;height:170px;border-radius:50%;border:1.5px solid #ffffff26;box-shadow:0 0 0 18px #ffffff0d;pointer-events:none}
+.sk-hero>*{position:relative;z-index:1}
+.sk-id{display:flex;align-items:center;gap:14px}
+.sk-ava{position:relative;flex:none}
+.sk-ava .av{width:76px;height:76px;font-size:27px;margin:0;box-shadow:0 0 0 3px var(--g2),0 0 0 5px #FFD766,0 12px 20px -8px #0009}
+.sk-cam{position:absolute;right:-3px;bottom:-3px;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#fff;color:#0F2E6E;box-shadow:0 0 0 2.5px var(--g2),0 4px 10px -2px #0007}
+.sk-cam svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sk-nm{min-width:0;flex:1}
+.sk-nm h3{margin:0;padding:0;font-size:22px;letter-spacing:-.01em;line-height:1.2;font-weight:800;cursor:pointer;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.sk-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sk-tags span{padding:3px 10px;border-radius:99px;background:#ffffff24;box-shadow:inset 0 0 0 1px #ffffff33;font-size:12.5px;font-weight:700}
+.sk-tags .sk-g{background:var(--yel);color:var(--yon);box-shadow:none;font-weight:800}
+.sk-tags .sk-n{background:none;box-shadow:none;padding-left:0;font-weight:600;opacity:.8}
+.sk-bal{position:relative;overflow:hidden;display:block;width:100%;margin-top:18px;padding:13px 16px 12px;border-radius:20px;text-align:left;color:#fff;background:#ffffff1c;box-shadow:inset 0 0 0 1px #ffffff2e}
+.sk-bl{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;opacity:.92}
+.sk-bs{font-style:normal;display:inline-flex;align-items:center;gap:5px;padding:3px 10px 3px 7px;border-radius:99px;background:#ffffff26;font-size:12px;font-weight:800}
+.sk-bs svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sk-amt{display:flex;align-items:baseline;gap:2px;margin-top:6px;font-size:clamp(27px,9.4vw,38px);line-height:1.1;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sk-amt span,.sk-amt b{background:linear-gradient(180deg,#fff 30%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+.sk-cap{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:13px;opacity:.9}
+.sk-cap svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
+.sk-bal:active{filter:brightness(1.12)}
+.sk-pi svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sk-h{display:flex;align-items:baseline;justify-content:space-between;margin:20px 4px 8px;font-size:15px;font-weight:800}
+.sk-h small{font-size:12.5px;font-weight:600;color:var(--hint)}
+.sk-list{overflow:hidden;border-radius:22px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 14px 26px -22px rgba(15,46,110,.45)}
+.sk-r{display:grid;grid-template-columns:1fr auto;column-gap:12px;align-items:center;width:100%;min-height:76px;padding:15px 18px 14px;text-align:left}
+.sk-p{display:flex;align-items:center;gap:12px;width:100%;min-height:62px;padding:13px 18px;text-align:left}
+.sk-r+.sk-r,.sk-p+.sk-p{border-top:1px solid var(--ln)}
+.sk-r>span{grid-column:1;font-size:13.5px;line-height:18px;font-weight:600;color:var(--hint)}
+.sk-r b{grid-column:1;min-width:0;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;line-height:26px;font-weight:800;letter-spacing:-.01em}
+.sk-r i{grid-column:2;grid-row:1/3;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--yel) 22%,var(--card));color:#8A6A00;transition:transform .2s}
+.sk-r i svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sk-r.ro i{display:none}
+.sk-r.ro b{color:var(--tx)}
+button.sk-r{transition:background .2s}button.sk-r:active{background:color-mix(in srgb,var(--yel) 16%,var(--card))}button.sk-r:active i{transform:scale(.9)}
+.sk-pi{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--grn) 14%,transparent);color:var(--grn)}
+.sk-p .t{flex:1;min-width:0;font-size:15.5px}
+.sk-p b{font-size:17px;font-weight:800;color:var(--grn);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sk-em{padding:18px 16px;text-align:center;color:var(--hint);font-size:14px}
+.sk-del{display:block;width:100%;margin-top:18px;padding:13px;border-radius:14px;color:var(--red);font-size:14px;font-weight:700;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 28%,transparent)}
+@keyframes skHero{from{opacity:0;transform:translateY(20px) scale(.95)}}
+@keyframes skAva{from{opacity:0;transform:scale(.55) rotate(-18deg)}}
+@keyframes skShine{from{transform:translateX(-130%) skewX(-18deg)}to{transform:translateX(330%) skewX(-18deg)}}
+@keyframes skTag{from{opacity:0;transform:translateX(-10px)}}
+#sheet.on .sk>.sk-hero{animation:skHero .75s cubic-bezier(.2,1,.3,1) both}
+#sheet.on .sk .sk-ava{animation:skAva .85s cubic-bezier(.3,1.5,.5,1) .25s both}
+#sheet.on .sk .sk-tags span{animation:skTag .5s cubic-bezier(.22,1,.36,1) both}
+#sheet.on .sk .sk-tags span:nth-child(1){animation-delay:.5s}#sheet.on .sk .sk-tags span:nth-child(2){animation-delay:.6s}
+.sk-bal::after{content:"";position:absolute;top:0;bottom:0;left:0;width:38%;background:linear-gradient(100deg,transparent,#ffffff38,transparent);pointer-events:none;animation:skShine 1.2s ease-out .95s both}
+@media (prefers-reduced-motion:reduce){#sheet.on .sk>*,#sheet.on .sk [data-cnt],#sheet.on .sk .sk-ava,#sheet.on .sk .sk-tags span{animation:none}.sk-bal::after{display:none}}
 /* дождь: слои и изоляция, чтобы падение монет не зависело от перерисовок страницы */
 #rain{contain:layout style paint}
 .pn-c.big,.pn-bn{will-change:transform,opacity;backface-visibility:hidden}
@@ -2353,7 +2433,7 @@ async function payAdd(a){
 
 /* ---------- Ученики: поиск, фильтр по классу, добавление, карточка ---------- */
 const GRADES=[...Array(11)].map((_,i)=>i+1),PRICE_QUICK=[3000,4000,5000];
-let sq="",sg="all",ph;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать)
+let sq="",sg="all",ph,freshSt=0;   // поиск, фильтр класса, выбранное фото (undefined — не менялось, "" — убрать)
 const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
 function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
 function stu(){
@@ -2373,9 +2453,15 @@ function stuList(){
   if(!act().length)return '<div class="empty0"><div class="e0i">🎓</div><b>Учеников пока нет</b><p>Добавьте первого — потом его можно будет выбрать в расписании.</p><button class="btn pri" style="width:100%" onclick="studNew()">+ Добавить ученика</button></div>';
   const q_=sq.trim().toLowerCase(),f=act().map(bal).filter(s=>(!q_||nameMatch(s.name,q_))&&(sg=="all"||(sg=="none"?!(s.grade||"").trim():(s.grade||"").trim()==sg)));
   if(!f.length)return '<div class="empty0"><div class="e0i">🔍</div><b>Учеников по этому запросу нет</b><p>Попробуйте другое имя или сбросьте фильтры.</p><button class="btn" style="width:100%" onclick="sq=\'\';sg=\'all\';render()">Сбросить фильтры</button></div>';
-  return f.map(s=>{const t=!s.price?"цена не указана":s.b<0?"долг "+money(s.b):s.b>0?"наперёд "+money(s.b):"всё оплачено",g=(s.grade||"").trim()?stGrade(s.id):"",
-      sub=[(s.subject||"").trim(),s.price?money(s.price)+" / занятие":"","проведено "+s.done].filter(Boolean).map(esc).join(" · ");
-    return `<div class="srow" onclick="card(${s.id})">${av(s)}<span class="info"><b>${esc(s.name)}${g?`<span class="gt">${esc(g)}</span>`:""}</b><small>${sub}</small></span><span class="bp ${s.b<0?"neg":s.b>0?"pos":""}">${t}</span><i class="chev">›</i></div>`}).join("")}
+  return f.map(s=>{const g=(s.grade||"").trim()?stGrade(s.id):"",sub=(s.subject||"").trim(),nw=s.id==freshSt;
+    const pl=!s.price&&!s.b?"":s.b<0?'<span class="stp dn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Есть долги</span>':'<span class="stp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Все оплачено</span>';
+    return `<div class="srow${s.b<0?" dn":s.b>0?" up":""}${nw?" st-new":""}" data-sid="${s.id}" onclick="card(${s.id})">${av(s)}<span class="info"><span class="nm"><b>${esc(s.name)}</b>${nw?'<span class="nw">Новый</span>':""}</span><small${sub?"":' class="no"'}>${g?`<span class="gt">${esc(g)}</span>`:""}<span class="sj">${esc(sub||"предмет не указан")}</span></small></span>${pl}<i class="chev">›</i></div>`}).join("")}
+/* новый ученик: прокрутить к строке; через 3 с снять подсветку и бейдж «Новый» (без перерисовки списка) */
+function stuFresh(id){
+  const el=$(`.srow[data-sid="${id}"]`);
+  if(el)el.scrollIntoView({block:"center",behavior:REDUCE?"auto":"smooth"});
+  clearTimeout(stuFresh.h);
+  stuFresh.h=setTimeout(()=>{freshSt=0;const e=$(".srow.st-new");if(e){e.classList.remove("st-new");const t=e.querySelector(".nw");if(t)t.remove()}},3000)}
 
 /* фото: центр-квадрат 360×360, JPEG — сервер принимает data-URL до ~500 КБ */
 function cropPhoto(f,cb){if(!f)return;const r=new FileReader();
@@ -2416,29 +2502,49 @@ async function studAdd(){
   const b={name,grade:$("#ng").value,subject:$("#nsb").value.trim(),price:Math.max(0,parseInt($("#np").value,10)||0)};if(ph)b.photo=ph;
   const r=await api("/api/student/add",b);if(!r)return;
   const cb=nsAfter;nsAfter=null;
+  if(tab=="s"&&!cb){                       // фильтры не должны прятать только что добавленного; строка появится с анимацией
+    const g=(b.grade||"").trim();
+    if(sq.trim()&&!nameMatch(name,sq.trim().toLowerCase()))sq="";
+    if(sg!="all"&&(sg=="none"?g:g!=sg))sg="all";
+    freshSt=r.id}
   close_();await load();toast("Ученик добавлен: "+name);
+  if(freshSt)stuFresh(r.id);
   if(cb)cb(r.id);
 }
+const SKI={
+  cam:'<path d="M4 8.5A2.5 2.5 0 016.5 6h1.2l1.2-1.6A1 1 0 019.7 4h4.6a1 1 0 01.8.4L16.3 6h1.2A2.5 2.5 0 0120 8.5v8a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 16.5z"/><circle cx="12" cy="12.5" r="3.2"/>',
+  pen:'<path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>',
+  done:'<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>'};
+const skv=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${SKI[k]||PCI[k]}</svg>`;
 function card(id,ed,fo){
   const s=bal(S.find(x=>x.id==id));
+  if(!s||s.deleted){toast("Ученик удалён");return}   // у удалённого ученика карточки нет
   if(ed){open(`<h3>Редактирование профиля</h3><p class="sub">${esc(s.name)}</p>${photoField(s.photo)}
     <label>Имя и фамилия<input id="en" value="${esc(s.name)}"></label><label>Класс</label>${gradeSel("eg",s.grade)}
     <label>Предмет<input id="es" value="${esc(s.subject||"")}"></label>${priceField("ep",s.price)}<p class="sub" style="margin-top:6px">Новая цена применится к будущим занятиям. Уже проведённые останутся по прежней цене.</p>
     <div class="btns"><button class="btn pri" onclick="saveS(${id})">Сохранить</button><button class="btn" onclick="card(${id})">Отмена</button></div>`);
     if(fo){const el=document.getElementById(fo);if(el){try{el.focus({preventScroll:true})}catch(e){}try{el.scrollIntoView({block:"center"})}catch(e){}}}
     return}
-  const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5),td=iso(T),plan=L.filter(l=>l.sid==id&&l.day>=td).length;
-  const bt=!s.price?"Цена не указана — долг не считается":s.b<0?"🔴 Текущий долг: "+money(s.b):s.b>0?"🟢 Оплачено наперёд: "+money(s.b):"✅ Долга нет";
-  const info=(k,v,fo)=>fo?`<div class="row" onclick="card(${id},1,'${fo}')" title="Нажмите, чтобы изменить"><span class="info">${k}</span><b>${v}</b> <span style="opacity:.55">✏️</span></div>`
-    :`<div class="row" style="cursor:default"><span class="info">${k}</span><b>${v}</b></div>`;
-  open(`${s.deleted?av(s,"big"):`<div class="phc">${av(s)}<button type="button" class="pill" onclick="photoMenu(${id})">📷 Изменить фото</button></div>`}<h3 style="text-align:center;padding:0;font-size:21px;cursor:pointer" onclick="card(${id},1,'en')" title="Нажмите, чтобы изменить">${esc(s.name)}</h3>
-  <p class="sub" style="text-align:center">${[gtxt(s.grade),s.subject].filter(Boolean).map(esc).join(" · ")||"класс и предмет не указаны"}</p>
-  <button class="gauge ${s.b<0?"gneg":s.b>0?"gpos":"gzero"}" onclick="balPop(${id})">${s.b==0?money(0):(s.b>0?"+":"−")+money(s.b)}</button>
-  <p class="gcap">${s.b<0?"Есть долг":s.b>0?"Есть предоплата":"Все уроки оплачены вовремя"}</p>
-  <div class="cst"><div class="stat"><small>Занятий проведено</small><b>${s.done}</b></div><div class="stat"><small>Оплачено всего</small><b>${money(s.paid)}</b></div>
-  <div class="stat"><small>Количество оплат</small><b>${mine.length}</b></div><div class="stat"><small>Занятий впереди</small><b>${plan}</b></div></div>
-  ${info("Класс",esc(gtxt(s.grade)||"—"),"eg")}${info("Предмет",esc(s.subject||"—"),"es")}${info("Цена за занятие",s.price?money(s.price):"не указана","ep")}${info("Стоимость проведённых",money(s.spent||0))}
-  <h2>Последние платежи</h2>${last.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Платежей ещё не было.</p>'}${s.deleted?'<p class="note">Ученик удалён. История занятий и оплат сохранена.</p>':`<div class="btns" style="margin-top:18px"><button class="btn dng" onclick="studDel(${id})">Удалить ученика</button></div>`}`);
+  const mine=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at),last=mine.slice(0,5);
+  const k=s.b<0?"neg":s.b>0?"pos":"zero",pill={neg:["debt","Есть долги"],pos:["ok","Все оплачено"],zero:["ok","Все оплачено"]}[k],
+    cap=s.b<0?"Есть долг":s.b>0?"Есть предоплата":!s.price?"Цена не указана — долг не считается":"Все уроки оплачены вовремя",
+    gr=(s.grade||"").trim()?esc(gtxt(s.grade)):"",sj=(s.subject||"").trim()?esc(s.subject):"",
+    tags=(gr?`<span class="sk-g">${gr}</span>`:"")+(sj?`<span>${sj}</span>`:"")||'<span class="sk-n">Класс и предмет не указаны</span>';
+  const row=(t,v,fo)=>fo?`<button type="button" class="sk-r" onclick="card(${id},1,'${fo}')" title="Нажмите, чтобы изменить"><span>${t}</span><b>${v}</b><i>${skv("pen")}</i></button>`
+    :`<div class="sk-r ro"><span>${t}</span><b>${v}</b><i></i></div>`;
+  open(`<div class="sk">
+  <div class="sk-hero sk-${k}" style="--i:0">
+    <div class="sk-id"><div class="sk-ava">${av(s)}<button type="button" class="sk-cam" onclick="photoMenu(${id})" aria-label="Изменить фото">${skv("cam")}</button></div>
+      <div class="sk-nm"><h3 onclick="card(${id},1,'en')" title="Нажмите, чтобы изменить">${esc(s.name)}</h3><div class="sk-tags">${tags}</div></div></div>
+    <button type="button" class="sk-bal" onclick="balPop(${id})"><span class="sk-bl">Баланс<i class="sk-bs">${skv(pill[0])}${pill[1]}</i></span>
+      <div class="sk-amt">${s.b==0?"":`<span>${s.b>0?"+":"−"}</span>`}<b data-cnt="${Math.abs(s.b)}" data-fmt="m" data-cd="200">${money(s.b)}</b></div>
+      <span class="sk-cap">${cap}${skv("chev")}</span></button>
+  </div>
+  <div style="--i:3"><h2 class="sk-h">Профиль</h2><div class="sk-list">${row("Класс",gr||"—","eg")}${row("Предмет",sj||"—","es")}${row("Цена за занятие",s.price?money(s.price):"не указана","ep")}</div></div>
+  <div style="--i:4"><h2 class="sk-h">Последние платежи${mine.length>5?`<small>5 из ${mine.length}</small>`:""}</h2><div class="sk-list">${last.map(p=>`<div class="sk-p"><span class="sk-pi">${skv("pay")}</span><span class="t">${when(p.at)}</span><b>+${money(p.amt)}</b></div>`).join("")||'<p class="sk-em">Платежей ещё не было.</p>'}</div></div>
+  <div style="--i:5"><button type="button" class="sk-del" onclick="studDel(${id})">Удалить ученика</button></div></div>`);
 }
 function studDel(id){const s=S.find(x=>x.id==id);
   tg.showConfirm(`Удалить ученика «${s.name}»? Будут удалены все его занятия, оплаты и регулярные серии — без возможности восстановления.`,async ok=>{if(ok&&await api("/api/student/delete",{id})){close_();await load();toast("Ученик удалён")}})}
@@ -2559,9 +2665,8 @@ async function voiceDone(r){const a=r.action,i=r.info||{};
     clearTimeout(payAdd.h);payAdd.h=setTimeout(()=>{fresh=0;const e=$(".feed.fresh");if(e)e.classList.remove("fresh")},2600);
     clearTimeout(payAdd.c);payAdd.c=setTimeout(()=>{if(tab=="p")payCard(i.pid,1)},1500);return}
   if(a=="add_student"&&i.sid){   // новый ученик вспыхивает в списке
-    await voiceFold();tab="s";sq="";sg="all";await load();toast("Ученик добавлен: "+i.name);
-    const el=$(`.srow[onclick="card(${i.sid})"]`);
-    if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),800)}return}
+    await voiceFold();tab="s";sq="";sg="all";freshSt=i.sid;await load();toast("Ученик добавлен: "+i.name);
+    stuFresh(i.sid);return}
   await voiceFold();await load()}
 async function voiceCancel(){chrNoTr();chrFields(null);chrBtns(false);
   let r=null;try{r=await api("/api/voice_cancel",{})}catch(e){}
