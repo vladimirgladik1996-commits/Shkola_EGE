@@ -1583,6 +1583,24 @@ def rate_ok(uid, now=None):
     d.append(now)
     return True
 
+async def _stream_fail(request, why="net"):
+    """Сбой ПОСЛЕ начала NDJSON-стрима (api_chat, api_essay_check_run): второй HTTP-статус
+    поверх начатого chunked-тела недопустим — aiohttp дописывал его в тело, клиент получал
+    «Invalid character in chunk size: b'HTTP/1.1 400 Bad Request'», а reverse-proxy Render
+    считал бэкенд мёртвым. Дописываем {"t":"fail","why":"net"} и закрываем тело штатно —
+    фронт показывает «Проверка не завершилась» + «Повторить». Стрим ещё не начинался → None
+    (обычный код ошибки)."""
+    resp = getattr(request, "stream_resp", None)
+    if resp is None or not getattr(resp, "prepared", False):
+        return None
+    try:
+        await resp.write((json.dumps({"t": "fail", "why": why}, ensure_ascii=False) + "\n").encode("utf-8"))
+        await resp.write_eof()
+    except Exception:                                      # соединение уже мертво — дописать некуда
+        pass
+    return resp
+
+
 def guarded(fn):
     async def w(request):
         code = authorized(request)
@@ -1601,12 +1619,14 @@ def guarded(fn):
             resp = await fn(request)
         except (ValueError, KeyError, IndexError, TypeError, AttributeError, RecursionError, OverflowError):
             log.info("api bad request: tg_id=%s path=%s", uid, request.path)
-            return web.Response(status=400)
+            return await _stream_fail(request) or web.Response(status=400)
         except web.HTTPException:
+            if await _stream_fail(request):                # стрим уже начался — второй статус недопустим
+                return request.stream_resp
             raise
         except Exception:                                    # непредвиденное: пишем в лог, наружу — без деталей
             log.exception("api error: tg_id=%s path=%s", uid, request.path)
-            return web.json_response({"error": "internal"}, status=500)
+            return await _stream_fail(request) or web.json_response({"error": "internal"}, status=500)
         if request.method == "POST" and resp.status < 400:   # журнал изменений
             try:
                 j = await request.json()
@@ -2423,6 +2443,7 @@ async def api_chat(request):
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
     await resp.prepare(request)
+    request.stream_resp = resp              # guarded: сбой после начала стрима → {"t":"fail"}, а не второй статус
 
     async def send(ev):
         await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
@@ -2638,6 +2659,7 @@ async def api_essay_check_run(request):
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
     await resp.prepare(request)
+    request.stream_resp = resp              # guarded: сбой после начала стрима → {"t":"fail"}, а не второй статус
 
     async def send(ev):
         await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
