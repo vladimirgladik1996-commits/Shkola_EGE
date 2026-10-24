@@ -1202,11 +1202,11 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:ecShim 1.6s infinite}
 @keyframes ecShim{to{transform:translateX(100%)}}
 .ec-log{width:100%;min-height:176px;background:var(--card);border:1.5px solid var(--ln);border-radius:16px;padding:12px;font-size:12px;font-weight:700;line-height:1.7;color:var(--hint)}
-.ec-log div{opacity:0;max-height:0;overflow:hidden;transform:translateY(6px);transition:opacity .35s,transform .35s,max-height .35s}
-.ec-log div.show{opacity:1;max-height:48px;transform:none}
-.ec-log div::before{content:"✓ ";color:var(--grn);font-weight:900}
-.ec-log div.n{color:var(--tx)}
-.ec-log div.n::before{content:"● ";color:var(--yel);animation:ecBl 1s infinite}
+.ec-stg div{opacity:0;max-height:0;overflow:hidden;transform:translateY(6px);transition:opacity .35s,transform .35s,max-height .35s}
+.ec-stg div.show{opacity:1;max-height:48px;transform:none}
+.ec-stg div::before{content:"✓ ";color:var(--grn);font-weight:900}
+.ec-stg div.n{color:var(--tx)}
+.ec-stg div.n::before{content:"● ";color:var(--yel);animation:ecBl 1s infinite}
 @keyframes ecBl{50%{opacity:.2}}
 /* --- «Съёмка»: видоискатель, рамка, плашка Вишенки, стопка страниц — из макета essay-check --- */
 .ec-lab{flex:1;min-width:0;font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1252,7 +1252,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-pop .btn{padding:16px;border-radius:16px;font:800 15.5px "Nunito",system-ui,sans-serif}
 .ec-pop .btn.pri{background:var(--acc);color:var(--on);box-shadow:0 8px 18px -10px var(--sh)}
 .ec-pop .btn:not(.pri){background:var(--card);color:var(--tx);box-shadow:0 0 0 1.5px var(--ln)}
-.ec-thk{width:100%;margin-top:10px;background:var(--card);border:1.5px solid var(--ln);border-radius:16px;padding:10px 12px;text-align:left}
+.ec-thk{margin-top:8px;padding-top:8px;border-top:1.5px solid var(--ln);text-align:left}   /* не отдельная карточка — секция ВНУТРИ общего блока стрима под картинкой */
 .ec-thk b{display:block;font-size:12.5px;font-weight:800;color:var(--acc)}
 .ec-thk i{display:block;max-height:132px;overflow-y:auto;margin-top:4px;font-size:12.5px;line-height:1.5;color:var(--hint);font-style:italic;white-space:pre-wrap;overflow-wrap:anywhere}
 .ec-ovl{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;padding:0;margin:0;border:2px solid #fff;border-radius:50%;background:#E8294F;color:#fff;font-weight:900;text-align:center;line-height:26px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
@@ -2962,10 +2962,12 @@ function ecLogHtml(){
     ecLive.map(v=>`<div class="show">${esc(v)}</div>`).join("")+
     ecWait.map((v,j)=>`<div class="${j===0?"show n":""}">${esc(v)}</div>`).join("")}
 function ecBarW(){return [14,34,56,78,94][Math.min(ecLive.length,4)]}   /* BP макета: ширина полосы по номеру этапа */
+function ecThinkHtml(){   /* мышление Вишенки — секция ВНУТРИ общего блока стрима, не вторая карточка с стримингом */
+  return ecThink?`<div class="ec-thk"><b>💭 Вишенка думает…</b><i id="ec-think">${esc(ecThink)}</i></div>`:""}
 function ecUpdProc(){if(tab!="ai"||ecStep!==2)return;
   let t=$("#ec-think");
-  if(ecThink&&!t){render();t=$("#ec-think")}   /* первая мысль стрима: карточки ещё нет — перерисовываем экран целиком */
-  else{const g=$("#ec-log");if(g)g.innerHTML=ecLogHtml();
+  if(ecThink&&!t){render();t=$("#ec-think")}   /* первая мысль стрима: её ещё нет в блоке — перерисовываем экран целиком */
+  else{const g=$("#ec-stages");if(g)g.innerHTML=ecLogHtml();   /* один блок: этапы — здесь, мышление живёт ниже в той же карточке */
     const b=$("#ec-bar");if(b)b.style.width=ecBarW()+"%"}
   if(t){t.textContent=ecThink;t.scrollTop=t.scrollHeight}}   /* мышление дозаписывается делтами, прокрутка — к последнему фрагменту */
 function ecWhyMsg(){return ecWhy==="empty"?"Не получилось разобрать текст работы — попробуйте снять страницы чётче."
@@ -2978,8 +2980,7 @@ function ecProc(){
     :`<div class="ec-note ec-err2">${ecWhyMsg()}</div><button class="ec-go" onclick="ecRetry()">Повторить</button>`;
   return `<div class="ec-mid${ecState==="run"?" ec-run":""}"><img class="ec-mas" src="${EC_MAS}" alt="Вишенка"><h2>${head}</h2>
 <div class="ec-bar"><i id="ec-bar" style="width:${ecBarW()}%"></i></div>
-<div class="ec-log" id="ec-log">${ecLogHtml()}</div>
-${ecThink?`<div class="ec-thk"><b>💭 Вишенка думает…</b><i id="ec-think">${esc(ecThink)}</i></div>`:""}</div>${tail}`}
+<div class="ec-log" id="ec-log"><div class="ec-stg" id="ec-stages">${ecLogHtml()}</div>${ecThinkHtml()}</div></div>${tail}`}
 async function ecRun(){   /* живой стрим POST /api/essay_check/run (NDJSON, как у /api/chat): стадии → done/fail/off */
   if(!ecSess)return;
   const id=++ecRunId;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();ecThink="";
