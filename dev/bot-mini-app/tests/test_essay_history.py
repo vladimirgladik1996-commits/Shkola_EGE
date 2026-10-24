@@ -178,7 +178,8 @@ async def main():
         assert res["text"] == RES["text"] and res["task"] == RES["task"]
         assert [e["i"] for e in res["errors"]] == [1, 2] and res["errors"][1]["type"] == "Речь"   # нормализация сохранена
         assert res["criteria"][1]["got"] == 6 and res["score"] == {"got": 7, "max": 7, "percent": 100, "level": "Отлично"}
-        assert set(res) == {"text", "task", "errors", "criteria", "recommendations", "score"}, sorted(res)
+        assert set(res) == {"text", "task", "errors", "criteria", "recommendations", "score", "missing", "why"}, sorted(res)
+        assert res["missing"] == [] and res["why"] == "", (res["missing"], res["why"])   # все блоки с данными
         ok("повторный просмотр: полный разбор (ошибки, критерии ФИПИ, статистика, балл) из сохранённых данных")
 
         assert (await post("/api/essay_check/load", {"id": alien})).status == 403, "чужая проверка не должна читаться"

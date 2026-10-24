@@ -180,27 +180,36 @@ async def pipeline():
     assert res["errors"][1]["type"] == "Речь"                      # неизвестный тип → «Речь»
     assert res["criteria"][1]["got"] == 6                          # зажато в максимум критерия
     assert res["score"] == {"got": 7, "max": 7, "percent": 100, "level": "Отлично"}
+    assert res["missing"] == [] and res["why"] == "", (res["missing"], res["why"])   # все блоки с данными — выдумывать нечего
     e1 = res["errors"][0]                                          # координаты — из разметки OCR
     assert e1["page"] == 0 and abs(e1["x"] - 47.5) < 0.3 and abs(e1["y"] - 7.5) < 0.3, e1
     ok("пайплайн: 5 стадий + стрим мышления, разбор нормализуется, координаты — из OCR")
 
     kimi.ask_json = fake_ask_json_none                              # повтор после пустого/не-JSON тоже пуст
     kimi.ask_stream = fake_stream_none
-    assert [e async for e in essaycheck.run(["x"], [], "oge")][-1] == ("err", "net")
+
+    async def last(*a, **kw):                                       # последнее событие пайплайна
+        return [e async for e in essaycheck.run(*a, **kw)][-1]
+
+    ev = await last(["x"], [], "oge")                              # модель молчит
+    assert ev[0] == "done" and ev[1]["why"] == "net" and {"errors", "criteria", "recommendations"} <= set(ev[1]["missing"]), ev
     kimi.ask_stream = fake_stream_junk
-    assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "net")
+    ev = await last(["x"], [], "ege")                              # кривой JSON + пустой повтор
+    assert ev[0] == "done" and ev[1]["why"] == "net" and "errors" in ev[1]["missing"], ev
     async def fake_recognize_empty(imgs):
         return [{"text": "  ", "words": []}]
     yavision.recognize_many = fake_recognize_empty
     kimi.ask_stream = fake_stream
-    assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "empty")
+    ev = await last(["x"], [], "ege")                              # пустой OCR — текста нет
+    assert ev[0] == "done" and ev[1]["why"] == "empty" and "text" in ev[1]["missing"], ev
     class Boom(yavision.VisionError):
         pass
     async def fake_recognize_fail(imgs):
         raise yavision.VisionError("http")
     yavision.recognize_many = fake_recognize_fail
-    assert [e async for e in essaycheck.run(["x"], [], "ege")][-1] == ("err", "http")
-    ok("сбои этапов: модель молчит → err/net, кривой JSON → err/net, пустой OCR → err/empty, сбой OCR → err/http")
+    ev = await last(["x"], [], "ege")                              # сбой OCR
+    assert ev[0] == "done" and ev[1]["why"] == "http" and "text" in ev[1]["missing"], ev
+    ok("ГЛАВНОЕ ПРАВИЛО: сбой этапа тоже доходит до превью — done с пустыми блоками (missing) и честным why, без выдумок")
     yavision.recognize_many, kimi.ask_stream = real_recognize, real_stream
     kimi.ask_json = real_ask_json
 
@@ -253,6 +262,7 @@ async def main():
         assert res["score"]["max"] == 7 and res["errors"][0]["found"] == "влеяния"
         assert {"text", "task", "errors", "criteria", "recommendations", "score"} <= set(res), sorted(res)
         assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Отлично"
+        assert res["missing"] == [] and res["why"] == "", (res.get("missing"), res.get("why"))
         assert {"i", "type", "found", "correct", "why", "src", "page", "x", "y"} <= set(res["errors"][0]), sorted(res["errors"][0])
         assert set(res["criteria"][0]) == {"name", "got", "max", "why", "tip"}
         assert set(res["recommendations"][0]) == {"title", "text", "badge"}
@@ -261,13 +271,14 @@ async def main():
         kimi.ask_stream, kimi.ask_json = fake_stream_none, fake_ask_json_none
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
-        assert evs[-1] == {"t": "fail", "why": "net"}, evs
+        assert evs[-1]["t"] == "done" and evs[-1]["result"]["why"] == "net", evs
+        assert {"errors", "criteria", "recommendations"} <= set(evs[-1]["result"]["missing"]), evs[-1]
 
-        kimi.ask_stream, kimi.ask_json = fake_stream_junk, fake_ask_json_empty   # пустой разбор — честный сбой
+        kimi.ask_stream, kimi.ask_json = fake_stream_junk, fake_ask_json_empty   # пустой разбор — превью с пустыми блоками
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
-        assert evs[-1] == {"t": "fail", "why": "empty"}, evs
-        ok("пустое распознавание/разбор → fail/empty")
+        assert evs[-1]["t"] == "done" and evs[-1]["result"]["why"] == "empty", evs
+        ok("модель молчит / разбор пустой → финальное превью с пустыми блоками и честным why (ничего не выдумывается)")
 
         kimi.ask_stream, kimi.ask_json = fake_stream, real_ask_json   # «Повторить» после сбоя: тот же сеанс заново
         r = await c.post("/api/essay_check/run", json={"id": d["id"]}, headers=H)

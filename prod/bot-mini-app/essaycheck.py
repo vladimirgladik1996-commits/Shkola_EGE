@@ -9,11 +9,12 @@ yavision (модель handwritten; текст сохраняется ВМЕСТ
 не ломает проверку — фолбэк CRITERIA ниже).
 
 События генератора run(): ("status", "текст этапа") | ("think", «дельта
-мышления Кими» — стрим «Вишенка думает…» на прелоадере) → … → ("done", result)
-или ("err", "net|http|empty"). Сбой этапа — событие, а не падение: бот переводит
-его в {"t":"fail"} для клиента (см. bot.api_essay_check_run). result нормализуется
-в _result(): типы ошибок из закрытого списка, нумерация подряд, итог баллов
-считается по критериям кодом — модели не доверяется её собственный «итог».
+мышления Кими» — стрим «Вишенка думает…» на прелоадере) → … → ("done", result).
+ГЛАВНОЕ ПРАВИЛО: пайплайн ВСЕГДА доходит до финального превью и НИЧЕГО не выдумывает:
+сбой любого этапа — это тоже "done" с result, где поля missing перечисляют блоки без
+данных (фронт показывает их пустыми), а why — честная причина сбоя; result нормализуется
+в _result(): типы ошибок из закрытого списка, нумерация подряд, итог баллов считается
+по критериям кодом — модели не доверяется её собственный «итог».
 
 """
 import asyncio, json, logging, math, os, re
@@ -100,9 +101,14 @@ def _finite(v):
     return f if math.isfinite(f) else None
 
 
-def _result(a, essay, task):
+def _result(a, essay, task, why=""):
     """Ответ модели → нормализованный разбор. Типы ошибок — из закрытого списка,
-    номера идут подряд, баллы зажимаются в рамки критерия, итог — сумма критериев."""
+    номера идут подряд, баллы зажимаются в рамки критерия, итог — сумма критериев.
+
+    ГЛАВНОЕ ПРАВИЛО: разбор ВСЕГДА доходит до финального превью и НИЧЕГО не выдумывает:
+    поля missing перечисляют блоки БЕЗ данных (text/errors/criteria/recommendations) —
+    фронт показывает такие блоки пустыми, а не «додуманными» выводами; why — честная
+    причина (код сбоя этапа), если данные получить не удалось."""
     errors = []
     for e in _as_list(a.get("errors")):
         if not isinstance(e, dict) or not _s(e.get("found")):
@@ -138,8 +144,18 @@ def _result(a, essay, task):
     pct = round(got * 100 / mx) if mx else 0
     level = ("Отлично" if pct >= 85 else "Хорошо" if pct >= 70
              else "Удовлетворительно" if pct >= 50 else "Нужно доработать")
+    # блоки без данных: их нельзя оценивать и нельзя додумывать — фронт покажет их пустыми
+    missing = []
+    if not essay:
+        missing.append("text")
+    if "errors" not in a:            # список есть (даже пустой) — это реальный вердикт «0 ошибок»
+        missing.append("errors")
+    if not criteria:                  # реальный разбор всегда даёт критерии ФИПИ
+        missing.append("criteria")
+    if "recommendations" not in a:
+        missing.append("recommendations")
     return {"text": essay, "task": task, "errors": errors, "criteria": criteria,
-            "recommendations": recs,
+            "recommendations": recs, "missing": missing, "why": why,
             "score": {"got": got, "max": mx, "percent": pct, "level": level}}
 
 
@@ -289,12 +305,12 @@ async def run(w, t, kind="ege"):
         pages = await yavision.recognize_many(w)
     except yavision.VisionError as e:
         log.warning("essaycheck: OCR работы не прошёл (%s)", e.code)
-        yield "err", e.code
+        yield "done", _result({}, "", "", why=e.code)   # превью с пустыми блоками, а не тупик
         return
     essay = "\n\n".join(_s(p.get("text")) for p in pages).strip()
     if not essay:
         log.warning("essaycheck: OCR работы дал пустой текст")
-        yield "err", "empty"
+        yield "done", _result({}, "", "", why="empty")
         return
     yield "status", "Распознан рукописный текст"
     task = ""
@@ -302,11 +318,12 @@ async def run(w, t, kind="ege"):
         try:
             tpages = await yavision.recognize_many(t)
         except yavision.VisionError as e:
-            log.warning("essaycheck: OCR задания не прошёл (%s)", e.code)
-            yield "err", e.code
-            return
-        task = "\n\n".join(_s(p.get("text")) for p in tpages).strip()
-        yield "status", "Прочитано задание и опорный текст"
+            # задание не прочиталось — НЕ выдумываем его и НЕ бросаем проверку:
+            # анализ идёт дальше с жёстким запретом выдумывать (TASK_MISSING)
+            log.warning("essaycheck: OCR задания не прошёл (%s) — продолжаю без задания", e.code)
+        else:
+            task = "\n\n".join(_s(p.get("text")) for p in tpages).strip()
+            yield "status", "Прочитано задание и опорный текст"
     yield "status", "Проверены орфографию и пунктуацию"
     extra = await fipicache.criteria(kind, "")   # актуальные документы ФИПИ (кэш 30 дней),
     criteria_text = CRITERIA[kind] + (("\n\nДополнительно — актуальные материалы ФИПИ с fipi.ru:\n" + extra)
@@ -324,7 +341,7 @@ async def run(w, t, kind="ege"):
             break
     if err:
         log.warning("essaycheck: анализ не прошёл (%s)", err)
-        yield "err", err if err in ("net", "http", "empty") else "net"
+        yield "done", _result({}, essay, task, why=err if err in ("net", "http", "empty") else "net")
         return
     a = _parse_json("".join(parts))
     if not a:                                  # один повтор: модель вернула не-JSON
@@ -332,11 +349,11 @@ async def run(w, t, kind="ege"):
         a = await kimi.ask_json([{"role": "user", "content": msg}])
     if not isinstance(a, dict):
         log.warning("essaycheck: модель не ответила на разбор")
-        yield "err", "net"
+        yield "done", _result({}, essay, task, why="net")   # превью с пустыми блоками разбора — ничего не выдумываем
         return
     if not (a.get("errors") or a.get("criteria")):
-        log.warning("essaycheck: разбор пустой")
-        yield "err", "empty"
+        log.warning("essaycheck: разбор пустой — показываю превью с пустыми блоками")
+        yield "done", _result(a, essay, task, why="empty")
         return
     for e in _as_list(a.get("errors")):        # пустой src не пропускаем — подставляем шаблон
         if isinstance(e, dict) and not _s(e.get("src")):
