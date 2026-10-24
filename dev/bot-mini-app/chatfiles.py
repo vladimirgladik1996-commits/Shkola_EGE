@@ -263,20 +263,29 @@ def _force(runs, **kw):
     return [(t, {**st, **kw}) for t, st in runs]
 
 
+# Символы, запрещённые в XML 1.0: такой символ из текста модели/вложения делает
+# document.xml невалидным XML — строгие просмотрщики объявляют файл «сломанным».
+_BAD_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u0080-\u009f\ufdd0-\ufdef\ufffe\uffff]")
+
+
 def _run_xml(text, st, size, color=None):
+    """Один ран w:r. Порядок дочерних элементов w:rPr — СТРОГО по схеме OOXML
+    (rFonts → b → i → color → sz → u): строгие просмотрщики (мобильный Word на Android,
+    Samsung) отвергают документ с нарушением порядка как «файл повреждён»,
+    хотя десктопный Word такие файлы часто открывает."""
     rpr = ""
-    if st.get("u") or st.get("blank"):
-        rpr += '<w:u w:val="single"/>'
+    if st.get("m"):
+        rpr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>'
     if st.get("b"):
         rpr += "<w:b/>"
     if st.get("i"):
         rpr += "<w:i/>"
-    if st.get("m"):
-        rpr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>'
-    rpr += f'<w:sz w:val="{size}"/>'
     if color:
         rpr += f'<w:color w:val="{color}"/>'
-    return f'<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{escape(text)}</w:t></w:r>'
+    rpr += f'<w:sz w:val="{size}"/>'
+    if st.get("u") or st.get("blank"):
+        rpr += '<w:u w:val="single"/>'
+    return f'<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{escape(_BAD_XML.sub("", text))}</w:t></w:r>'
 
 
 def _para(runs, size=22, ind=None, after=120, color=None):
@@ -451,7 +460,7 @@ def docx_bytes(title, blocks, footer_all=False):
     core = (_XML + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
             'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-            f'<dc:title>{escape(title)}</dc:title><dc:creator>Кабинет репетитора</dc:creator></cp:coreProperties>')
+            f'<dc:title>{escape(_BAD_XML.sub("", title))}</dc:title><dc:creator>Кабинет репетитора</dc:creator></cp:coreProperties>')
     app = (_XML + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">'
            '<Application>Microsoft Office Word</Application><AppVersion>16.0000</AppVersion></Properties>')
     W = "application/vnd.openxmlformats-officedocument.wordprocessingml."

@@ -23,6 +23,7 @@ ok("логика шагов и ответа вырезана из docs/index.htm
 
 HARNESS = r"""
 let CH=[],chBusy=false,chFmt=0,chDeep=false,chAtt=[],chRec=null;
+const CH_IDLE=60000;   /* потолок тишины стрима — как в docs/index.html (см. apiStream) */
 const CH_FMT=["text","docx","pdf","image"],tab="ch",esc=s=>String(s),chSave=()=>{},chUpd=()=>{};
 let EVENTS=[],SNAPS=[];
 const show=()=>JSON.stringify(CH.map(m=>({r:m.r,step:!!m.step,st:m.st||"",lbl:m.lbl||"",t:m.t,tg:m.tg||0,err:m.err||0,live:!!m.live,a:(m.a||[]).map(x=>x.n)})));

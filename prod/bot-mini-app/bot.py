@@ -1624,6 +1624,9 @@ def guarded(fn):
             if await _stream_fail(request):                # стрим уже начался — второй статус недопустим
                 return request.stream_resp
             raise
+        except (ConnectionResetError, BrokenPipeError):   # клиент сам оборвал соединение (мобильная сеть/WebView)
+            log.info("api: клиент отключился: tg_id=%s path=%s", uid, request.path)
+            return await _stream_fail(request) or web.Response(status=499)
         except Exception:                                    # непредвиденное: пишем в лог, наружу — без деталей
             log.exception("api error: tg_id=%s path=%s", uid, request.path)
             return await _stream_fail(request) or web.json_response({"error": "internal"}, status=500)
@@ -2445,8 +2448,42 @@ async def api_chat(request):
     await resp.prepare(request)
     request.stream_resp = resp              # guarded: сбой после начала стрима → {"t":"fail"}, а не второй статус
 
+    wlock, stop, dead = asyncio.Lock(), asyncio.Event(), False
+
     async def send(ev):
-        await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+        """Событие в NDJSON-стрим. Молчащее соединение убивают reverse-proxy и WebView,
+        поэтому между событиями работает пульс beat(); клиент уже ушёл — дописывать некуда,
+        но обработка продолжается: файл всё равно уйдёт пользователю в Telegram."""
+        nonlocal dead
+        if dead:
+            return
+        try:
+            async with wlock:
+                await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+        except (ConnectionResetError, BrokenPipeError, RuntimeError):
+            dead = True
+            stop.set()
+            return
+        if isinstance(ev, dict) and ev.get("t") in ("done", "fail", "off"):
+            stop.set()
+
+    async def beat():
+        """Пульс против тишины: глубокая генерация, проверка Кими и отправка в Telegram
+        могут молчать минутами — без пульса соединение умирает и клиент висит на
+        «бесконечной загрузке» (тот же приём, что EC_BEAT в «ИИ-проверке»)."""
+        while not stop.is_set():
+            try:
+                await asyncio.wait_for(stop.wait(), EC_BEAT)
+            except asyncio.TimeoutError:
+                if stop.is_set() or dead:
+                    return
+                async with wlock:
+                    try:
+                        await resp.write(b'{"t":"hb"}\n')
+                    except Exception:
+                        return
+
+    asyncio.ensure_future(beat())
 
     if not kimi.enabled():
         await send({"t": "off"})
@@ -2658,6 +2695,7 @@ async def api_essay_check_photo(request):
         return web.json_response({"error": "bad"}, status=400)
     pid = secrets.token_urlsafe(9)
     store[pid] = {"uid": uid, "set": st, "jpeg": jpeg, "ts": now}
+    log.info("essay photo: tg_id=%s sid=%s set=%s ok", uid, sid, st)   # диагностика зависаний (баг 007/жёлоб)
     return web.json_response({"id": pid})
 
 
@@ -2708,6 +2746,7 @@ async def api_essay_check_upload(request):
         EC_CHECKS.pop(i, None)
     cid = secrets.token_urlsafe(12)
     EC_CHECKS[cid] = [uid, out, now]
+    log.info("essay session: tg_id=%s cid=%s w=%s t=%s", uid, cid, len(out["w"]), len(out["t"]))
     if isinstance(sid, str):
         EC_PHOTOS.pop(sid, None)                     # копилка сеанса собрана — фото больше не нужны
     return web.json_response({"id": cid, "n_w": len(out["w"]), "n_t": len(out["t"])})

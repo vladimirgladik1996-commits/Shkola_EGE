@@ -1847,6 +1847,8 @@ async function api(p,b,opt){const h={"X-Init":tg.initData,"Content-Type":"applic
         :"Не получилось, попробуйте ещё раз");return null}return r.json()
   }catch(e){if(ctrl&&ctrl.signal.aborted){if(!quiet)toast("Сервер не отвечает — проверьте интернет и попробуйте ещё раз");return null}throw e}
   finally{if(tm)clearTimeout(tm)}}
+const CH_IDLE=60000;   /* потолок тишины стрима «Чата с ИИ» (мс): сервер пульсирует {"t":"hb"} каждые ~15 с;
+   мёртвое соединение обрывается по тишине и честно показывает «Не получилось получить ответ…», а не бесконечную загрузку */
 async function apiStream(p,b,onEvent,opt){const h={"X-Init":tg.initData,"Content-Type":"application/json"};
   /* Стрим NDJSON от /api/chat: события (status/think/text/done/fail) отдаются в onEvent по мере прихода.
      opt.idle — потолок тишины в мс: соединение умеет умирать МОЛЧА (мобильная сеть, прокси,
@@ -2856,7 +2858,9 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
   if(cur){cur.innerHTML=h;cur.scrollTop=0;cur.classList.remove("swp");void cur.offsetWidth;cur.classList.add("swp");return}
   s.innerHTML=`<div class="bd" onclick="close_()"></div><div class="sh">${h}</div>`;$("#sheet").classList.add("on")}
 function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
-function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon();ecDogPlace();
+function safeHtml(fn){   /* экран никогда не должен стать пустым из-за исключения в шаблоне */
+  try{return fn()}catch(e){return `<div class="empty0"><div class="e0i">😵</div><b>Не получилось показать экран</b><p>Попробуйте ещё раз — или перейдите в другой раздел и вернитесь.</p></div>`}}
+function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=safeHtml(()=>tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon());ecDogPlace();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
   const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";document.body.classList.toggle("ec-nb",tab=="ai");const cw=$("#chw");if(cw)cw.style.display=(tab=="ch"||tab=="ai")?"none":"";   /* «ИИ-проверка»: Вишенка вызывается из карточки ошибки и по выделению текста — плавающая кнопка на странице не нужна */if(tab=="ch")requestAnimationFrame(()=>scrollTo(0,document.documentElement.scrollHeight));fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
@@ -4114,7 +4118,7 @@ async function chAsk(){
       if(ev.file&&typeof ev.file.name=="string")file={n:ev.file.name,k:"out",u:typeof ev.file.url=="string"&&ev.file.url?API_BASE+ev.file.url:undefined,m:typeof ev.file.mime=="string"?ev.file.mime:undefined,img:typeof ev.file.img=="string"&&/^data:image\/png;base64,/.test(ev.file.img)?ev.file.img:undefined};
       const t=typeof ev.reply=="string"&&ev.reply?ev.reply:acc;
       if(t)answer(t);else finish()}
-    if(tab=="ch")chUpd(true)})}catch(e){}
+    if(tab=="ch")chUpd(true)},{idle:CH_IDLE})}catch(e){}
   if(!fin){chBusy=false;chStepEnd();CH.push({r:"a",t:why,err:1});chSave();if(tab=="ch")chUpd(true)}
 }   // ушли из раздела — ответ сохранён, интерфейс не трогаем
 
