@@ -2596,6 +2596,22 @@ EC_TTL = 30 * 60                                 # полчаса — как п�
 EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
 
 
+def _ec_float(name, default, lo, hi):
+    try:
+        v = float(os.getenv(name, "") or default)
+    except ValueError:
+        v = default
+    return max(lo, min(hi, v))
+
+
+# Стрим проверки НЕ ДОЛЖЕН молчать: reverse-proxy (Render) и WebView закрывают соединение,
+# тихо обрывающееся посреди OCR или анализа, и клиент зависает на «Вишенка читает…» навсегда.
+# EC_BEAT — как часто пульсировать {"t":"hb"} в тишине; EC_TIMEOUT — потолок всей проверки
+# (после него клиент получает честный {"t":"fail","why":"slow"} вместо вечного ожидания).
+EC_BEAT = _ec_float("EC_BEAT", 15.0, 2, 120)
+EC_TIMEOUT = _ec_float("EC_TIMEOUT", 900.0, 30, 7200)
+
+
 def ec_uid(request):
     """Кто работает с «ИИ-проверкой»: тот же идентификатор, что у user_id, но без требования
     «только Telegram» — загрузка фото, запуск, сохранение и история доступны и standalone-входу
@@ -2671,18 +2687,61 @@ async def api_essay_check_run(request):
         return resp
     kind = j.get("kind") if isinstance(j.get("kind"), str) else "ege"
     log.info("essay check: tg_id=%s photos=%d/%d kind=%s", uid, len(rec[1]["w"]), len(rec[1]["t"]), kind)
-    async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
-        if ev_kind == "status":
-            await send({"t": "status", "v": v})
-        elif ev_kind == "think":                    # стрим мышления Кими — от лица Вишенки на прелоадере
-            await send({"t": "think", "v": v})
-        elif ev_kind == "err":
-            log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
-            await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
-            await resp.write_eof()
-            return resp
-        else:                                      # done
-            await send({"t": "done", "result": v})
+    # События пайплайна идут через очередь, а пишет в сокет ТОЛЬКО эта корутина:
+    # параллельные resp.write недопустимы (ломают chunked-кодирование), поэтому и пульс,
+    # и потолок времени живут здесь, а не в essaycheck.
+    q = asyncio.Queue()
+
+    async def pump():
+        try:
+            async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
+                await q.put(("ev", ev_kind, v))
+        except asyncio.CancelledError:
+            raise
+        except Exception:                              # пайплайн не должен убивать стрим молча
+            log.exception("essay check: tg_id=%s пайплайн проверки упал", uid)
+            await q.put(("ev", "err", "net"))
+        await q.put(("end", None, None))
+
+    task = asyncio.ensure_future(pump())
+    deadline, gt, finished = time.monotonic() + EC_TIMEOUT, None, False
+    try:
+        while True:
+            if gt is None:                             # ожидание очереди не отменяется на пульсе —
+                gt = asyncio.ensure_future(q.get())    # иначе событие может потеряться между таймаутами
+            left = deadline - time.monotonic()
+            if left <= 0:
+                log.warning("essay check: tg_id=%s не уложился в %.0f с", uid, EC_TIMEOUT)
+                await send({"t": "fail", "why": "slow"})
+                finished = True
+                break
+            done, _ = await asyncio.wait({gt}, timeout=max(0.05, min(EC_BEAT, left)))
+            if gt not in done:
+                await send({"t": "hb"})               # пульс: соединение не должно молчать
+                continue
+            item, gt = gt.result(), None
+            if item[0] == "end":
+                break
+            _, ev_kind, v = item
+            if ev_kind == "status":
+                await send({"t": "status", "v": v})
+            elif ev_kind == "think":                  # стрим мышления Кими — от лица Вишенки на прелоадере
+                await send({"t": "think", "v": v})
+            elif ev_kind == "err":
+                log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
+                await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
+                finished = True
+                break
+            else:                                      # done
+                await send({"t": "done", "result": v})
+                finished = True
+                break
+    finally:
+        if gt is not None:
+            gt.cancel()
+        task.cancel()
+    if not finished:                                   # пайплайн кончился без итога — клиенту нельзя молчать:
+        await send({"t": "fail", "why": "net"})      # иначе экран «Вишенка читает…» висит вечно
     await resp.write_eof()
     return resp
 
