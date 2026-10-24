@@ -4,7 +4,7 @@
 OverflowError рвали пайплайн УЖЕ ПОСЛЕ resp.prepare() — клиент получал
 «Invalid character in chunk size: b'HTTP/1.1 400 Bad Request'», а reverse-proxy
 Render видел мёртвый бэкенд. Запуск: python3 tests/test_essaycheck_parse.py"""
-import itertools, os, sys
+import itertools, os, random, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import essaycheck
@@ -77,5 +77,28 @@ assert (e["page"], e["x"], e["y"]) == (0, 20.0, 12.0), e   # центр бокс
 r = essaycheck._result(a, "текст", "задание")
 assert r["score"] == {"got": 2, "max": 2, "percent": 100, "level": "Отлично"}, r["score"]
 ok("честный разбор: координаты из OCR и баллы по критериям на месте")
+
+# --- 7. _near: дешёвый префильтр перед _lev1 НЕ отбрасывает совпадений (звук) ---
+ALPH = "абвгде"
+for _ in range(3000):
+    a = "".join(random.choice(ALPH) for _ in range(random.randint(1, 6)))
+    b = "".join(random.choice(ALPH) for _ in range(random.randint(1, 6)))
+    assert not essaycheck._lev1(a, b) or essaycheck._near(a, b), (a, b)
+ok("_near: 3000 случайных пар — ни одно совпадение _lev1 не отброшено")
+
+# --- 8. _bind_coords не морозит процесс: 6 страниц × 40 ошибок с ненайденными фрагментами ---
+pages = []
+for pi in range(6):
+    ws = [{"t": "слово%d" % i, "x1": 1, "y1": 1, "x2": 2, "y2": 2} for i in range(400)]
+    pages.append({"text": "".join(w["t"] for w in ws), "words": ws})
+a = {"errors": [{"found": "фрагмент%d" % i} for i in range(40)]}
+t0 = time.time()
+essaycheck._bind_coords(a, pages)
+dt = time.time() - t0
+assert dt < 5.0, "_bind_coords слишком долгий: %.2f с" % dt
+src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "essaycheck.py"), encoding="utf-8").read()
+assert "asyncio.to_thread(_bind_coords" in src, "_bind_coords не вынесен из событийного цикла"
+ok("_bind_coords: 6 страниц × 40 ошибок — %.2f с, поиск вне event loop" % dt)
 
 print("test_essaycheck_parse: OK")

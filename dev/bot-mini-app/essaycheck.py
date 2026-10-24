@@ -165,6 +165,16 @@ def _close(a, b):
     return False
 
 
+def _near(a, b):
+    """Дешёвый префильтр перед _lev1 (звук: ни одно совпадение не отбрасывается).
+    При расхождении ≤1 символа первые символы равны либо правка в позиции 0 —
+    тогда равны «хвосты» со сдвигом: a[1:]==b[1:] (замена), a[1:]==b (вставка в a),
+    a==b[1:] (вставка в b)."""
+    if not a or not b:
+        return False
+    return a[0] == b[0] or a[1:2] == b[1:2] or a[1:2] == b[:1] or a[:1] == b[1:2]
+
+
 def _lev1(a, b):
     """Расстояние Левенштейна ≤1 (равны / одна вставка / одна замена / одно удаление)."""
     if a == b:
@@ -218,7 +228,8 @@ def _bind_coords(a, pages):
                     if L <= 0:
                         continue
                     for j in range(0, len(text) - L + 1):
-                        if _lev1(needle, text[j:j + L]):
+                        seg = text[j:j + L]
+                        if _near(needle, seg) and _lev1(needle, seg):
                             pos, ln = j, L
                             break
                     if pos >= 0:
@@ -330,6 +341,9 @@ async def run(w, t, kind="ege"):
     for e in _as_list(a.get("errors")):        # пустой src не пропускаем — подставляем шаблон
         if isinstance(e, dict) and not _s(e.get("src")):
             e["src"] = SRC_TEMPLATE
-    _bind_coords(a, pages)                     # координаты ошибок — только из разметки OCR
+    # координаты ошибок — только из разметки OCR; поиск O(страницы × ошибки × фрагмент)
+    # выносится из событийного цикла: иначе на 60 ошибках он морозит бота и API на секунды,
+    # HEALTHCHECK (timeout=5s) не проходит и Render перезапускает сервис
+    await asyncio.to_thread(_bind_coords, a, pages)
     yield "status", "Сверяю с критериями ФИПИ…"
     yield "done", _result(a, essay, task)
