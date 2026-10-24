@@ -16,7 +16,7 @@ yavision (модель handwritten; текст сохраняется ВМЕСТ
 считается по критериям кодом — модели не доверяется её собственный «итог».
 
 """
-import asyncio, json, logging, os, re
+import asyncio, json, logging, math, os, re
 
 import fipicache, kimi, yavision
 
@@ -77,7 +77,7 @@ ANALYSIS_PROMPT = """Ты — опытный проверяющий {what} по 
 def _num(v, default, lo, hi):
     try:
         n = int(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError: int(float("inf"))
         return default
     return max(lo, min(hi, n))
 
@@ -86,11 +86,25 @@ def _s(v):
     return v.strip() if isinstance(v, str) else ""
 
 
+def _as_list(v):
+    """Ответ модели — недоверенные данные: вместо списка может прийти число или объект.
+    Итерируем только настоящие списки, иначе for по числу даёт TypeError."""
+    return v if isinstance(v, list) else []
+
+
+def _finite(v):
+    """Число из ответа модели: не bool и конечно (inf/nan — не число, иначе OverflowError)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    f = float(v)
+    return f if math.isfinite(f) else None
+
+
 def _result(a, essay, task):
     """Ответ модели → нормализованный разбор. Типы ошибок — из закрытого списка,
     номера идут подряд, баллы зажимаются в рамки критерия, итог — сумма критериев."""
     errors = []
-    for e in a.get("errors") or []:
+    for e in _as_list(a.get("errors")):
         if not isinstance(e, dict) or not _s(e.get("found")):
             continue
         e2 = {"i": len(errors) + 1,
@@ -99,21 +113,21 @@ def _result(a, essay, task):
               "why": _s(e.get("why")), "src": _s(e.get("src"))}
         # демо-оверлей: координаты ошибки на фото (page — индекс фото, x/y — проценты)
         for k, lo, hi in (("page", 0, 20), ("x", 0, 100), ("y", 0, 100)):
-            v = e.get(k)
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                e2[k] = max(lo, min(hi, int(v) if k == "page" else round(float(v), 1)))
+            v = _finite(e.get(k))
+            if v is not None:
+                e2[k] = max(lo, min(hi, int(v) if k == "page" else round(v, 1)))
         if all(k in e2 for k in ("x", "y")):
             e2.setdefault("page", 0)
         errors.append(e2)
     criteria = []
-    for c in a.get("criteria") or []:
+    for c in _as_list(a.get("criteria")):
         if not isinstance(c, dict) or not _s(c.get("name")):
             continue
         mx = _num(c.get("max"), 1, 1, 10)
         criteria.append({"name": _s(c.get("name")), "got": _num(c.get("got"), 0, 0, mx), "max": mx,
                          "why": _s(c.get("why")), "tip": _s(c.get("tip"))})
     recs = []
-    for r in a.get("recommendations") or []:
+    for r in _as_list(a.get("recommendations")):
         if not isinstance(r, dict) or not _s(r.get("title")):
             continue
         recs.append({"title": _s(r.get("title")), "text": _s(r.get("text")), "badge": _s(r.get("badge"))})
@@ -130,8 +144,10 @@ def _result(a, essay, task):
 
 
 def _norm(s):
-    """Нормализация для поиска фрагмента в словах OCR: ё→е, регистр, только буквы/цифры."""
-    return re.sub(r"[^0-9a-zа-я]+", "", (s or "").lower().replace("ё", "е"))
+    """Нормализация для поиска фрагмента в словах OCR: ё→е, регистр, только буквы/цифры.
+    Модель может прислать что угодно («found»: 2024 — число, или объект): не-строка
+    даёт пустой фрагмент («не найден»), а не AttributeError."""
+    return re.sub(r"[^0-9a-zа-я]+", "", (s if isinstance(s, str) else "").lower().replace("ё", "е"))
 
 
 def _close(a, b):
@@ -156,11 +172,11 @@ def _lev1(a, b):
     la, lb = len(a), len(b)
     if abs(la - lb) > 1:
         return False
-    if la > lb:
-        a, b = b, a                                  # a короче или равна
     if la == lb:
         return sum(1 for x, y in zip(a, b) if x != y) <= 1
-    for i in range(lb):                              # одна вставка в b
+    if la > lb:
+        a, b = b, a                                  # a — короче, b — длиннее ровно на 1 символ
+    for i in range(len(b)):                          # одно удаление из b (эквивалентно вставке в b)
         if a == b[:i] + b[i + 1:]:
             return True
     return False
@@ -176,7 +192,7 @@ def _bind_coords(a, pages):
     prepared = []
     for pi, pg in enumerate(pages):
         ws, text, idx = [], "", []
-        for w in (pg.get("words") or []):
+        for w in _as_list(pg.get("words")):
             t = _norm(w.get("t"))
             if not t:
                 continue
@@ -184,7 +200,7 @@ def _bind_coords(a, pages):
             text += t
             idx += [len(ws) - 1] * len(t)
         prepared.append((pi, text, idx, ws))
-    for e in (a.get("errors") or []):
+    for e in _as_list(a.get("errors")):
         if not isinstance(e, dict):
             continue
         needle = _norm(e.get("found"))
@@ -311,7 +327,7 @@ async def run(w, t, kind="ege"):
         log.warning("essaycheck: разбор пустой")
         yield "err", "empty"
         return
-    for e in a.get("errors") or []:            # пустой src не пропускаем — подставляем шаблон
+    for e in _as_list(a.get("errors")):        # пустой src не пропускаем — подставляем шаблон
         if isinstance(e, dict) and not _s(e.get("src")):
             e["src"] = SRC_TEMPLATE
     _bind_coords(a, pages)                     # координаты ошибок — только из разметки OCR
