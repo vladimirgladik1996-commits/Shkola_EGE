@@ -65,4 +65,11 @@ os.environ.pop("YANDEX_API_KEY"); importlib.reload(yavision)
 assert yavision.enabled() is False
 ok("enabled(): ключ только из env, без ключа боевой OCR выключен")
 
+# ---------- 8. ответ API терпим к форме: и {"result":{…}}, и прямой {"textAnnotation":…} ----------
+flat = {"textAnnotation": {"width": "100", "height": "100", "fullText": "ок",
+        "blocks": [{"lines": [{"words": [{"text": "ок", "boundingBox": verts(10, 10, 50, 50)}]}]}]}}
+rf = yavision.parse(flat)
+assert rf["text"] == "ок" and len(rf["words"]) == 1 and abs(rf["words"][0]["x1"] - 10) < 0.2
+ok("parse(): ответ без обёртки result разбирается так же, как {\"result\":{…}}")
+
 print("test_yavision: все проверки прошли")

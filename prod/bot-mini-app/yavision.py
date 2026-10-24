@@ -20,6 +20,7 @@ import base64
 import json
 import logging
 import os
+import random
 
 import aiohttp
 
@@ -28,8 +29,18 @@ log = logging.getLogger("tutor.yavision")
 API = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
 API_KEY = os.environ.get("YANDEX_" "API_KEY", "").strip()
 TIMEOUT = float(os.getenv("YANDEX_TIMEOUT", "60") or "60")
-MAX_PARALLEL = 3          # одновременных запросов OCR (не забиваем квоту)
-RETRIES = 1               # повторов на одно фото
+def _int(name, default, lo, hi):
+    try:
+        v = int(os.getenv(name, "") or default)
+    except ValueError:
+        v = default
+    return max(lo, min(hi, v))
+
+
+# Параллельность — главное ускорение OCR (12 фото по очереди = минуты тишины в стриме).
+# Квота API бережётся повторами на 429; жёсткий потолок 12, настройка — env.
+MAX_PARALLEL = _int("YANDEX_MAX_PARALLEL", 6, 1, 12)
+RETRIES = _int("YANDEX_RETRIES", 2, 0, 5)      # повторов на одно фото (сеть/429/5xx)
 
 
 class VisionError(Exception):
@@ -102,7 +113,11 @@ def _walk_words(node, out, w, h):
 def parse(j):
     """Ответ recognizeText → {"text":…, "words":[{t,x1,y1,x2,y2}]} (координаты в %).
     Разбор толерантный: схема ответа может пополняться полями."""
-    ta = (((j or {}).get("result") or {}).get("textAnnotation")) or {}
+    # ответ терпимый к форме: гейтвей отдаёт {"result":{"textAnnotation":…}},
+    # встречается и прямой {"textAnnotation":…} — оба варианта разбираются одинаково
+    res = (j or {}).get("result")
+    res = res if isinstance(res, dict) else (j or {})
+    ta = (res.get("textAnnotation") if isinstance(res.get("textAnnotation"), dict) else {}) or {}
     w, h = _dim(ta.get("width")), _dim(ta.get("height"))
     words = []
     _walk_words(ta, words, w, h)
@@ -125,8 +140,8 @@ async def _recognize_one(session, sem, img_b64):
                         raw = await r.text()
                         log.warning("yavision: HTTP %s: %s", r.status, raw[:200])
                         last = "http"
-                        if r.status in (429, 500, 502, 503, 504) and attempt < RETRIES:
-                            await asyncio.sleep(1.5)
+                        if r.status in (408, 429, 500, 502, 503, 504) and attempt < RETRIES:
+                            await asyncio.sleep(min(8.0, 1.5 * 2 ** attempt) + random.uniform(0, 0.5))
                             continue
                         raise VisionError("http")
                     j = await r.json(content_type=None)
@@ -140,17 +155,36 @@ async def _recognize_one(session, sem, img_b64):
             log.warning("yavision: попытка %s не удалась: %r", attempt + 1, e)
             last = "net"
             if attempt < RETRIES:
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(min(8.0, 1.5 * 2 ** attempt) + random.uniform(0, 0.5))
     raise VisionError(last)
 
 
 async def recognize_many(images):
     """Список фото (base64 jpeg) → список {"text","words"} по порядку страниц.
-    Параллельность ограничена MAX_PARALLEL; сбой хотя бы одного фото — VisionError."""
+    Параллельность ограничена MAX_PARALLEL (env YANDEX_MAX_PARALLEL).
+
+    Надёжность: сбой ЧАСТИ фото не роняет проверку — вместо страницы подставляется
+    заглушка {"text":"","words":[],"failed":True} (позиция в списке сохраняется —
+    page у ошибок не съезжает), essaycheck помечает итог why="part". VisionError —
+    только когда не удалось НИ ОДНО фото (или ключ не задан)."""
     if not images:
         return []
     if not enabled():
         raise VisionError("net")
     sem = asyncio.Semaphore(MAX_PARALLEL)
+
+    async def safe(session, img):
+        try:
+            return await _recognize_one(session, sem, img), ""
+        except VisionError as e:
+            return None, e.code
+        except Exception as e:                      # страховка: один сбой не должен ронять остальных
+            log.warning("yavision: непредвиденный сбой фото: %r", e)
+            return None, "net"
+
     async with aiohttp.ClientSession() as session:
-        return await asyncio.gather(*[_recognize_one(session, sem, img) for img in images])
+        out = await asyncio.gather(*[safe(session, img) for img in images])
+    if all(res is None for res, _ in out):
+        raise VisionError(next((code for _, code in out if code), "net"))
+    return [res if res is not None else {"text": "", "words": [], "failed": True}
+            for res, _ in out]

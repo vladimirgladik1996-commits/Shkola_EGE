@@ -2641,10 +2641,13 @@ async def api_essay_check_upload(request):
         return web.json_response({"error": "bad"}, status=400)
     out = {"w": [], "t": []}
     try:
-        for key, lst in (("w", w), ("t", t)):
-            for f in lst:
-                raw = chatfiles._b64(f.get("d") if isinstance(f, dict) else None)
-                out[key].append(chatfiles.to_jpeg_b64(raw))
+        # PIL (декод + ресайз + JPEG) — тяжёлая синхронная работа: гоняем её в потоках
+        # и параллельно по фото — иначе 12 картинок морозят event loop и весь бот+API
+        # (тот же класс, что «заморозка event loop» в bug-reports/004)
+        async def conv(lst):
+            raws = [chatfiles._b64(f.get("d") if isinstance(f, dict) else None) for f in lst]
+            return await asyncio.gather(*[asyncio.to_thread(chatfiles.to_jpeg_b64, r) for r in raws])
+        out["w"], out["t"] = await asyncio.gather(conv(w), conv(t))
     except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
         return web.json_response({"error": "bad"}, status=400)
     now = time.time()
