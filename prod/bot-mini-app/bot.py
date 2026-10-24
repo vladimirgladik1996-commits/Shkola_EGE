@@ -2592,6 +2592,13 @@ async def api_apk(_request):
 #   w = «Работа» — страницы сочинения/эссе, t = «Задание» — условие и опорный текст.
 # Нормализация та же, что у фото чата: любая картинка → JPEG ≤1600 px (chatfiles.to_jpeg_b64).
 EC_CHECKS = {}                                   # id → [uid, {"w": [jpeg_b64], "t": [jpeg_b64]}, время]
+# Фото загружаются на сервер СРАЗУ после съёмки/выбора из галереи — по одному, небольшими
+# запросами (/api/essay_check/photo, баг-репорт 007). Кнопка «Готово» лишь собирает сеанс из
+# уже загруженных фото по id и стартует проверку — мгновенно. Раньше все фото (до 12 штук,
+# несколько МБ base64) уходили ОДНИМ тяжёлым запросом прямо по «Готово»: на мобильной сети это
+# минуты «долгой загрузки» без признаков жизни, а соединение без таймаута зависало навсегда.
+EC_PHOTO_TTL = 60 * 60                           # незабранные «копилки» фото живут час
+EC_PHOTOS = {}                                   # sid → {pid: {"uid", "set", "jpeg", "ts"}}
 EC_TTL = 30 * 60                                 # полчаса — как подписные ссылки файлов чата
 EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
 
@@ -2623,10 +2630,46 @@ def ec_uid(request):
 
 
 @guarded
+async def api_essay_check_photo(request):
+    """Одно фото «ИИ-проверки» — загружается сразу после съёмки или выбора из галереи
+    (баг-репорт 007). Принимает {sid, set:"w"|"t", n, d, mime}, кладёт картинку в копилку
+    сеанса sid и отвечает {"id": pid}. «Готово» собирает проверку из id — мгновенно,
+    без тяжёлого запроса; сбой одного фото не вешает экран (клиент догружает его повторно)."""
+    try:
+        j = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad"}, status=400)
+    if not isinstance(j, dict):
+        return web.json_response({"error": "bad"}, status=400)
+    uid = ec_uid(request)
+    sid, st = j.get("sid"), j.get("set")
+    if not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,40}", sid) or st not in ("w", "t"):
+        return web.json_response({"error": "bad"}, status=400)
+    now = time.time()
+    store = EC_PHOTOS.setdefault(sid, {})
+    for k in [k for k, v in store.items() if now - v["ts"] > EC_PHOTO_TTL]:
+        store.pop(k, None)                            # протухшие фото чистим по пути
+    if len(store) >= EC_MAX_PHOTOS:
+        return web.json_response({"error": "bad"}, status=400)
+    try:
+        raw = chatfiles._b64(j.get("d") if isinstance(j.get("d"), str) else None)
+        jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw)
+    except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
+        return web.json_response({"error": "bad"}, status=400)
+    pid = secrets.token_urlsafe(9)
+    store[pid] = {"uid": uid, "set": st, "jpeg": jpeg, "ts": now}
+    return web.json_response({"id": pid})
+
+
+@guarded
 async def api_essay_check_upload(request):
-    """Приём фото для «ИИ-проверки» (пуш 4). Принимает наборы w/t [{n, d, mime}],
-    где d — base64 картинки; приводит их к JPEG и складывает в сеанс проверки.
-    Сам анализ (распознавание и оценка по критериям ФИПИ) — следующий этап (пуш 5)."""
+    """Сборка сеанса «ИИ-проверки» из фото (пуш 4). Два формата:
+      • новый (баг-репорт 007): {sid, w:[pid], t:[pid]} — фото уже загружены по
+        /api/essay_check/photo сразу после съёмки, запрос лёгкий и мгновенный;
+      • прежний: {w:[{n, d, mime}], t:[…]} — все фото сразу одним тяжёлым запросом
+        (прежние сборки APK продолжают работать).
+    Приводит картинки к JPEG и складывает в сеанс проверки. Сам анализ (распознавание
+    и оценка по критериям ФИПИ) — следующий этап (пуш 5)."""
     try:
         j = await request.json()
     except Exception:
@@ -2639,22 +2682,34 @@ async def api_essay_check_upload(request):
         return web.json_response({"error": "bad"}, status=400)
     if (not w and not t) or len(w) + len(t) > EC_MAX_PHOTOS:
         return web.json_response({"error": "bad"}, status=400)
-    out = {"w": [], "t": []}
-    try:
-        # PIL (декод + ресайз + JPEG) — тяжёлая синхронная работа: гоняем её в потоках
-        # и параллельно по фото — иначе 12 картинок морозят event loop и весь бот+API
-        # (тот же класс, что «заморозка event loop» в bug-reports/004)
-        async def conv(lst):
-            raws = [chatfiles._b64(f.get("d") if isinstance(f, dict) else None) for f in lst]
-            return await asyncio.gather(*[asyncio.to_thread(chatfiles.to_jpeg_b64, r) for r in raws])
-        out["w"], out["t"] = await asyncio.gather(conv(w), conv(t))
-    except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
-        return web.json_response({"error": "bad"}, status=400)
+    sid = j.get("sid")
+    if isinstance(sid, str) and all(isinstance(x, str) for x in w + t):
+        # новый формат: фото уже на сервере — только собираем их по id (в порядке списков)
+        store = EC_PHOTOS.get(sid, {})
+        recs = [store.get(x) for x in w + t]
+        if any(r is None for r in recs) or any(r["uid"] != uid for r in recs):
+            # протухло (перезапуск сервиса / TTL) или чужое — клиент перезальёт фото заново
+            return web.json_response({"error": "gone"}, status=400)
+        out = {"w": [store[x]["jpeg"] for x in w], "t": [store[x]["jpeg"] for x in t]}
+    else:
+        out = {"w": [], "t": []}
+        try:
+            # PIL (декод + ресайз + JPEG) — тяжёлая синхронная работа: гоняем её в потоках
+            # и параллельно по фото — иначе 12 картинок морозят event loop и весь бот+API
+            # (тот же класс, что «заморозка event loop» в bug-reports/004)
+            async def conv(lst):
+                raws = [chatfiles._b64(f.get("d") if isinstance(f, dict) else None) for f in lst]
+                return await asyncio.gather(*[asyncio.to_thread(chatfiles.to_jpeg_b64, r) for r in raws])
+            out["w"], out["t"] = await asyncio.gather(conv(w), conv(t))
+        except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
+            return web.json_response({"error": "bad"}, status=400)
     now = time.time()
     for i in [i for i, r in EC_CHECKS.items() if now - r[2] > EC_TTL]:
         EC_CHECKS.pop(i, None)
     cid = secrets.token_urlsafe(12)
     EC_CHECKS[cid] = [uid, out, now]
+    if isinstance(sid, str):
+        EC_PHOTOS.pop(sid, None)                     # копилка сеанса собрана — фото больше не нужны
     return web.json_response({"id": cid, "n_w": len(out["w"]), "n_t": len(out["t"])})
 
 
@@ -2879,7 +2934,8 @@ def make_app():
     app.router.add_get("/api/chat_file/{tok}/{fname}", api_chat_file)   # имя файла в пути — так документ называется у получателя
     app.router.add_post("/api/chat_file/prepare", api_chat_file_prepare)   # «Поделиться»: tg.shareMessage — файл, не ссылка
     app.router.add_post("/api/chat_file/rebuild", api_chat_file_rebuild)
-    app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: фото работ и задания (пуш 4)
+    app.router.add_post("/api/essay_check/photo", api_essay_check_photo)     # «ИИ-проверка»: фото сразу после съёмки, по одному (баг-репорт 007)
+    app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: сборка сеанса из фото работ и задания (пуш 4)
     app.router.add_post("/api/essay_check/run", api_essay_check_run)           # «ИИ-проверка»: запуск проверки, стрим стадий и результата (пуш 5)   # оживление старых карточек: файл собирается заново из текста ответа
     app.router.add_post("/api/essay_check/save", api_essay_check_save)         # «ИИ-проверка»: сохранение проверки за учеником (пуш 7)
     app.router.add_post("/api/essay_check/history", api_essay_check_history)   # «ИИ-проверка»: история сохранённых проверок (пуш 7)
