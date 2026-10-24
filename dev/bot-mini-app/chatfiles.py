@@ -288,8 +288,12 @@ def _run_xml(text, st, size, color=None):
     return f'<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{escape(_BAD_XML.sub("", text))}</w:t></w:r>'
 
 
-def _para(runs, size=22, ind=None, after=120, color=None):
-    ppr = f'<w:spacing w:after="{after}"/>' + (f'<w:ind w:left="{ind[0]}" w:hanging="{ind[1]}"/>' if ind else "")
+def _para(runs, size=22, ind=None, after=120, color=None, first=None):
+    """first — абзацный отступ первой строки в twips (1.25 см ≈ 709): сплошный текст без
+    отступов сливается в одно полотно — у сочинений и эссе абзацы должны члениться видимо."""
+    ppr = f'<w:spacing w:after="{after}"/>' + (
+        f'<w:ind w:left="{ind[0]}" w:hanging="{ind[1]}"/>' if ind else
+        (f'<w:ind w:firstLine="{first}"/>' if first else ""))
     return f'<w:p><w:pPr>{ppr}</w:pPr>' + "".join(_run_xml(t, st, size, color) for t, st in runs) + "</w:p>"
 
 
@@ -394,7 +398,7 @@ def docx_bytes(title, blocks, footer_all=False):
             media.append((f"word/media/image{img_id}.png", png))
             body.append(f'<w:p>{_docx_img(rid, img_id, cx, cy)}</w:p>')
         else:
-            body.append(_para(b[1], size=22, after=60))
+            body.append(_para(b[1], size=22, after=60, first=709))   # абзацный отступ 1.25 см
     # фирменные шапка (первая страница) и подвал (последняя страница); нет картинок — обычный документ
     hdr_png, ftr_png = _asset("header.png"), _asset("footer.png")
     TW, PH = 6120130, 10691630                       # ширина текста (17 см) и высота страницы A4, EMU
@@ -567,7 +571,7 @@ def pdf_bytes(title, blocks):
     st = {
         "t": ParagraphStyle("t", fontName="ChatSans-Bold", fontSize=18, leading=23, textColor=navy, spaceAfter=10),
         "h": ParagraphStyle("h", fontName="ChatSans-Bold", fontSize=13.5, leading=18, textColor=navy, spaceBefore=8, spaceAfter=4),
-        "p": ParagraphStyle("p", fontName="ChatSans", fontSize=11, leading=15.5, spaceAfter=5),
+        "p": ParagraphStyle("p", fontName="ChatSans", fontSize=11, leading=15.5, spaceAfter=5, firstLineIndent=35),   # абзацный отступ 1.25 см — как в Word
         "li": ParagraphStyle("li", fontName="ChatSans", fontSize=11, leading=15.5, leftIndent=16, firstLineIndent=-16, spaceAfter=3),
         "code": ParagraphStyle("code", fontName="Courier", fontSize=9, leading=12, spaceAfter=5),
         "tc": ParagraphStyle("tc", fontName="ChatSans", fontSize=9.5, leading=12),
