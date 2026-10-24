@@ -161,6 +161,12 @@ def _plain(runs):
     return "".join(t for t, _ in runs).replace("\u00a0", " ").strip()
 
 
+def _is_selfcheck(txt):
+    """Заголовок раздела «Ответы для самопроверки» — СТРОГО для тестов,
+    и всегда с новой страницы (отдельный лист документа)."""
+    return _clean(str(txt)).lower().startswith("ответы для самопроверк")
+
+
 def _is_table_row(l):
     s = l.strip()
     return s.startswith("|") and s.endswith("|") and s.count("|") >= 2
@@ -288,10 +294,12 @@ def _run_xml(text, st, size, color=None):
     return f'<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{escape(_BAD_XML.sub("", text))}</w:t></w:r>'
 
 
-def _para(runs, size=22, ind=None, after=120, color=None, first=None):
+def _para(runs, size=22, ind=None, after=120, color=None, first=None, brk=False):
     """first — абзацный отступ первой строки в twips (1.25 см ≈ 709): сплошный текст без
-    отступов сливается в одно полотно — у сочинений и эссе абзацы должны члениться видимо."""
-    ppr = f'<w:spacing w:after="{after}"/>' + (
+    отступов сливается в одно полотно — у сочинений и эссе абзацы должны члениться видимо.
+    brk — абзац начинается с НОВОЙ страницы (w:pageBreakBefore): раздел «Ответы для
+    самопроверки» всегда уезжает на отдельный лист."""
+    ppr = ('<w:pageBreakBefore/>' if brk else "") + f'<w:spacing w:after="{after}"/>' + (
         f'<w:ind w:left="{ind[0]}" w:hanging="{ind[1]}"/>' if ind else
         (f'<w:ind w:firstLine="{first}"/>' if first else ""))
     return f'<w:p><w:pPr>{ppr}</w:pPr>' + "".join(_run_xml(t, st, size, color) for t, st in runs) + "</w:p>"
@@ -375,7 +383,8 @@ def docx_bytes(title, blocks, footer_all=False):
     for b in blocks:
         k = b[0]
         if k == "h":
-            body.append(_para(_force(b[1], b=1), size=28, after=100, color=_NC))
+            body.append(_para(_force(b[1], b=1), size=28, after=100, color=_NC,
+                             brk=_is_selfcheck(_plain(b[1]))))
         elif k == "li":
             body.append(_para(_runs(b[1] + "\t") + b[2], size=22, ind=(500, 340), after=60))
         elif k == "code":
@@ -398,7 +407,8 @@ def docx_bytes(title, blocks, footer_all=False):
             media.append((f"word/media/image{img_id}.png", png))
             body.append(f'<w:p>{_docx_img(rid, img_id, cx, cy)}</w:p>')
         else:
-            body.append(_para(b[1], size=22, after=60, first=709))   # абзацный отступ 1.25 см
+            body.append(_para(b[1], size=22, after=60, first=709,
+                              brk=_is_selfcheck(_plain(b[1]))))   # абзацный отступ 1.25 см; «Ответы…» — с новой страницы
     # фирменные шапка (первая страница) и подвал (последняя страница); нет картинок — обычный документ
     hdr_png, ftr_png = _asset("header.png"), _asset("footer.png")
     TW, PH = 6120130, 10691630                       # ширина текста (17 см) и высота страницы A4, EMU
@@ -565,7 +575,7 @@ def pdf_bytes(title, blocks):
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
-    from reportlab.platypus import Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import Image as RLImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     _register_pdf_fonts()
     navy = HexColor("#0F2E6E")
     st = {
@@ -582,6 +592,8 @@ def pdf_bytes(title, blocks):
         if k == "li":
             story.append(Paragraph(escape(b[1]) + "&nbsp;&nbsp;" + _para_xml(b[2]), st["li"]))
         elif k == "h":
+            if _is_selfcheck(_plain(b[1])):
+                story.append(PageBreak())
             story.append(Paragraph(_para_xml(_force(b[1], b=1)), st["h"]))
         elif k == "code":
             story.append(Paragraph("<br/>".join(escape(l) for l in b[1].split("\n")), st["code"]))
@@ -605,6 +617,8 @@ def pdf_bytes(title, blocks):
             except Exception:
                 pass
         elif k == "p":
+            if _is_selfcheck(_plain(b[1])):
+                story.append(PageBreak())
             story.append(Paragraph(_para_xml(b[1]), st["p"]))
         story.append(Spacer(1, 4))
     out = io.BytesIO()
