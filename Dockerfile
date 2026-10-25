@@ -19,6 +19,16 @@ WORKDIR /app
 COPY prod/bot-mini-app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Chromium для «ИИ-проверки»: PDF-отчёт печатается из HTML-макета (essayreport.py) — точная копия макета.
+# Ставится только headless-shell (~250 МБ с системными библиотеками). Нет браузера — отчёт собирается запасным
+# путём (reportlab), проверка не падает; движок можно выключить переменной ESSAY_REPORT_ENGINE=reportlab.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /ms-playwright && rm -rf /var/lib/apt/lists/*
+# шрифт макета Nunito (OFL) для отчёта: скачался — PDF в точности как в макете; нет — DejaVu (кириллица цела)
+RUN mkdir -p assets/fonts && (python -c "import urllib.request as u;u.urlretrieve('https://github.com/google/fonts/raw/main/ofl/nunito/Nunito%5Bwght%5D.ttf','/tmp/Nunito.ttf')" \
+    && mv /tmp/Nunito.ttf assets/fonts/Nunito.ttf || echo "Nunito не скачан — отчёт будет на DejaVu")
+
 # код и ассеты (docs/ — мини-апп, fonts/ — шрифты для PDF)
 COPY prod/bot-mini-app/ ./
 

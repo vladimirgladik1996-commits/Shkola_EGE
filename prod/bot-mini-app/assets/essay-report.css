@@ -1,0 +1,107 @@
+/* ===== A4 для PDF: 210 × 297 мм, поля внутри страницы ===== */
+@page{size:A4;margin:0}
+:root{
+  --bg:#FBF7E9;--card:#fff;--tx:#0E2250;--hint:#3F4A6E;--ln:#8C93AA;--ln2:#D5D8E3;
+  --acc:#0F2E6E;--yel:#FFC93C;--red:#A8201A;--pink:#8E0F3A;--grn:#12643C;--amb:#7A5200;
+  --z:1;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#C9CFDD}
+body{font-family:"Nunito","DejaVu Sans",system-ui,Arial,sans-serif;color:var(--tx);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pages{zoom:var(--z);display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 0}
+.page{width:210mm;min-height:296mm;height:auto;background:#fff;position:relative;overflow:visible;padding:12mm 14mm 9mm;
+  box-shadow:0 6px 24px rgba(15,46,110,.25);break-after:page;page-break-after:always;display:flex;flex-direction:column}
+.page:last-child{break-after:auto;page-break-after:auto}
+@media print{
+  html{background:#fff}.pages{zoom:1;display:block;padding:0;gap:0}
+  .page{box-shadow:none;margin:0}
+}
+
+/* ===== общая шапка и подвал каждой страницы ===== */
+.top{display:flex;align-items:center;gap:10px;padding-bottom:9px;border-bottom:2px solid var(--tx);margin-bottom:12px}
+.top img{width:34px;height:34px;border-radius:50%;border:2px solid var(--tx);object-fit:cover}
+.top .brand{font-weight:900;font-size:13px;line-height:1.15}
+.top .brand small{display:block;font-weight:700;font-size:9.5px;color:#333}
+.top .meta{margin-left:auto;text-align:right;font-size:9.5px;font-weight:700;color:#222;line-height:1.4}
+.foot{flex:none;display:flex;justify-content:space-between;margin-top:6px;
+  font-size:9px;font-weight:700;color:#222;border-top:1.5px solid #222;padding-top:5px;background:#fff}
+.grow{flex:1 0 4mm}
+.page>*{flex-shrink:0}
+
+h1{font-size:23px;font-weight:900;letter-spacing:-.2px;line-height:1.15}
+.sub{font-size:11px;font-weight:700;color:#333;margin:3px 0 12px}
+h2{font-size:13px;font-weight:900;margin:14px 0 7px;display:flex;align-items:center;gap:8px}
+h2:before{content:"";width:5px;height:15px;border-radius:3px;background:var(--tx)}
+h2 span{margin-left:auto;font-size:9.5px;font-weight:800;background:#fff;color:var(--tx);border:1.5px solid var(--tx);border-radius:99px;padding:1px 10px}
+
+/* ===== «hero» с баллом ===== */
+.hero{border-radius:16px;padding:14px 16px;color:var(--tx);background:#fff;border:2.5px solid var(--tx)}
+.hero .r1{display:flex;gap:16px;align-items:center}
+.gauge{position:relative;width:98px;height:98px;flex:none}
+.gauge svg{transform:rotate(-90deg);display:block}
+.gauge div{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge b{font-size:30px;line-height:1;font-weight:900;color:var(--tx)}
+.gauge small{font-size:10px;font-weight:800}
+.lb{font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--hint)}
+.lv{display:inline-block;margin:5px 0 6px;background:var(--tx);color:#fff;border-radius:99px;padding:3px 13px;font-weight:900;font-size:12.5px}
+.who{display:flex;gap:7px;align-items:center;font-weight:800;font-size:12px}
+.av{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:var(--tx);color:#fff;font-size:10.5px;font-weight:800}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.tiles div{background:#fff;border:1.5px solid var(--tx);border-radius:11px;padding:6px 4px;text-align:center;font-size:9.5px;font-weight:800}
+.tiles b{display:block;font-size:18px;font-weight:900;color:var(--tx);line-height:1.15}
+.hero .info{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--hint);text-align:right;line-height:1.55}
+
+/* ===== статистика ошибок ===== */
+.st{display:flex;align-items:center;gap:9px;font-size:10.5px;font-weight:800;margin:5px 0}
+.st span:first-child{flex:none;width:96px;white-space:nowrap}
+.st .bar{flex:1 1 0;min-width:0;height:9px;border-radius:9px;background:#fff;border:1.5px solid var(--tx);overflow:hidden}
+.st .bar i{display:block;height:100%;background:var(--tx)}
+.st em{flex:none;font-style:normal;width:22px;text-align:right;color:var(--tx);font-weight:900}
+
+/* ===== текст работы с пометками ===== */
+.essay{background:#fff;border:1.5px solid var(--ln);border-radius:12px;padding:12px 15px;font-size:11.8px;line-height:2.05;font-weight:500}
+.essay p+p{margin-top:7px}
+.e{background:#EDEDED;border-bottom:2px solid #000;padding:0 1px;position:relative}
+.e sup{display:inline-grid;place-items:center;min-width:13px;height:13px;border-radius:50%;background:#000;color:#fff;font-size:8.5px;font-weight:900;line-height:1;margin-left:2px;vertical-align:top;position:relative;top:-1px}
+.e.pu{border-bottom:2px dashed #000}
+.e.re{border-bottom:3px double #000}
+.legend{display:flex;gap:14px;font-size:9.5px;font-weight:800;color:#222;margin-top:6px}
+.legend i{display:inline-block;width:22px;height:0;margin-right:5px;vertical-align:2px}
+
+/* ===== таблица ошибок ===== */
+table{width:100%;border-collapse:separate;border-spacing:0 6px}
+th{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#222;font-weight:800;text-align:left;padding:0 8px 2px}
+td{background:#fff;border-top:1.5px solid var(--ln);border-bottom:1.5px solid var(--ln);color:#111;padding:8px;vertical-align:top;font-size:10.3px;line-height:1.45;font-weight:500}
+td:first-child{border-left:1.5px solid var(--ln);border-radius:11px 0 0 11px;width:30px;text-align:center}
+td:last-child{border-right:1.5px solid var(--ln);border-radius:0 11px 11px 0}
+tr{break-inside:avoid;page-break-inside:avoid}
+.num{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#000;color:#fff;font-size:10.5px;font-weight:900}
+.pill{display:inline-block;border-radius:99px;padding:1px 9px;font-size:9px;font-weight:900;background:#fff;color:#000;border:1.5px solid #000;margin-bottom:4px}
+.pill.pu{border-style:dashed}.pill.re{border-style:double;border-width:3px;padding:0 8px}
+.fix{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:11px}
+.fix s{color:#000;text-decoration:line-through;text-decoration-thickness:1px;font-weight:700}
+.fix b{color:#000;font-weight:900;border-bottom:1.5px solid #000}
+.fix .ar{color:var(--hint);font-weight:900}
+.src{display:block;margin-top:3px;font-size:9px;color:#333;font-weight:700}
+
+/* ===== критерии ФИПИ ===== */
+.kc{border:1.5px solid var(--ln);border-left:6px solid var(--tx);border-radius:11px;padding:6px 11px;margin-bottom:5px;break-inside:avoid;page-break-inside:avoid}
+.kc.w{border-left-style:double;border-left-width:7px}.kc.r{border-left-width:10px}
+.kc .t{display:flex;justify-content:space-between;gap:10px;align-items:center;font-weight:900;font-size:11.2px}
+.kc .p{flex:none;border-radius:99px;padding:1px 10px;font-size:10.5px;font-weight:900;background:var(--tx);color:#fff;border:1.5px solid var(--tx)}
+.kc.w .p{background:#fff;color:var(--tx)}.kc.r .p{background:#fff;color:var(--tx);border-style:dashed}
+.kc .b{height:7px;border-radius:9px;background:#fff;border:1.2px solid var(--tx);margin:5px 0;overflow:hidden}
+.kc .b i{display:block;height:100%;background:var(--tx)}
+.kc p{font-size:10px;line-height:1.45;font-weight:500;color:#111}.kc p b{font-weight:900}.kc p.tp{margin-top:2px;color:#333}
+
+/* ===== рекомендации ===== */
+.rcs{border:1.5px solid var(--ln);border-radius:14px;padding:2px 13px;background:#fff}
+.rc{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--ln);break-inside:avoid}
+.rc:first-child{border-top:0}
+.rc .n{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;color:#fff;background:var(--tx)}
+.rc b{display:block;font-size:11.3px;font-weight:900}
+.rc p{font-size:10px;line-height:1.45;font-weight:500;color:#222;margin-top:1px}
+.rc em{display:inline-block;margin-top:4px;font-size:9px;font-weight:900;font-style:normal;background:#fff;color:var(--tx);border:1.2px solid var(--tx);border-radius:99px;padding:0 9px}
+
+.note{margin-top:7px;font-size:9px;line-height:1.45;font-weight:700;color:#222;border:1.2px solid var(--ln);border-radius:10px;padding:6px 11px}
+.empty{font-size:10px;font-weight:700;color:var(--hint);border:1.5px dashed var(--ln);border-radius:10px;padding:10px;text-align:center}

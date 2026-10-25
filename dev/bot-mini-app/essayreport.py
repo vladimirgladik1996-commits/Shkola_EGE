@@ -7,8 +7,16 @@ mockups/ai-check-a4-preview.html: стр. 1 — шапка, балл, стати
 essaycheck._result(); пустые блоки (missing) показываются честной пометкой, ничего не додумывается.
 Зависимости: stdlib + reportlab (как у chatfiles). Ничего не знает про aiohttp/aiogram — проверяется
 отдельным тестом (tests/test_essay_report.py).
+
+ДВИЖКИ (ESSAY_REPORT_ENGINE, по умолчанию html):
+  html      — отчёт верстается тем же HTML/CSS, что макет (assets/essay-report.css — стили макета дословно,
+              assets/essay-report.js — раскладка по страницам A4), PDF печатает Chromium (playwright): это
+              точная копия макета. Word — те же страницы A4 картинками на всю страницу: другого способа
+              получить в Word «ровно как в HTML» нет (текст при этом не редактируется; он лежит в альт-тексте).
+  reportlab — прежний запасной путь (PDF рисуется вручную, Word — текстовый). Включается сам, если Chromium
+              не запустился: отчёт не должен ронять проверку.
 """
-import io, logging, os, re
+import base64, html as html_lib, io, json, logging, os, pathlib, re, tempfile, threading, zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape
 
@@ -62,13 +70,13 @@ def _counts(r):
 
 
 def _crit_state(c):
-    """(класс карточки, подпись): w — частично, r — основная потеря (≥ половины баллов потеряно)."""
+    """(класс карточки, подпись) — правило фронта (ecFipiView) и макета: 100% — полный балл, от 50% — частично
+    (w), меньше половины — основная потеря (r). Ровно половина (1 из 2) — «частично», как в макете."""
     got, mx = c["got"], c["max"]
-    if got >= mx:
+    pc = int(got * 100 / mx + 0.5) if mx else 0
+    if pc >= 100:
         return "", "полный балл"
-    if got * 2 <= mx and mx > 1:
-        return "r", "основная потеря"
-    return "w", "частично"
+    return ("w", "частично") if pc >= 50 else ("r", "основная потеря")
 
 
 def mark_spans(text, errors):
@@ -449,12 +457,277 @@ def pdf_report(r, kind="ege", student="", now=None):
     return out.getvalue()
 
 
+# ---------- HTML-движок: точная копия макета (HTML/CSS → Chromium → PDF; Word — страницы A4 картинками) ----------
+ENGINE = os.getenv("ESSAY_REPORT_ENGINE", "html").strip().lower()
+ASSETS = os.path.join(HERE, "assets")
+CSS_FILE = os.path.join(ASSETS, "essay-report.css")        # стили макета ai-check-a4-preview.html — дословно
+JS_FILE = os.path.join(ASSETS, "essay-report.js")          # раскладка блоков по страницам A4
+NUNITO = os.path.join(ASSETS, "fonts", "Nunito.ttf")       # шрифт макета (variable, OFL); нет файла — Google Fonts
+SHORT = {"ege": "сочинение ЕГЭ", "oge": "эссе ОГЭ"}
+SUB1 = "Разбор подготовила Вишенка"
+THEAD = "<thead><tr><th>№</th><th>Фрагмент и исправление</th><th>Правило и источник</th></tr></thead>"
+CSS_CLS = {"Пунктуация": " pu", "Речь": " re"}              # орфография — без класса, как в макете
+GAUGE_L = 276.46                                           # длина окружности шкалы (2π·44): 12 из 17 → 195, как в макете
+GAUGE_C = 277                                              # второй член dasharray — как в макете
+_RENDER_LOCK = threading.Lock()                            # один Chromium за раз: на 512 МБ параллельные запуски не нужны
+
+
+def _e(t):
+    return html_lib.escape("" if t is None else str(t), quote=True)
+
+
+def _read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def _logo_uri():
+    try:
+        with open(LOGO, "rb") as f:
+            return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    except OSError:
+        return ""
+
+
+def _fonts_head():
+    """(<link> для головы, @font-face). DejaVu из fonts/ всегда — кириллица не превратится в рамки;
+    Nunito — из assets/fonts/Nunito.ttf, а если файла нет — тем же <link> на Google Fonts, что в макете."""
+    uri = lambda p: pathlib.Path(p).resolve().as_uri()
+    css = (f"@font-face{{font-family:'DejaVu Sans';src:url('{uri(os.path.join(chatfiles.FONTS, 'DejaVuSans.ttf'))}');font-weight:400}}"
+           f"@font-face{{font-family:'DejaVu Sans';src:url('{uri(os.path.join(chatfiles.FONTS, 'DejaVuSans-Bold.ttf'))}');font-weight:700 900}}")
+    if os.path.exists(NUNITO):
+        return "", css + f"@font-face{{font-family:'Nunito';src:url('{uri(NUNITO)}');font-weight:200 1000}}"
+    return ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+            '<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">'), css
+
+
+def _pct(n):
+    return min(100, int(n * 17.5 + 0.5))                   # ширины полос статистики — как ecStats фронта (4/2/1 → 70/35/18)
+
+
+def _blocks(r, kind, student, now):
+    """Разбор → список блоков для раскладки по страницам (разметка — дословно из макета)."""
+    kind = _kind(kind)
+    sc, miss = r.get("score") or {}, r.get("missing") or []
+    errs, crits, recs = r.get("errors") or [], r.get("criteria") or [], r.get("recommendations") or []
+    B = []
+
+    def add(h, w=None, k=0, n=0):
+        B.append({"h": h, "w": w, "k": k, "n": n})
+
+    def empty(t):
+        return f'<div class="empty">{_e(t)}</div>'
+
+    def tag(t):
+        return f"<span>{_e(t)}</span>" if t else ""
+
+    # --- страница 1: шапка, балл, статистика, текст ---
+    add(f"<h1>{_e(_title(kind))}</h1>", k=1)
+    add(f'<p class="sub">{_e(WORK[kind][1])}</p>')
+    if "criteria" in miss:
+        add(empty(MISSING["criteria"]))
+    else:
+        got, mx, pot, c = sc.get("got", 0), sc.get("max", 0), potential(r), _counts(r)
+        fill = max(0, min(1, got / mx)) * GAUGE_L if mx else 0
+        arc = (f'<circle cx="52" cy="52" r="44" fill="none" stroke="#0E2250" stroke-width="9" stroke-linecap="round" '
+               f'stroke-dasharray="{fill:.0f} {GAUGE_C}"/>') if fill >= 1 else ""
+        who = (f'<div class="who"><span class="av">{_e(student.strip()[:1].upper())}</span>{_e(student)}</div>'
+               if student.strip() else "")
+        info = (f"Критериев: {len(crits)}<br>Ошибок найдено: {len(errs)}"
+                + (f"<br>Потенциал: +{pot} {_plural(pot)}" if pot else ""))
+        tiles = ('<div class="tiles">' + "".join(f"<div><b>{c[t]}</b>{t.lower()}</div>" for t in TYPES) + "</div>"
+                 if "errors" not in miss else "")
+        add('<div class="hero"><div class="r1"><div class="gauge">'
+            '<svg width="98" height="98" viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#C9CEDD" '
+            f'stroke-width="9"/>{arc}</svg><div><b>{got}</b><small>из {mx}</small></div></div>'
+            f'<div><div class="lb">Прогнозный балл</div><span class="lv">{_e(sc.get("level", ""))} · {_e(sc.get("percent", 0))}%</span>'
+            f'{who}</div><div class="info">{info}</div></div>{tiles}</div>')
+    if "errors" not in miss:
+        c = _counts(r)
+        add("<h2>Статистика ошибок</h2>", k=1)
+        for t in TYPES:
+            add(f'<div class="st"><span>{t}</span><div class="bar"><i style="width:{_pct(c[t])}%"></i></div><em>{c[t]}</em></div>')
+    add("<h2>Текст работы с пометками</h2>", k=1)
+    if "text" in miss:
+        add(empty(MISSING["text"]))
+    else:
+        paras = _paras(r.get("text"), r.get("errors"))
+        etype = {e["i"]: e["type"] for e in errs}
+        for j, para in enumerate(paras):
+            x = "".join((f'<span class="e{CSS_CLS.get(etype.get(i), "")}">{_e(s)}<sup>{_e(i)}</sup></span>' if i else _e(s))
+                        for s, i in para)
+            add(f"<p>{x}</p>", w="essay", k=1 if j == len(paras) - 1 else 0)
+        add('<div class="legend"><span><i style="border-top:2px solid #000"></i>Орфография</span>'
+            '<span><i style="border-top:2px dashed #000"></i>Пунктуация</span>'
+            '<span><i style="border-top:3px double #000"></i>Речь</span>'
+            '<span style="margin-left:auto">Текст распознан с фото, ошибки ученика сохранены</span></div>')
+
+    # --- страница 2: таблица ошибок ---
+    err_tag = f"{len(errs)} подтверждены текстом" if errs else ""
+    add(f"<h2>Разбор ошибок{tag(err_tag)}</h2>", k=1, n=1)
+    if not errs:
+        add(empty(MISSING["errors"] if "errors" in miss else "Ошибок не найдено."))
+    for e in errs:
+        cls = CSS_CLS.get(e["type"], "")
+        src = f'<span class="src">{_e(e["src"])}</span>' if e.get("src") else ""
+        add(f'<tr><td><span class="num{cls}">{_e(e["i"])}</span></td><td><span class="pill{cls}">{_e(e["type"])}</span>'
+            f'<div class="fix"><s>{_e(e["found"])}</s><span class="ar">→</span><b>{_e(e["correct"] or "—")}</b></div></td>'
+            f'<td>{_e(e["why"])}{src}</td></tr>', w="tbl")
+
+    # --- страница 3: критерии ФИПИ и рекомендации ---
+    crit_tag = f"{sc.get('got', 0)} из {sc.get('max', 0)}" if crits else ""
+    add(f"<h2>Критерии ФИПИ с обоснованием{tag(crit_tag)}</h2>", k=1, n=1)
+    if not crits:
+        add(empty(MISSING["criteria"]))
+    for c in crits:
+        cls, lab = _crit_state(c)
+        pc = int(c["got"] * 100 / c["max"] + 0.5) if c["max"] else 0
+        why = f'<p><b>Почему:</b> {_e(c["why"])}</p>' if c.get("why") else ""
+        tip = f'<p class="tp"><b>Совет:</b> {_e(c["tip"])}</p>' if c.get("tip") else ""
+        add(f'<div class="kc{(" " + cls) if cls else ""}"><div class="t"><span>{_e(c["name"])}</span>'
+            f'<span class="p">{c["got"]} / {c["max"]} · {lab}</span></div><div class="b"><i style="width:{pc}%"></i></div>{why}{tip}</div>')
+    if recs:
+        pot = potential(r)
+        pot_tag = f"потенциал +{pot} {_plural(pot)}" if pot else ""
+        add(f"<h2>Рекомендации{tag(pot_tag)}</h2>", k=1)
+        for n, x in enumerate(recs, 1):
+            text = f'<p>{_e(x["text"])}</p>' if x.get("text") else ""
+            badge = f'<em>{_e(x["badge"])}</em>' if x.get("badge") else ""
+            add(f'<div class="rc"><div class="n">{n}</div><div><b>{_e(x["title"])}</b>{text}{badge}</div></div>', w="rcs")
+    add(f'<div class="note">{_e(NOTE)}</div>')
+    return B
+
+
+def html_report(r, kind="ege", student="", now=None):
+    """Разбор → самодостаточный HTML (стили макета + раскладка по страницам A4). Тот же файл можно открыть в браузере."""
+    now, kind = now or datetime.now(), _kind(kind)
+    student = (student or "").strip()
+    cfg = {"brand": BRAND, "sub1": SUB1, "sub2": f"{student} · {SHORT[kind]}" if student else SHORT[kind],
+           "date": _date(now), "num": _number(now), "logo": _logo_uri(), "thead": THEAD,
+           "blocks": _blocks(r, kind, student, now)}
+    data = json.dumps(cfg, ensure_ascii=False).replace("</", "<\\/")
+    link, face = _fonts_head()
+    return ('<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">'
+            f"<title>{_e(_title(kind))}</title>{link}<style>{face}\n{_read(CSS_FILE)}</style></head>"
+            f'<body><div class="pages" id="pages"></div><script>window.REPORT={data};</script>'
+            f"<script>{_read(JS_FILE)}</script></body></html>")
+
+
+def render_pdf(html, timeout=45):
+    """HTML → (PDF-байты, тексты страниц). Chromium через playwright; любой сбой — исключение (build уйдёт на запасной путь)."""
+    from playwright.sync_api import sync_playwright
+    with _RENDER_LOCK, tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "report.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+        with sync_playwright() as p:
+            br = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
+            try:
+                pg = br.new_page()
+                pg.goto(pathlib.Path(path).as_uri(), wait_until="load", timeout=timeout * 1000)
+                pg.wait_for_function("window.__pages !== undefined", timeout=timeout * 1000)
+                texts = pg.evaluate("window.__pages")
+                pdf = pg.pdf(format="A4", print_background=True, prefer_css_page_size=True,
+                             margin={"top": "0", "right": "0", "bottom": "0", "left": "0"})
+            finally:
+                br.close()
+    return pdf, texts
+
+
+def pdf_pages_png(pdf, dpi=200):
+    """Страницы готового PDF → PNG (pypdfium2): Word получает ровно то, что напечатано в PDF."""
+    import pypdfium2 as pdfium
+    out = []
+    for page in pdfium.PdfDocument(pdf):
+        im = page.render(scale=dpi / 72).to_pil().convert("RGB")
+        buf = io.BytesIO()
+        im.save(buf, "PNG", optimize=True)
+        out.append(buf.getvalue())
+    if not out:
+        raise ValueError("в PDF нет страниц")
+    return out
+
+
+def docx_pages(pngs, texts, title):
+    """Word: каждая страница A4 — картинка на всю страницу (поля 0). Картинка чуть ниже листа (295 из 297 мм),
+    иначе Word добавит пустую страницу из-за знака абзаца. Текст страницы — в альт-тексте картинки."""
+    NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+          'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+          'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"')
+    cy = 295 * 36000
+    cx = round(cy * 210 / 297)
+    body, rels = [], []
+    for i, _png in enumerate(pngs, 1):
+        alt = escape(re.sub(r"\s+", " ", (texts[i - 1] if i <= len(texts) else "")).strip()[:1500], {'"': "&quot;"})
+        body.append(
+            '<w:p><w:pPr>' + ('<w:pageBreakBefore/>' if i > 1 else '') +
+            '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'
+            '<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:drawing>'
+            f'<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{cx}" cy="{cy}"/>'
+            f'<wp:docPr id="{i}" name="Страница {i}" descr="{alt}"/>'
+            '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>'
+            f'<pic:nvPicPr><pic:cNvPr id="{i}" name="page{i}.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+            f'<pic:blipFill><a:blip r:embed="rId{10 + i}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            f'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>'
+            '</wp:inline></w:drawing></w:r></w:p>')
+        rels.append(f'<Relationship Id="rId{10 + i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+                    f'Target="media/page{i}.png"/>')
+    X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    doc = (X + f'<w:document {NS}><w:body>' + "".join(body) +
+           '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+           '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>'
+           '</w:body></w:document>')
+    ct = (X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+          '<Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>'
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+          '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+          '</Types>')
+    R = "http://schemas.openxmlformats.org/"
+    root_rels = (X + f'<Relationships xmlns="{R}package/2006/relationships">'
+                 f'<Relationship Id="rId1" Type="{R}officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+                 f'<Relationship Id="rId2" Type="{R}package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+                 '</Relationships>')
+    doc_rels = X + f'<Relationships xmlns="{R}package/2006/relationships">' + "".join(rels) + "</Relationships>"
+    core = (X + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+            'xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>' + escape(title) + f"</dc:title><dc:creator>{escape(BRAND)}</dc:creator>"
+            "</cp:coreProperties>")
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", ct)
+        z.writestr("_rels/.rels", root_rels)
+        z.writestr("word/document.xml", doc)
+        z.writestr("word/_rels/document.xml.rels", doc_rels)
+        z.writestr("docProps/core.xml", core)
+        for i, png in enumerate(pngs, 1):
+            z.writestr(f"word/media/page{i}.png", png)
+    return out.getvalue()
+
+
 def build(r, kind="ege", student="", now=None):
     """Разбор → {"pdf": (байты, имя), "docx": (байты, имя)}. Формат, который не собрался, пропускается
-    (в лог — причина): отчёт не должен ронять проверку, а один формат — лишать второго."""
+    (в лог — причина): отчёт не должен ронять проверку, а один формат — лишать второго.
+    Движок html: PDF печатает Chromium из макета, Word — те же страницы картинками. Chromium не запустился —
+    запасной путь reportlab (PDF) и текстовый Word, отчёт всё равно уходит."""
     now = now or datetime.now()
     stem, out = file_name(kind, student, now), {}
+    if ENGINE == "html":
+        try:
+            pdf, texts = render_pdf(html_report(r, kind, student, now))
+            out["pdf"] = (pdf, f"{stem}.pdf")
+            try:
+                out["docx"] = (docx_pages(pdf_pages_png(pdf), texts, _title(kind)), f"{stem}.docx")
+            except Exception as e:
+                log.exception("essayreport: Word из страниц PDF не собрался: %r", e)
+        except Exception as e:
+            log.warning("essayreport: HTML-движок (Chromium) не сработал, запасной путь reportlab: %r", e)
     for ext, fn in (("pdf", pdf_report), ("docx", docx_report)):
+        if ext in out:
+            continue
         try:
             out[ext] = (fn(r, kind, student, now), f"{stem}.{ext}")
         except Exception as e:
