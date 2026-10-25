@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, essaycheck, kimi, matlib, whisper, yavision
+import assist, auth, chatfiles, essaycheck, essayreport, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -2881,6 +2881,7 @@ async def api_essay_check_run(request):
                         return
                     else:                          # done
                         _ec_job_end(job, {"t": "done", "result": v})
+                        ec_report_start(request.app.get("bot"), uid, v, kind)   # PDF + Word с разбором — в чат с ботом, фоном
                         return
             except asyncio.CancelledError:
                 raise
@@ -2922,6 +2923,41 @@ async def api_essay_check_run(request):
     EC_JOBS.pop(cid, None)                         # итог отдан клиенту — журнал больше не нужен
     await resp.write_eof()
     return resp
+
+
+# ---------- «ИИ-проверка»: PDF и Word с разбором — в Telegram по завершении проверки ----------
+EC_BG = set()               # фоновые отправки отчёта: ссылка на задачу, пока она не закончилась (иначе её соберёт GC)
+
+
+async def ec_report_send(tg_bot, uid, r, kind, student=""):
+    """Собирает PDF (A4) и Word с разбором и присылает ботом в чат пользователя двумя документами.
+    Сборка — essayreport (код файлов «Чата с ИИ» + формат A4 из макета). Любой сбой — только в лог:
+    отчёт не должен ломать проверку, а один недоставленный формат — второй. True — хоть что-то доставлено."""
+    files = await asyncio.get_running_loop().run_in_executor(None, essayreport.build, r, kind, student)
+    cap, sent = essayreport.caption(r, kind, student)[:1000], False
+    for ext in ("pdf", "docx"):
+        if ext not in files:
+            continue
+        data, name = files[ext]
+        try:
+            await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
+                                       disable_notification=sent)
+            sent = True
+        except TelegramAPIError as e:
+            log.warning("essay report: %s не ушёл tg_id=%s err=%s", ext, uid, e)
+    return sent
+
+
+def ec_report_start(tg_bot, uid, r, kind):
+    """Запуск фоновой отправки отчёта по готовому разбору. Не шлём: без бота/Telegram-id (standalone, uid 0),
+    при сбое проверки и пустом разборе (нет ни ошибок, ни критериев — анализировать нечего)."""
+    if tg_bot is None or type(uid) is not int or uid <= 0 or not isinstance(r, dict) or not (r.get("errors") or r.get("criteria")):
+        return None
+    t = asyncio.ensure_future(ec_report_send(tg_bot, uid, r, kind if kind in essayreport.WORK else "ege"))
+    EC_BG.add(t)
+    t.add_done_callback(lambda x: (EC_BG.discard(x), x.cancelled() or x.exception() is None
+                                   or log.error("essay report: tg_id=%s упал: %r", uid, x.exception())))
+    return t
 
 
 # ---------- «ИИ-проверка»: сохранение и история (пуш 7 из PUSH-PLAN.md) ----------
