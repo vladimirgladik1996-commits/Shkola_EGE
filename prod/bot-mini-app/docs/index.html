@@ -1172,7 +1172,8 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-chip{border:1.5px solid var(--ln);background:var(--card);color:var(--tx);border-radius:99px;padding:8px 14px;font:800 13px "Nunito",system-ui,sans-serif;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .ec-chip.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
 .ec-go{justify-self:end;border:1px solid #e3c36a;border-radius:16px;padding:12px 16px;font:900 14px "Nunito",system-ui,sans-serif;letter-spacing:.3px;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2fbf79 0%,#12864f 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 2px rgba(31,154,91,.25),0 6px 16px rgba(18,134,79,.5);text-shadow:0 1px 2px rgba(0,0,0,.25);position:relative;overflow:hidden}
-.ec-go::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);animation:ecSheen 3.6s ease-in-out infinite}
+.ec-go::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);opacity:0}
+.ec-go.busy::after{opacity:1;animation:ecSheen 1.1s linear infinite}   /* «бегущая полоса» — ТОЛЬКО пока фото реально уходят; постоянная бегущая полоса читалась как вечная загрузка кнопки */
 @keyframes ecSheen{0%,60%{left:-60%}100%{left:130%}}
 .ec-ctl .ec-go{transition:opacity .25s,transform .25s}
 .ec-ctl .ec-go.off{opacity:0;transform:scale(.9);pointer-events:none}
@@ -3038,26 +3039,36 @@ function ecAskSkip(){close_();ecUpload(true)}   /* продолжить без �
 const EC_UP_IDLE=30000,EC_UP_MAX=90000;   /* тишина отправки / общий потолок одного фото, мс */
 function ecUpApi(p,b){   /* POST с прогрессом отправки (XHR): по прогрессу перезапускается сторож
      тишины — медленная, но живая сеть НЕ убивается, а мёртвая обрывается за EC_UP_IDLE, а не висит вечно */
-  return new Promise(res=>{const x=new XMLHttpRequest();let idle=null,max=null,done=false;
+  return new Promise(res=>{let x=null,idle=null,max=null,done=false;
     const fin=v=>{if(done)return;done=true;if(idle)clearTimeout(idle);if(max)clearTimeout(max);res(v)};
     const arm=()=>{if(idle)clearTimeout(idle);idle=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_IDLE)};
-    x.open("POST",API_BASE+p,true);
-    x.setRequestHeader("Content-Type","application/json");x.setRequestHeader("X-Init",tg.initData);
-    if(APP&&localStorage.sesTok)x.setRequestHeader("X-Session",localStorage.sesTok);
-    x.upload.onprogress=()=>arm();
-    x.onload=()=>{if(x.status==401||x.status==403){lockScreen(x.status);return fin(null)}
-      if(x.status<200||x.status>=300)return fin(null);
-      let j=null;try{j=JSON.parse(x.responseText)}catch(e){}fin(j&&typeof j==="object"?j:null)};
-    x.onerror=()=>fin(null);x.onabort=()=>fin(null);
-    max=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_MAX);arm();x.send(JSON.stringify(b))})}
+    try{
+      x=new XMLHttpRequest();
+      x.open("POST",API_BASE+p,true);
+      x.setRequestHeader("Content-Type","application/json");
+      try{x.setRequestHeader("X-Init",tg&&tg.initData?tg.initData:"")}catch(e){}   /* initData нет/пуст — уходим без подписи, сервер ответит 401/403 честно */
+      if(APP&&localStorage.sesTok){try{x.setRequestHeader("X-Session",localStorage.sesTok)}catch(e){}}
+      x.upload.onprogress=()=>arm();
+      x.onload=()=>{if(x.status==401||x.status==403){lockScreen(x.status);return fin(null)}
+        if(x.status<200||x.status>=300)return fin(null);
+        let j=null;try{j=JSON.parse(x.responseText)}catch(e){}fin(j&&typeof j==="object"?j:null)};
+      x.onerror=()=>fin(null);x.onabort=()=>fin(null);x.ontimeout=()=>fin(null);
+      max=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_MAX);arm();x.send(JSON.stringify(b));
+    }catch(e){fin(null)}   /* синхронный сбой — это «не загрузилось», а не вечная загрузка (bug-reports/012) */
+  })}
 async function ecUpOne(p){   /* одно фото на сервер; p: {src,set,id,st} — st: wait|up|ok|fail */
   if(!p||p.st=="ok")return true;
   if(p.jn)return p.jn;   /* уже грузится — ждём тот же запрос, не дублируем */
   p.st="up";
-  p.jn=(async()=>{const r=await ecUpApi("/api/essay_check/photo",{sid:ecUpId,set:p.set,n:"photo.jpg",d:p.src.split(",")[1]||"",mime:"image/jpeg"});
-    p.jn=null;if(r&&r.id){p.id=r.id;p.st="ok";return true}p.st="fail";return false})();
-  return p.jn}
-function ecUpKick(){ecShots.w.concat(ecShots.t).forEach(p=>{if(p.st=="wait")ecUpOne(p)})}   /* фоновая загрузка после съёмки */
+  const j=(async()=>{let r=null;
+    try{r=await ecUpApi("/api/essay_check/photo",{sid:ecUpId,set:p.set,n:"photo.jpg",d:p.src.split(",")[1]||"",mime:"image/jpeg"})}catch(e){r=null}
+    if(p.jn===j)p.jn=null;   /* снимаем «в полёте» ВСЕГДА: раньше при сбое p.jn оставался отклонённым промисом
+                                навсегда — фото было невозможно догрузить, «Готово» падал на нём же раз за разом (bug-reports/012) */
+    if(r&&r.id){p.id=r.id;p.st="ok";return true}
+    p.st="fail";return false})();
+  p.jn=j;
+  return j}
+function ecUpKick(){ecShots.w.concat(ecShots.t).forEach(p=>{if(p.st=="wait")Promise.resolve(ecUpOne(p)).catch(()=>{})})}   /* фоновая загрузка после съёмки; сбой одного фото не роняет остальные */
 async function ecUpAll(){   /* дозагрузить всё, что не ушло фоном (сбой сети, перезапуск сервиса) */
   let ok=true;for(const p of ecShots.w.concat(ecShots.t)){if(!(await ecUpOne(p)))ok=false}return ok}
 async function ecUpload(skip){if(ecBusy)return;
@@ -3065,25 +3076,32 @@ async function ecUpload(skip){if(ecBusy)return;
   if(!ecShots.w.length){ecAskWork();return}   /* только задание: ни при каких условиях дальше не пускаем */
   if(!skip&&!ecShots.t.length){ecAskTask();return}   /* только работа: спрашиваем — добавить задание или продолжить без */
   ecBusy=true;
+  /* Кнопка «Готово» обязана вернуться в исходное состояние В ЛЮБОМ исходе (bug-reports/012).
+     Раньше подпись «Загружаю фото…» снималась только через render() под условием tab=="ai"&&ecStep===1:
+     любой другой исход оставлял кнопку с вечной «Загружаю…» и бегущей полосой — выглядело как зависшая
+     загрузка при исправном интернете и живом сервере. */
+  const btn0=$("#ec-go"),was=btn0&&btn0.textContent?btn0.textContent:"Готово";
+  if(btn0){btn0.textContent="Загружаю фото…";btn0.classList.add("busy")}
+  let finished=false;
+  const done=()=>{
+    if(finished)return;finished=true;ecBusy=false;
+    const b=$("#ec-go");if(b){b.textContent=was;b.classList.remove("busy")}
+    if(tab=="ai"&&ecStep===1)render()};
   try{
     /* фото обычно уже на сервере (грузятся сразу после съёмки) — собираем сеанс по id и стартуем
        проверку мгновенно; догрузка нужна только после сбоя сети или перезапуска сервиса */
-    const btn=$("#ec-go");if(btn)btn.textContent="Загружаю фото…";
-    if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");
-      ecBusy=false;if(tab=="ai"&&ecStep===1)render();return}
+    if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");return done()}
     let r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     if(!r||!r.id){   /* сервис перезапустился и потерял копилку фото — перезальём и соберём заново */
       for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null}
-      if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");
-        ecBusy=false;if(tab=="ai"&&ecStep===1)render();return}
+      if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");return done()}
       r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     }
-    if(!r||!r.id){toast("Не получилось отправить фото — попробуйте ещё раз");
-      ecBusy=false;if(tab=="ai"&&ecStep===1)render();return}
+    if(!r||!r.id){toast("Не получилось отправить фото — попробуйте ещё раз");return done()}
     ecSess=r.id;ecStep=2;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
     render();scrollTo(0,0);ecRun();
-  }catch(e){toast("Не получилось загрузить фото — попробуйте ещё раз");if(tab=="ai"&&ecStep===1)render()}
-  ecBusy=false}
+  }catch(e){toast("Не получилось загрузить фото — попробуйте ещё раз")}
+  finally{done()}}
 /* --- экран обработки: лог этапов — log макета: ✓ сделано, ● текущий этап, будущие скрыты; полоса прогресса --- */
 function ecLogHtml(){
   const first="Собрала "+(ecShots.w.length+ecShots.t.length)+" фото в одно сочинение";   /* макет: «Собрала 3 фото в одно сочинение» */
