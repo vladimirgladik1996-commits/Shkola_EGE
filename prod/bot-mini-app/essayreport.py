@@ -735,6 +735,39 @@ def build(r, kind="ege", student="", now=None):
     return out
 
 
+def cache_key(uid, r, kind="ege", student=""):
+    """Ключ сборки отчёта: один и тот же разбор (содержательная часть) + тип работы + ученик + владелец.
+    По нему Telegram-отправка и кнопки «Переслать» на экране превью берут ОДИН собранный файл, а не два."""
+    import hashlib
+    keep = {"u": uid, "k": _kind(kind), "s": (student or "").strip(), "t": (r.get("text") or "").strip(),
+            "e": [[e.get("type"), e.get("found"), e.get("correct"), e.get("why"), e.get("src")] for e in r.get("errors") or []],
+            "c": [[c.get("name"), c.get("got"), c.get("max"), c.get("why"), c.get("tip")] for c in r.get("criteria") or []],
+            "r": [[x.get("title"), x.get("text"), x.get("badge")] for x in r.get("recommendations") or []],
+            "m": sorted(r.get("missing") or [])}
+    return hashlib.sha1(json.dumps(keep, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def from_client(res):
+    """Разбор в том виде, как его держит экран превью (ecNrm) → нормализованный разбор essaycheck._result.
+    Данным с клиента не доверяем: нумерация, баллы и типы ошибок пересчитываются на сервере, как при самой проверке.
+    None — пересылать нечего (не словарь, слишком длинный текст, нет ни ошибок, ни критериев)."""
+    import essaycheck
+    try:
+        if not isinstance(res, dict):
+            return None
+        text = res.get("text") if isinstance(res.get("text"), str) else ""
+        task = res.get("task") if isinstance(res.get("task"), str) else ""
+        miss = [m for m in (res.get("missing") if isinstance(res.get("missing"), list) else []) if isinstance(m, str)]
+        if len(text) > 100_000:
+            return None
+        raw = {k: res.get(k) for k in ("errors", "criteria", "recommendations") if k not in miss}
+        r = essaycheck._result(raw, text.strip(), task.strip()[:20000])
+    except Exception as e:
+        log.warning("essayreport.from_client: разбор не нормализовался: %r", e)
+        return None
+    return r if (r.get("errors") or r.get("criteria")) else None
+
+
 def caption(r, kind="ege", student=""):
     """Подпись к файлам в Telegram: тип работы, ученик, итоговый балл."""
     sc = r.get("score") or {}

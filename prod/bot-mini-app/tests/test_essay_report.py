@@ -168,4 +168,35 @@ if chromium:
         er.render_pdf = orig
     assert set(fb) == {"pdf", "docx"} and fb["pdf"][0][:5] == b"%PDF-" and b"<w:tbl>" not in zipfile.ZipFile(io.BytesIO(fb["docx"][0])).read("word/document.xml")
     ok("Chromium упал → PDF (reportlab) и текстовый Word всё равно собираются")
+# 11. кнопки «Переслать PDF/Word» на превью: сервер (нормализация, общий кэш) и экран (общая пересылка чата)
+try:
+    import aiohttp  # noqa: F401
+except ImportError:                       # без aiohttp (минимальное окружение) essaycheck не импортируется — подставляем заглушки
+    from unittest.mock import MagicMock
+    for m_ in ("aiohttp", "aiohttp.web", "aiohttp.client_exceptions"):
+        sys.modules.setdefault(m_, MagicMock())
+import essaycheck
+srv = essaycheck._result({"errors": [dict(e, x=10.5, y=20, page=0) for e in R["errors"]], "criteria": R["criteria"],
+                          "recommendations": R["recommendations"]}, R["text"], "")
+cli = {k: srv[k] for k in ("text", "task", "errors", "criteria", "recommendations", "missing", "why", "score")}
+cli["errors"] = [{k: e[k] for k in ("i", "type", "found", "correct", "why", "src")} for e in srv["errors"]]   # как ecNrm: без x/y/page
+back = er.from_client(cli)
+assert back and er.cache_key(42, srv, "ege", "") == er.cache_key(42, back, "ege", ""), "ключ сборки у сервера и у экрана совпадает — файл собирается один раз"
+assert er.cache_key(42, back, "ege", "") != er.cache_key(42, back, "ege", "Анна") != er.cache_key(43, back, "ege", "Анна")
+for bad_ in (None, [], {"errors": "x"}, {"errors": [], "criteria": []}, {"text": "x" * 100001, "errors": [{"found": "а"}]}):
+    assert er.from_client(bad_) is None, bad_
+ok("from_client: разбор с экрана нормализуется на сервере; мусор и пустой разбор отклоняются; ключ кэша совпадает с серверным")
+
+bot_src = open(os.path.join(ROOT, "bot.py"), encoding="utf-8").read()
+for s_ in ("async def ec_report_files(", "def ec_report_links(", "async def api_essay_report(", "essayreport.from_client(",
+           'add_post("/api/essay_report/files", api_essay_report)', "chat_file_put(uid, data, name, EC_REPORT_MIME[ext])", "rec[5] = fid"):
+    assert s_ in bot_src, s_
+assert bot_src.count("essayreport.build") == 1, "сборка отчёта — в одном месте (общий кэш)"
+html_src = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
+for s_ in ("async function chShareX(x)", "return chShareX(x)}", "function ecRepBox(r)", "ecRepShare('${k}',this)",
+           "chShareX({u:x.url,n:x.name,m:x.mime,k:\"out\"})", "/api/essay_report/files", "Переслать PDF", "Переслать Word", "${ecRepBox(r)}"):
+    assert s_ in html_src, s_
+i_hero, i_box = html_src.index('class="ec-hero2"'), html_src.index("${ecRepBox(r)}")
+assert i_box > i_hero and html_src.index("function ecTabSet(t)") > i_box, "кнопки — сразу под блоком прогнозного балла (внизу экрана превью)"
+ok("кнопки «Переслать PDF/Word» под блоком балла; пересылка — общий chShareX чата; файлы и кэш — на сервере")
 print("OK")

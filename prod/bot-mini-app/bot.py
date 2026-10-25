@@ -2929,23 +2929,95 @@ async def api_essay_check_run(request):
 EC_BG = set()               # фоновые отправки отчёта: ссылка на задачу, пока она не закончилась (иначе её соберёт GC)
 
 
+EC_REPORTS = {}             # ключ разбора (essayreport.cache_key) → {"ts", "fut": сборка файлов, "links": карточки файлов}
+EC_REPORT_MIME = {"pdf": "application/pdf",
+                  "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+EC_REPORT_MAX = 40          # столько разборов держим в памяти одновременно (файлы по 1–3 МБ): старые вытесняются
+
+
+async def ec_report_files(uid, r, kind, student=""):
+    """Собирает PDF и Word с разбором ОДИН раз на разбор: Telegram-отправка и кнопки «Переслать» на экране
+    превью берут один и тот же результат (ключ — essayreport.cache_key), а не собирают файлы дважды.
+    Возвращает (запись кэша, {формат: (байты, имя)}); пустой словарь — не собралось ничего."""
+    now = time.time()
+    for k in [k for k, e in EC_REPORTS.items() if now - e["ts"] > CHAT_FILE_TTL]:
+        EC_REPORTS.pop(k, None)
+    while len(EC_REPORTS) >= EC_REPORT_MAX:
+        EC_REPORTS.pop(min(EC_REPORTS, key=lambda k: EC_REPORTS[k]["ts"]), None)
+    key = essayreport.cache_key(uid, r, kind, student)
+    ent = EC_REPORTS.get(key)
+    if ent is None:
+        ent = EC_REPORTS[key] = {"ts": now, "links": None,
+                                 "fut": asyncio.get_running_loop().run_in_executor(None, essayreport.build, r, kind, student)}
+    files = await ent["fut"]
+    if not files:
+        EC_REPORTS.pop(key, None)
+    return ent, files
+
+
+def ec_report_links(ent, uid, files):
+    """Файлы отчёта → карточки файлов «Чата с ИИ» (chat_file_put: та же подписная ссылка и tok). По ним кнопки
+    «Переслать» работают ровно как «Поделиться» под файлом в чате: chShare → /api/chat_file/prepare → tg.shareMessage."""
+    links = ent["links"]
+    if links is None or any(l["tok"] not in CHAT_FILES for l in links.values()):
+        links = ent["links"] = {}
+        for ext, (data, name) in files.items():
+            url = chat_file_put(uid, data, name, EC_REPORT_MIME[ext])
+            links[ext] = {"kind": ext, "name": name, "mime": EC_REPORT_MIME[ext], "url": url, "tok": url.split("/")[3]}
+    return links
+
+
 async def ec_report_send(tg_bot, uid, r, kind, student=""):
     """Собирает PDF (A4) и Word с разбором и присылает ботом в чат пользователя двумя документами.
-    Сборка — essayreport (код файлов «Чата с ИИ» + формат A4 из макета). Любой сбой — только в лог:
-    отчёт не должен ломать проверку, а один недоставленный формат — второй. True — хоть что-то доставлено."""
-    files = await asyncio.get_running_loop().run_in_executor(None, essayreport.build, r, kind, student)
+    Сборка — essayreport (HTML-макет → Chromium → PDF; Word — те же страницы). Любой сбой — только в лог:
+    отчёт не должен ломать проверку, а один недоставленный формат — второй. True — хоть что-то доставлено.
+    Файлы заодно регистрируются карточками чата (ec_report_links) — кнопки «Переслать» на экране превью
+    отдают тот же файл, а file_id из Telegram сохраняется, чтобы пересылка не загружала его заново."""
+    ent, files = await ec_report_files(uid, r, kind, student)
+    links = ec_report_links(ent, uid, files)
     cap, sent = essayreport.caption(r, kind, student)[:1000], False
     for ext in ("pdf", "docx"):
         if ext not in files:
             continue
         data, name = files[ext]
         try:
-            await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
-                                       disable_notification=sent)
+            msg = await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
+                                             disable_notification=sent)
+            fid = getattr(getattr(msg, "document", None), "file_id", None)
+            rec = CHAT_FILES.get(links[ext]["tok"])
+            if fid and rec:
+                rec[5] = fid
             sent = True
         except TelegramAPIError as e:
             log.warning("essay report: %s не ушёл tg_id=%s err=%s", ext, uid, e)
     return sent
+
+
+@guarded
+async def api_essay_report(request):
+    """Файлы разбора для кнопок «Переслать PDF / Word» на экране превью «ИИ-проверки» (в том числе в просмотре
+    из истории). Экран присылает разбор как держит его сам (ecNrm), сервер нормализует его заново и отдаёт
+    карточки файлов — те же, что у файлов «Чата с ИИ»; дальше экран вызывает общую пересылку чата (chShareX).
+    Если отчёт уже собран после проверки (его собрала отправка в Telegram) — отдаётся тот же файл."""
+    try:
+        j = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad"}, status=400)
+    uid = user_id(request)
+    r = essayreport.from_client(j.get("result")) if isinstance(j, dict) else None
+    if r is None or not isinstance(uid, int) or uid <= 0:
+        return web.json_response({"error": "bad"}, status=400)
+    kind = "oge" if j.get("kind") == "oge" else "ege"
+    student = re.sub(r"\s+", " ", j["student"] if isinstance(j.get("student"), str) else "").strip()[:60]
+    try:
+        ent, files = await ec_report_files(uid, r, kind, student)
+    except Exception as e:
+        log.warning("essay report files: tg_id=%s err=%r", uid, e)
+        return web.json_response({"error": "build_failed"}, status=500)
+    if not files:
+        return web.json_response({"error": "build_failed"}, status=500)
+    links = ec_report_links(ent, uid, files)
+    return web.json_response({"files": [{k: v for k, v in links[e].items() if k != "tok"} for e in ("pdf", "docx") if e in links]})
 
 
 def ec_report_start(tg_bot, uid, r, kind):
@@ -3093,6 +3165,7 @@ def make_app():
     app.router.add_post("/api/essay_check/photo", api_essay_check_photo)     # «ИИ-проверка»: фото сразу после съёмки, по одному (баг-репорт 007)
     app.router.add_post("/api/essay_check/upload", api_essay_check_upload)   # «ИИ-проверка»: сборка сеанса из фото работ и задания (пуш 4)
     app.router.add_post("/api/essay_check/run", api_essay_check_run)           # «ИИ-проверка»: запуск проверки, стрим стадий и результата (пуш 5)   # оживление старых карточек: файл собирается заново из текста ответа
+    app.router.add_post("/api/essay_report/files", api_essay_report)           # «ИИ-проверка»: файлы разбора для кнопок «Переслать PDF/Word» на превью
     app.router.add_post("/api/essay_check/save", api_essay_check_save)         # «ИИ-проверка»: сохранение проверки за учеником (пуш 7)
     app.router.add_post("/api/essay_check/history", api_essay_check_history)   # «ИИ-проверка»: история сохранённых проверок (пуш 7)
     app.router.add_post("/api/essay_check/load", api_essay_check_load)         # «ИИ-проверка»: повторный просмотр сохранённого разбора (пуш 7)

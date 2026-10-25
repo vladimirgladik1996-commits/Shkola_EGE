@@ -1296,6 +1296,13 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-rc em{display:inline-block;margin-top:5px;font:900 11px "Nunito",system-ui,sans-serif;font-style:normal;background:rgba(31,154,91,.15);color:var(--grn);border-radius:99px;padding:2px 9px}
 /* hero-балл — как .hero в макете: золотая рамка, «Прогнозный балл», шкала N из M, уровень, ученик, плитки */
 .ec-hero2{margin-top:12px;border-radius:24px;padding:16px;color:#fff;background:radial-gradient(circle at 85% 0%,rgba(255,201,60,.35),transparent 55%),linear-gradient(145deg,#0B2556,#1B4AA8);border:1px solid rgba(255,201,60,.55);box-shadow:0 14px 30px var(--sh),inset 0 1px 0 rgba(255,255,255,.2)}
+.ec-rep{display:flex;gap:8px;margin-top:10px}
+.ec-rep .ec-rp{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:0 10px;border-radius:14px;font:800 14px "Nunito",system-ui,sans-serif;white-space:nowrap;color:var(--acc);background:color-mix(in srgb,var(--acc) 9%,var(--card));box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 22%,var(--ln));transition:transform .12s}
+.ec-rep .ec-rp.pdf{color:#D93025;background:color-mix(in srgb,#D93025 8%,var(--card));box-shadow:0 0 0 1px color-mix(in srgb,#D93025 26%,var(--ln))}
+.ec-rep .ec-rp:active{transform:scale(.96)}
+.ec-rep .ec-rp:disabled{opacity:.6}
+.ec-rep .ec-rp.busy{opacity:1}
+.ec-rep .ec-rp svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .ec-top2{display:flex;align-items:center;gap:14px}
 .ec-gauge{position:relative;flex:none;width:104px;height:104px}
 .ec-gauge svg{transform:rotate(-90deg)}
@@ -3256,7 +3263,36 @@ ${ecView=="hist"?"":ecResNote()}
 ${ecView=="hist"||(!has("errors")&&!has("criteria"))?"":ecStuBlock()}
 ${has("criteria")?`<div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Прогнозный балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span>${ecSid!=null&&ecStuName()?`<div class="ec-who"><span class="ec-av" style="background:#E8294F;width:28px;height:28px">${esc(ecStuName().charAt(0).toUpperCase())}</span>${esc(ecStuName())}</div>`:""}</div></div>
   ${has("errors")?`<div class="ec-tiles">${EC_TYPES.map(t=>`<div><b>${cnt[t]}</b>${t.toLowerCase()}</div>`).join("")}<img class="ec-dog" src="${EC_DOG}" alt="" draggable="false"></div>`:""}</div>`:""}
+${ecRepBox(r)}
 `}
+/* --- «Переслать PDF / Word» под блоком прогнозного балла: файлы разбора (те же, что бот присылает в Telegram) ---
+   Файлы готовит сервер (/api/essay_report/files — берёт уже собранный после проверки отчёт), а пересылка —
+   общая логика «Поделиться» из «Чата с ИИ» (chShareX): APK — системное окно «Переслать файл», Telegram 8.0+ —
+   окно «Отправить в…» с самим файлом, браузер — Web Share с файлом; запасной путь — скачивание. Ссылки не шлём. */
+function ecRepBox(r){
+  if(!r||(!r.errors.length&&!r.criteria.length))return"";   /* пустой разбор — файлов нет, как и в Telegram */
+  const b=(k,ic,l)=>`<button type="button" class="ec-rp ${k}" data-k="${k}" onclick="ecRepShare('${k}',this)">${ic}<span>${l}</span></button>`;
+  return `<div class="ec-rep" role="group" aria-label="Переслать файлы разбора">${b("pdf",CH_IC.share,"Переслать PDF")}${b("docx",CH_IC.share,"Переслать Word")}</div>`}
+let ecRepMemo={k:"",p:null};
+function ecRepLinks(){   /* один запрос на разбор и ученика: PDF и Word берутся из одного ответа */
+  const k=JSON.stringify([ecKind,ecStuName(),ecRes&&ecRes.text,ecRes&&ecRes.score,ecRes&&ecRes.errors.length]);
+  if(ecRepMemo.k===k&&ecRepMemo.p)return ecRepMemo.p;
+  const h={"Content-Type":"application/json"};if(tg&&tg.initData)h["X-Init"]=tg.initData;
+  if(APP&&localStorage.sesTok)h["X-Session"]=localStorage.sesTok;
+  const p=fetch(API_BASE+"/api/essay_report/files",{method:"POST",headers:h,cache:"no-store",
+    body:JSON.stringify({result:ecRes,kind:ecKind,student:ecStuName()})})
+    .then(r=>r.ok?r.json():null).then(d=>d&&Array.isArray(d.files)&&d.files.length?d.files:null).catch(()=>null);
+  ecRepMemo={k:k,p:p};p.then(f=>{if(!f&&ecRepMemo.p===p)ecRepMemo={k:"",p:null}});   /* сбой не запоминаем — повтор сможет дособрать */
+  return p}
+async function ecRepShare(kind,btn){
+  if(!ecRes||btn.disabled)return;
+  const all=document.querySelectorAll(".ec-rep .ec-rp"),lab=btn.querySelector("span"),was=lab.textContent;
+  all.forEach(x=>x.disabled=true);lab.textContent="Готовлю файл…";btn.classList.add("busy");
+  try{
+    const f=await ecRepLinks(),x=f&&f.find(z=>z.kind===kind);
+    if(!x){toast("Не получилось подготовить файл — попробуйте ещё раз");return}
+    await chShareX({u:x.url,n:x.name,m:x.mime,k:"out"})   /* та же пересылка, что «Поделиться» под файлом в чате */
+  }finally{if(btn.isConnected){all.forEach(z=>z.disabled=false);lab.textContent=was;btn.classList.remove("busy")}}}
 function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вкладки переключаются на месте — без перерисовки экрана */
   const ve=$("#ec-ve"),vf=$("#ec-vf"),te=$("#ec-te"),tf=$("#ec-tf");
   if(!ve||!vf||!te||!tf){if(tab=="ai"&&ecStep===3)render();return}
@@ -3739,6 +3775,10 @@ let chShBusy=false;
    браузер/WebView — системное окно шаринга с файлом (Web Share API Level 2, navigator.share({files})).
    Запасной путь (chShareSave) только скачивает файл — без ссылок и без лишних сообщений. */
 async function chShare(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return}
+  return chShareX(x)}
+/* Сама пересылка файла — общая для карточки чата и для кнопок «Переслать PDF/Word» на превью «ИИ-проверки»:
+   x = {u:ссылка файла, n:имя, m:mime}; путь Telegram/APK/браузер — тот, что описан выше */
+async function chShareX(x){
   if(chShBusy)return;chShBusy=true;
   const u=chAbs(x),A=window.Android||{},mime=chMime(x);
   try{
