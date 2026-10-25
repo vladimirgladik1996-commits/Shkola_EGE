@@ -2,7 +2,9 @@
 Было: пайплайн падал (напр. TypeError: 'int' object is not iterable) → guarded возвращал
 web.Response(400) ПОВЕРХ начатого chunked-тела → клиент получал
 «Invalid character in chunk size: b'HTTP/1.1 400 Bad Request'», reverse-proxy Render
-считал бэкенд мёртвым. Стало: {"t":"fail","why":"net"} + штатный конец тела.
+считал бэкенд мёртвым. Стало: {"t":"fail"} + штатный конец тела.
+Причина сбоя различается (баг-репорт 010): падение пайплайна на сервере → "srv",
+недоступный сервис модели/OCR → "net"/"http"/"empty".
 Страдали оба стрима: /api/essay_check/run и /api/chat. Запуск: python3 tests/test_stream_fail.py"""
 import asyncio, hashlib, hmac, json, os, sqlite3, sys, time
 from urllib.parse import urlencode
@@ -51,7 +53,7 @@ async def main():
         assert r.status == 200 and "ndjson" in r.headers["Content-Type"], (r.status, r.headers)
         evs = ndjson(await r.read())
         assert evs[0] == {"t": "status", "v": "Собрала фото"}, evs
-        assert evs[-1] == {"t": "fail", "why": "net"}, evs
+        assert evs[-1] == {"t": "fail", "why": "srv"}, evs
         ok("/api/essay_check/run: сбой после prepare() → 200 + {\"t\":\"fail\"} + валидный конец стрима")
 
         # --- 2. /api/chat: тот же дефект был и здесь ---

@@ -3103,6 +3103,8 @@ function ecWhyMsg(){const miss=(ecRes&&ecRes.missing)||[],noText=miss.indexOf("t
   :ecWhy==="slow"?"Проверка заняла слишком долго и была остановлена — попробуйте повторить (можно снять поменьше страниц)."
   :ecWhy==="off"?"ИИ пока не подключён: администратору нужно задать KIMI_API_KEY и YANDEX_API_KEY. После подключения проверка заработает."
   :ecWhy==="part"?"Часть данных получить не удалось — блоки без данных показаны пустыми, ничего не додумано."
+  :ecWhy==="srv"?"Проверка не завершилась из-за сбоя на сервере — это не проблема вашего интернета. Нажмите «Повторить» — разбор уйдёт заново."
+  :ecWhy==="link"?"Связь с сервером прервалась посреди проверки. Работа не потеряна — нажмите «Повторить»: разбор продолжится с места обрыва."
   :"Прервалась связь с сервером — проверьте интернет и повторите проверку."}
 function ecProc(){
   const head=ecState==="run"?"Вишенка читает…":ecState==="off"?"ИИ не подключён":"Проверка не завершилась";
@@ -3112,28 +3114,35 @@ function ecProc(){
   return `<div class="ec-mid${ecState==="run"?" ec-run":""}"><img class="ec-mas" src="${EC_MAS}" alt="Вишенка"><h2>${head}</h2>
 <div class="ec-bar"><i id="ec-bar" style="width:${ecBarW()}%"></i></div>
 <div class="ec-log" id="ec-log"><div class="ec-stg" id="ec-stages">${ecLogHtml()}</div>${ecThinkHtml()}</div></div>${tail}`}
+const EC_RETRY=3,EC_RETRY_MS=2000;   /* повторы ПЕРЕПОДКЛЮЧЕНИЯ к журналу сеанса после обрыва соединения (баг-репорт 010) */
 async function ecRun(){   /* живой стрим POST /api/essay_check/run (NDJSON, как у /api/chat): стадии → done/fail/off */
   if(!ecSess)return;
-  const id=++ecRunId;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();ecThink="";
-  if(tab=="ai"&&ecStep===2)render();
+  const id=++ecRunId;
   const on=ev=>{if(id!==ecRunId||!ev||typeof ev!="object")return;   /* устаревший стрим (повтор/новая проверка) экран не трогает */
-    if(ev.t=="status"&&typeof ev.v=="string"&&ev.v){ecWait=ecWait.filter(x=>x!==ev.v);ecLive.push(ev.v);ecUpdProc()}
+    if(ev.t=="status"&&typeof ev.v=="string"&&ev.v){if(ecLive.indexOf(ev.v)<0){ecWait=ecWait.filter(x=>x!==ev.v);ecLive.push(ev.v)}ecUpdProc()}
     else if(ev.t=="think"&&typeof ev.v=="string"&&ev.v){ecThink=(ecThink+ev.v).slice(-EC_THINK_MAX);ecUpdProc()}   /* стрим мышления Кими — от лица Вишенки */
     else if(ev.t=="done"){ecDone(ev.result)}
     else if(ev.t=="fail"){ecFail(ev.why)}
     else if(ev.t=="off"){ecOff()}};   /* «hb» — пульс сервера: событиями не считается, только держит поток живым */
-  try{await apiStream("/api/essay_check/run",{id:ecSess,kind:ecKind},on,{idle:EC_IDLE})}
-  catch(e){if(id===ecRunId)ecFail("net");return}                  /* сеть упала посреди стрима — тоже честный сбой */
-  if(id===ecRunId&&ecState=="run"&&!locked)ecFail("net")}   /* стрим кончился без done/fail/off (обрыв, потолок тишины,
-   перезапуск сервиса) — честный сбой; раньше ответ без событий считался сбоем, а ответ с событиями,
-   но без итога, оставлял «Вишенка читает…» висеть вечно */
+  /* Обрыв соединения (мобильная сеть, свёрнутый WebView) больше не съедает проверку: сервер ведёт
+     ЖУРНАЛ сеанса и отдаёт его с самого начала (баг-репорт 010), поэтому переподключение доигрывает
+     уже сделанное и продолжает с места обрыва. Экран ошибки — только когда подключиться не вышло. */
+  for(let a=0;a<=EC_RETRY;a++){
+    ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();ecThink="";   /* журнал приходит с начала — экран пересобираем заново */
+    if(tab=="ai"&&ecStep===2)render();
+    try{await apiStream("/api/essay_check/run",{id:ecSess,kind:ecKind},on,{idle:EC_IDLE})}catch(e){}
+    if(id!==ecRunId||ecState!=="run")return;   /* итог пришёл или экран занят другой проверкой */
+    if(a<EC_RETRY)await new Promise(r=>setTimeout(r,EC_RETRY_MS));   /* обрыв: подключаемся к той же проверке снова */
+  }
+  if(id===ecRunId&&ecState=="run"&&!locked)ecFail("link")}   /* связь не восстановилась — честный сбой + «Повторить»; раньше это был ecFail("net"),
+   и обрыв соединения выглядел как «проверьте интернет», хотя проверка на сервере была жива (баг-репорт 010) */
 function ecRetry(){if(ecState=="run"||!ecSess)return;ecStep=2;ecState="run";render();scrollTo(0,0);ecRun()}     /* повтор после сбоя: тот же сеанс с уже загруженными фото — и с превью, и с экрана обработки */
 function ecDone(r){const n=ecNrm(r);ecRes=n;
   const thin=n.missing.filter(k=>k!="recommendations").length;   /* есть блоки без данных — говорим честно */
   ecWhy=n.why||ecWhy||(thin?"part":"");   /* ГЛАВНОЕ ПРАВИЛО: превью ВСЕГДА открывается, пустые блоки — без додумывания */
   ecState="done";ecStep=3;ecTab="e";ecFix=false;ecSaved=0;ecView="";ecViewInfo="";ecFx={};ecCur=0;
   if(tab=="ai"){ecErrClose();render();scrollTo(0,0)}}
-function ecFail(why){ecState="fail";ecWhy=(why==="empty"||why==="http"||why==="slow")?why:"net";ecDone(null)}   /* сбой — тоже финальное превью: пустые блоки + честная причина + «Повторить», а не вечное ожидание */
+function ecFail(why){ecState="fail";ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link")?why:"net";ecDone(null)}   /* сбой — тоже финальное превью: пустые блоки + честная причина + «Повторить», а не вечное ожидание */
 function ecOff(){ecState="off";ecWhy="off";ecDone(null)}
 /* --- результат (экран 4): поля — из essaycheck._result; пустой или кривой ответ не роняет экран --- */
 function ecLevel(p){return p>=85?"Отлично":p>=70?"Хорошо":p>=50?"Удовлетворительно":"Нужно доработать"}
@@ -3226,6 +3235,10 @@ function ecStuBlock(){   /* блок «Ученик»: карточки-чипс
     +`<button type="button" class="ec-sc nw" onclick="ecStuPick('save')"><span class="ec-sa">+</span><span class="ec-sn">Другой</span></button>`;
   return `<div class="ec-blk ec-sb"><h3><span class="ec-sbt"><span class="ec-sbi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.8-3.6 3.9-5.6 7.5-5.6s6.7 2 7.5 5.6"/></svg></span>Ученик</span><span class="ec-sbh">кому засчитать работу</span></h3><div class="ec-stu">${chips}</div><button class="ec-save${ecSaved?" ec-saved":""}" onclick="ecSave()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4h11a1 1 0 011 1v15l-6.5-4-6.5 4V5a1 1 0 011-1z"/></svg><span>${ecSaveLabel()}</span></button></div>`}
 function ecResult(){
+  /* Блок «Ученик» + «Сохранить за учеником» рисуется только на разборе с данными:
+     пустой разбор нечего сохранять — историю не мусорим (условие — в шаблоне ниже).
+     Комментарий держим ВНЕ обратных кавычек: внутри шаблона он попадает в innerHTML
+     и отрисовывается на экране как обычный текст (баг-репорт 009). */
   const r=ecRes||ecNrm(null),sc=r.score,miss=r.missing||[],has=k=>miss.indexOf(k)<0;
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
   return `<div class="ec-hd">
@@ -3240,7 +3253,7 @@ ${ecView=="hist"?"":ecResNote()}
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
 <div id="ec-vf"${ecTab=="f"?"":' class="ec-hid"'}>${ecFipiView(r)}</div>
-${ecView=="hist"||(!has("errors")&&!has("criteria"))?"":ecStuBlock()}   /* пустой разбор нечего сохранять — историю не мусорим */
+${ecView=="hist"||(!has("errors")&&!has("criteria"))?"":ecStuBlock()}
 ${has("criteria")?`<div class="ec-hero2"><div class="ec-top2">${ecGauge(sc)}<div><div class="ec-lb">Прогнозный балл</div><span class="ec-lv">${esc(sc.level)} · ${sc.percent}%</span>${ecSid!=null&&ecStuName()?`<div class="ec-who"><span class="ec-av" style="background:#E8294F;width:28px;height:28px">${esc(ecStuName().charAt(0).toUpperCase())}</span>${esc(ecStuName())}</div>`:""}</div></div>
   ${has("errors")?`<div class="ec-tiles">${EC_TYPES.map(t=>`<div><b>${cnt[t]}</b>${t.toLowerCase()}</div>`).join("")}<img class="ec-dog" src="${EC_DOG}" alt="" draggable="false"></div>`:""}</div>`:""}
 `}

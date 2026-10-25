@@ -9,8 +9,11 @@
     без событий»), а fetch/read() жили без таймаута — мёртвая сеть вешала промис навсегда;
   • бэкенд: у проверки не было ни пульса, ни потолка времени — вечный стрим был возможен.
 Стало: пульс {"t":"hb"} в тишине (EC_BEAT), потолок EC_TIMEOUT → {"t":"fail","why":"slow"},
-конец стрима без итога → {"t":"fail","why":"net"}, у клиента — потолок тишины EC_IDLE,
-по которому apiStream закрывает поток, а ecRun честно показывает сбой + «Повторить».
+падение пайплайна → {"t":"fail","why":"srv"} (сбой СЕРВЕРА, а не «проверьте интернет»),
+у клиента — потолок тишины EC_IDLE, по которому apiStream закрывает поток, а ecRun честно
+показывает сбой + «Повторить».
+Контракт причин (баг-репорт 010): net/http/empty — сервис недоступен, slow — потолок времени,
+srv — сбой обработки на сервере, link — обрыв соединения с клиентом (работа не потеряна).
 Запуск: python3 tests/test_essay_check_stall.py"""
 import asyncio, hashlib, hmac, json, os, shutil, sqlite3, subprocess, sys, time
 from urllib.parse import urlencode
@@ -55,16 +58,17 @@ assert "if(rd)rd.cancel()" in html, "по тишине поток надо за�
 assert 'apiStream("/api/essay_check/run",{id:ecSess,kind:ecKind},on,{idle:EC_IDLE})' in html, \
     "ecRun должен передавать потолок тишины в apiStream"
 run_body = html[html.index("async function ecRun(){"):html.index("function ecRetry(")]
-assert 'if(id===ecRunId&&ecState=="run"&&!locked)ecFail("net")' in run_body, \
-    "конец стрима без done/fail/off обязан быть сбоем — раньше экран висел вечно"
+assert 'if(id===ecRunId&&ecState=="run"&&!locked)ecFail("link")' in run_body, \
+    "конец стрима без done/fail/off обязан быть сбоем (link — обрыв связи) — раньше экран висел вечно"
 assert "!got" not in run_body, "охранник снова требует «пустой ответ»: события без итога вешали экран"
-assert 'ecWhy=(why==="empty"||why==="http"||why==="slow")?why:"net"' in html, \
-    "ecFail должен различать причину slow"
-assert 'ecWhy==="slow"' in html, "для «slow» нужен свой текст ошибки в ecWhyMsg()"
+assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link")?why:"net"' in html, \
+    "ecFail должен различать причины: slow / srv (сбой сервера) / link (обрыв связи)"
+assert 'ecWhy==="slow"' in html and 'ecWhy==="srv"' in html and 'ecWhy==="link"' in html, \
+    "для slow/srv/link нужны свои тексты ошибок в ecWhyMsg()"
 ok("фронт: потолок тишины EC_IDLE, конец стрима без итога = сбой (без условия «пустой ответ»)")
 
 # ---------- 1б. ГЛАВНОЕ ПРАВИЛО: превью ВСЕГДА, блоки без данных — пустые, ничего не выдумываем ----------
-assert 'ecWhy=(why==="empty"||why==="http"||why==="slow")?why:"net";ecDone(null)}' in html, \
+assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link")?why:"net";ecDone(null)}' in html, \
     "сбой тоже открывает финальное превью (ecFail → ecDone), а не вешает экран обработки"
 assert 'function ecOff(){ecState="off";ecWhy="off";ecDone(null)}' in html, "off — тоже на финальное превью"
 assert "function ecResNote(" in html and 'onclick="ecRetry()">Повторить' in html, \
@@ -138,7 +142,7 @@ async def main():
         assert took < 3, f"потолок EC_TIMEOUT не сработал: {took:.1f} с"
         ok(f"тишина пайплайна: пульс {{\"t\":\"hb\"}} каждые {bot.EC_BEAT} с, потолок {bot.EC_TIMEOUT} с → fail/slow за %.1f с" % took)
 
-        # --- 4. пайплайн кончился БЕЗ итога (как раньше «зависало») → fail/net, а не молчание ---
+        # --- 4. пайплайн кончился БЕЗ итога (как раньше «зависало») → fail/srv, а не молчание ---
         async def bare_run(*a, **k):
             yield "status", "Распознан рукописный текст"
             return
@@ -147,8 +151,8 @@ async def main():
         bot.EC_CHECKS["cid2"] = [42, {"w": ["x"], "t": []}, time.time()]
         r = await c.post("/api/essay_check/run", json={"id": "cid2"}, headers=H)
         evs = ndjson(await r.read())
-        assert evs[-1] == {"t": "fail", "why": "net"}, evs
-        ok("пайплайн без итога: стрим закрывается событием fail/net — клиент не виснет")
+        assert evs[-1] == {"t": "fail", "why": "srv"}, evs
+        ok("пайплайн без итога: стрим закрывается событием fail/srv (сбой сервера) — клиент не виснет")
 
         # --- 5. штатный конец: done остаётся последним событием, fail не дописывается ---
         async def done_run(*a, **k):

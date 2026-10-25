@@ -2691,6 +2691,45 @@ def _ec_float(name, default, lo, hi):
 EC_BEAT = _ec_float("EC_BEAT", 15.0, 2, 120)
 EC_TIMEOUT = _ec_float("EC_TIMEOUT", 900.0, 30, 7200)
 
+# ---------- «ИИ-проверка»: журнал проверки переживает обрыв соединения (баг-репорт 010) ----------
+# Проверка идёт 3–5 минут ОДНИМ HTTP-потоком (OCR до 12 фото + анализ Кими со стримом мышления).
+# На мобильной сети такое соединение рвётся — в прод-логах это «клиент отключился» и
+# "POST /api/essay_check/run" 200 с НУЛЁМ байт: вся работа (OCR + анализ) раньше выбрасывалась
+# вместе с обрывом (task.cancel в finally), а пользователь получал пустое превью с текстом
+# «Прервалась связь с сервером — проверьте интернет», хотя сервер был исправен.
+# Теперь события и итог копятся в EC_JOBS[cid], а стрим только ПОДКЛЮЧАЕТСЯ к журналу:
+# повторное подключение («Повторить») доигрывает уже сделанное и продолжает с места обрыва.
+EC_JOBS = {}                                    # cid → {"events": [...], "final": bool, "task": Task|None, "ts": float}
+EC_JOURNAL_THINK = 60000                        # потолок мышления в журнале (хвост) — журнал не разрастается до сотен КБ
+
+
+def _ec_jobs_gc(now=None):
+    """Протухшие журналы — вместе с сеансами EC_CHECKS; идущая проверка не удаляется."""
+    now = time.time() if now is None else now
+    for cid, j in list(EC_JOBS.items()):
+        alive = j["task"] is not None and not j["task"].done()
+        if not alive and now - j["ts"] > EC_TTL:
+            EC_JOBS.pop(cid, None)
+
+
+def _ec_job_add(job, ev):
+    """Событие в журнал. hb — держатель соединения, в журнал не пишется; поток мышления
+    склеивается в одно событие — иначе журнал разрастается сотнями мелких дельт."""
+    if ev.get("t") == "hb":
+        return
+    evs = job["events"]
+    if ev.get("t") == "think" and evs and evs[-1].get("t") == "think":
+        evs[-1] = {"t": "think", "v": (evs[-1].get("v", "") + ev.get("v", ""))[-EC_JOURNAL_THINK:]}
+        return
+    evs.append(ev)
+
+
+def _ec_job_end(job, ev):
+    """Итог проверки (done/fail) — последнее событие журнала; дальше журнал закрыт."""
+    if not job["final"]:
+        _ec_job_add(job, ev)
+        job["final"] = True
+
 
 def ec_uid(request):
     """Кто работает с «ИИ-проверкой»: тот же идентификатор, что у user_id, но без требования
@@ -2823,58 +2862,64 @@ async def api_essay_check_run(request):
     # События пайплайна идут через очередь, а пишет в сокет ТОЛЬКО эта корутина:
     # параллельные resp.write недопустимы (ломают chunked-кодирование), поэтому и пульс,
     # и потолок времени живут здесь, а не в essaycheck.
-    q = asyncio.Queue()
+    now = time.time()
+    _ec_jobs_gc(now)
+    job = EC_JOBS.get(cid)
+    if job is None:                                # первый запуск сеанса — начинаем проверку
+        job = EC_JOBS[cid] = {"events": [], "final": False, "task": None, "ts": now}
 
-    async def pump():
-        try:
-            async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
-                await q.put(("ev", ev_kind, v))
-        except asyncio.CancelledError:
-            raise
-        except Exception:                              # пайплайн не должен убивать стрим молча
-            log.exception("essay check: tg_id=%s пайплайн проверки упал", uid)
-            await q.put(("ev", "err", "net"))
-        await q.put(("end", None, None))
+        async def pump():
+            try:
+                async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
+                    if ev_kind == "status":
+                        _ec_job_add(job, {"t": "status", "v": v})
+                    elif ev_kind == "think":      # стрим мышления Кими — от лица Вишенки на прелоадере
+                        _ec_job_add(job, {"t": "think", "v": v})
+                    elif ev_kind == "err":
+                        log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
+                        _ec_job_end(job, {"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
+                        return
+                    else:                          # done
+                        _ec_job_end(job, {"t": "done", "result": v})
+                        return
+            except asyncio.CancelledError:
+                raise
+            except Exception:                      # падение пайплайна — сбой СЕРВЕРА, а не «проверьте интернет»
+                log.exception("essay check: tg_id=%s пайплайн проверки упал", uid)
+                _ec_job_end(job, {"t": "fail", "why": "srv"})
+                return
+            _ec_job_end(job, {"t": "fail", "why": "srv"})   # пайплайн кончился без итога — клиенту нельзя молчать
 
-    task = asyncio.ensure_future(pump())
-    deadline, gt, finished = time.monotonic() + EC_TIMEOUT, None, False
-    try:
-        while True:
-            if gt is None:                             # ожидание очереди не отменяется на пульсе —
-                gt = asyncio.ensure_future(q.get())    # иначе событие может потеряться между таймаутами
-            left = deadline - time.monotonic()
-            if left <= 0:
+        async def pump_guard():
+            try:
+                await asyncio.wait_for(pump(), EC_TIMEOUT)
+            except asyncio.TimeoutError:
                 log.warning("essay check: tg_id=%s не уложился в %.0f с", uid, EC_TIMEOUT)
-                await send({"t": "fail", "why": "slow"})
-                finished = True
+                _ec_job_end(job, {"t": "fail", "why": "slow"})
+
+        job["task"] = asyncio.ensure_future(pump_guard())
+    else:
+        log.info("essay check: подключение к журналу сеанса cid=%s (событий %d, итог %s)",
+                 cid, len(job["events"]), job["final"])
+
+    # Отдаём журнал сеанса и следим за новыми событиями. Обрыв соединения НЕ останавливает
+    # проверку и НЕ съедает журнал: следующий запрос («Повторить») подхватит её с места обрыва.
+    try:
+        idx, last = 0, time.monotonic()
+        while True:
+            while idx < len(job["events"]):
+                await send(job["events"][idx])
+                idx += 1
+            if job["final"]:
                 break
-            done, _ = await asyncio.wait({gt}, timeout=max(0.05, min(EC_BEAT, left)))
-            if gt not in done:
-                await send({"t": "hb"})               # пульс: соединение не должно молчать
-                continue
-            item, gt = gt.result(), None
-            if item[0] == "end":
-                break
-            _, ev_kind, v = item
-            if ev_kind == "status":
-                await send({"t": "status", "v": v})
-            elif ev_kind == "think":                  # стрим мышления Кими — от лица Вишенки на прелоадере
-                await send({"t": "think", "v": v})
-            elif ev_kind == "err":
-                log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
-                await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
-                finished = True
-                break
-            else:                                      # done
-                await send({"t": "done", "result": v})
-                finished = True
-                break
-    finally:
-        if gt is not None:
-            gt.cancel()
-        task.cancel()
-    if not finished:                                   # пайплайн кончился без итога — клиенту нельзя молчать:
-        await send({"t": "fail", "why": "net"})      # иначе экран «Вишенка читает…» висит вечно
+            if time.monotonic() - last >= EC_BEAT:
+                await send({"t": "hb"})           # пульс: соединение не должно молчать
+                last = time.monotonic()
+            await asyncio.sleep(0.1)
+    except (ConnectionResetError, BrokenPipeError, RuntimeError):
+        log.info("essay check: клиент отключился, проверка продолжается: tg_id=%s cid=%s", uid, cid)
+        return resp                                # журнал цел — «Повторить» подключится заново
+    EC_JOBS.pop(cid, None)                         # итог отдан клиенту — журнал больше не нужен
     await resp.write_eof()
     return resp
 
