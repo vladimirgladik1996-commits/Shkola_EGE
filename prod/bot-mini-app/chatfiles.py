@@ -312,7 +312,10 @@ def _docx_table(rows):
                 for s in ("top", "left", "bottom", "right", "insideH", "insideV"))
     trs = []
     for r in rows:
-        tcs = [_para(c or [("", {})], size=20, after=40) for c in r]
+        # каждая ячейка — СТРОГО <w:tc> (w:tcPr + хотя бы один <w:p>): «голые» <w:p> внутри <w:tr>
+        # нарушают схему OOXML — строгие просмотрщики (Samsung/мобильный Word) объявляют файл повреждённым
+        tcs = ['<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'
+               + _para(c or [("", {})], size=20, after=40) + '</w:tc>' for c in r]
         tcs += ['<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p/></w:tc>'] * (ncol - len(r))
         trs.append("<w:tr>" + "".join(tcs) + "</w:tr>")
     return (f'<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>{b}</w:tblBorders></w:tblPr>'
