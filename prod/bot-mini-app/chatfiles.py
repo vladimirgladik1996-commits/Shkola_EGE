@@ -389,7 +389,8 @@ def docx_bytes(title, blocks, footer_all=False):
             body.append(_para(_force(b[1], b=1), size=28, after=100, color=_NC,
                              brk=_is_selfcheck(_plain(b[1]))))
         elif k == "li":
-            body.append(_para(_runs(b[1] + "\t") + b[2], size=22, ind=(500, 340), after=60))
+            # маркер и текст — через неразрывный пробел: раньше «•» и текст склеивались («•Текст»)
+            body.append(_para(_runs(b[1]) + [("\u00a0", {})] + b[2], size=22, ind=(500, 340), after=60))
         elif k == "code":
             for ln in b[1].split("\n"):
                 body.append(_para([(ln, {"m": 1})], size=18, after=0))
@@ -490,8 +491,10 @@ def docx_bytes(title, blocks, footer_all=False):
           f'<Override PartName="/word/settings.xml" ContentType="{W}settings+xml"/>'
           f'<Override PartName="/word/header1.xml" ContentType="{W}header+xml"/>'
           f'<Override PartName="/word/footer1.xml" ContentType="{W}footer+xml"/>'
-          f'<Override PartName="/word/header2.xml" ContentType="{W}header+xml"/>'
-          '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+          # header2.xml — только когда фирменная шапка действительно кладётся в пакет:
+          # Override на несуществующую часть — грязь в [Content_Types].xml (строгие проверки её видят)
+          + (f'<Override PartName="/word/header2.xml" ContentType="{W}header+xml"/>' if hdr_png else "")
+          + '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
           '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
           '</Types>')
     R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
