@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ИИ-проверка · поп-апы «не хватает фото»</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBF7E9;--card:#fff;--tx:#0E2250;--hint:#66719A;--ln:#E9E1C8;--acc:#0F2E6E;--on:#fff;--yel:#FFC93C;--red:#D64545;--grn:#1F9A5B;--sh:rgba(15,46,110,.22)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0B1836;--card:#132452;--tx:#F2F5FF;--hint:#9AA8CC;--ln:#243A70;--acc:#FFC93C;--on:#0E2250;--grn:#3FCB82;--red:#F26B6B}}
+:root[data-theme=dark]{--bg:#0B1836;--card:#132452;--tx:#F2F5FF;--hint:#9AA8CC;--ln:#243A70;--acc:#FFC93C;--on:#0E2250;--grn:#3FCB82;--red:#F26B6B}
+*{box-sizing:border-box;margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--bg);color:var(--tx);font-family:"Nunito",system-ui,sans-serif;min-height:100vh}
+h1{font-size:20px;font-weight:900;padding:18px 18px 4px}
+p.sub{color:var(--hint);font-size:13px;font-weight:700;padding:0 18px 12px;max-width:62ch;line-height:1.45}
+.tools{display:flex;gap:10px;flex-wrap:wrap;padding:0 18px 8px}
+.seg{display:inline-flex;border:1.5px solid var(--ln);background:var(--card);border-radius:99px;padding:3px}
+.seg button{border:0;background:none;color:var(--tx);font:800 13px Nunito,system-ui,sans-serif;padding:7px 14px;border-radius:99px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--acc);color:var(--on)}
+.seg button:focus-visible,.eck-bf:focus-visible,.eck-bg:focus-visible,.again:focus-visible{outline:3px solid var(--yel);outline-offset:2px}
+.row{display:flex;gap:18px;overflow-x:auto;padding:8px 18px 12px;scroll-snap-type:x mandatory}
+.col{flex:0 0 320px;scroll-snap-align:center}
+.ph{height:660px;border-radius:30px;background:var(--bg);border:2px solid var(--ln);box-shadow:0 10px 30px var(--sh);position:relative;overflow:hidden;display:flex;flex-direction:column}
+.cap{text-align:center;font-size:12px;font-weight:800;color:var(--hint);padding:10px 4px 4px;min-height:44px}
+.again{display:block;margin:0 auto 18px;border:1.5px solid var(--ln);background:var(--card);color:var(--tx);border-radius:99px;padding:6px 14px;font:800 12px Nunito,system-ui,sans-serif;cursor:pointer}
+/* ---------- экран «Съёмка» под поп-апом (из макета essay-check) ---------- */
+.cam{background:#101826;color:#fff}
+.top{padding:14px 16px 6px;font-weight:900;font-size:15px;display:flex;gap:8px}.top i{font-style:normal;color:#9AA8CC;font-size:20px}
+.view{flex:1;margin:8px 10px;border-radius:20px;background:linear-gradient(160deg,#2a3550,#171e30);position:relative;overflow:hidden}
+.view .frame{position:absolute;inset:26px 26px 66px;border:2px dashed rgba(255,255,255,.5);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:rgba(255,255,255,.7);text-align:center;padding:10px}
+.chs{position:absolute;left:0;right:0;bottom:12px;display:flex;gap:8px;justify-content:center}
+.chip{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:99px;padding:8px 14px;font:800 13px Nunito,system-ui,sans-serif;white-space:nowrap;transition:background .2s}
+.chip.on{background:var(--yel);color:#0E2250}
+.chip.hit{animation:hit .9s ease .15s 2}
+@keyframes hit{50%{box-shadow:0 0 0 6px rgba(255,201,60,.45)}}
+.ctl{display:grid;grid-template-columns:1fr 78px 1fr;align-items:center;padding:12px 14px 22px}
+.th{position:relative;width:52px;height:58px;margin-left:6px}
+.th b{position:absolute;left:4px;top:6px;width:36px;height:46px;border-radius:7px;border:2px solid #fff;background:#fbf8ee repeating-linear-gradient(transparent 0 7px,#b9c6e6 7px 8px);box-shadow:0 3px 8px rgba(0,0,0,.5)}
+.th b:nth-child(1){transform:rotate(-9deg) translate(-4px,2px)}.th b:nth-child(2){transform:rotate(3deg) translate(5px,0)}.th b.t{background:#bcd0f5;transform:rotate(-2deg)}
+.th i{position:absolute;right:-6px;top:-4px;z-index:3;min-width:20px;height:20px;border-radius:99px;background:var(--yel);color:#0E2250;font:900 11px/20px Nunito,system-ui,sans-serif;text-align:center;font-style:normal;padding:0 5px}
+.shut{width:66px;height:66px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.25);justify-self:center}
+.go{justify-self:end;border:1px solid #e3c36a;border-radius:16px;padding:12px 16px;font:900 14px Nunito,system-ui,sans-serif;color:#fff;background:linear-gradient(180deg,#2fbf79 0%,#12864f 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 2px rgba(31,154,91,.25),0 6px 16px rgba(18,134,79,.5)}
+.next{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:30px;font-weight:900;font-size:16px;background:var(--bg);color:var(--tx)}
+.next small{display:block;color:var(--hint);font-size:12.5px;font-weight:700;margin-top:6px}
+
+/* ================== ПОП-АП (в приложении: CSS и JS — см. popups-integration.md) ==================
+   Оболочка — та же, что у модалок раздела: .ec-mod (подложка) + карточка 22px на фоне var(--bg). */
+.ec-mod{position:fixed;inset:0;z-index:80;background:rgba(10,24,60,.55);display:flex;align-items:center;justify-content:center;padding:12px;animation:ecFade .22s ease both}
+.ec-mod[hidden]{display:none}
+.ph .ec-mod{position:absolute}   /* только в превью: подложка внутри «телефона» */
+@keyframes ecFade{from{opacity:0}}
+@keyframes ecPop2{from{opacity:0;transform:translateY(16px) scale(.94)}}
+.eck{position:relative;width:100%;max-width:340px;background:var(--bg);color:var(--tx);border-radius:24px;padding:50px 16px 16px;box-shadow:0 14px 40px rgba(0,0,0,.4);animation:ecPop2 .34s cubic-bezier(.2,1.15,.4,1) both;text-align:center}
+.eck-av{position:absolute;left:50%;top:-40px;width:80px;height:80px;margin-left:-40px;border-radius:50%;background:url(data:image/webp;base64,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) center/cover;border:4px solid var(--yel);box-shadow:0 0 0 4px var(--bg),0 8px 18px var(--sh)}
+.eck h3{font-size:20px;font-weight:900;line-height:1.2}
+.eck>p{margin:8px 4px 12px;font-size:13.5px;font-weight:700;line-height:1.45;color:var(--hint)}
+.eck>p b{color:var(--tx);font-weight:800}
+.eck-st{background:var(--card);border:1.5px solid var(--ln);border-radius:14px;padding:4px 12px;margin-bottom:14px;text-align:left}
+.eck-sr{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13.5px;font-weight:800}
+.eck-sr+.eck-sr{border-top:1.5px dashed var(--ln)}
+.eck-sr .d{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:900 14px/1 Nunito,system-ui,sans-serif;color:#fff;background:var(--grn)}
+.eck-sr .v{margin-left:auto;font-weight:800;color:var(--hint)}
+.eck-sr.no .d{background:var(--yel);color:#0E2250}
+.eck-sr.no.req .d{background:var(--red);color:#fff}
+.eck-sr.no .v{color:var(--tx)}
+.eck-bf,.eck-bg{width:100%;border-radius:16px;padding:14px;font:900 15px Nunito,system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.eck-bf{border:1.5px solid var(--acc);background:var(--acc);color:var(--on)}
+.eck-bf svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.eck-bg{margin-top:8px;border:1.5px solid var(--ln);background:none;color:var(--hint)}
+.eck-bf:active,.eck-bg:active{transform:scale(.98)}
+@media (prefers-reduced-motion:reduce){.ec-mod,.eck,.chip.hit{animation:none}}
+
+.spec{max-width:760px;margin:6px 18px 40px;background:var(--card);border:1.5px solid var(--ln);border-radius:16px;padding:14px 16px;font-size:13px;font-weight:700;line-height:1.55}
+.spec h2{font-size:15px;font-weight:900;margin-bottom:6px}
+.spec li{margin:4px 0 4px 18px;color:var(--hint)}.spec li b{color:var(--tx)}
+</style>
+</head>
+<body>
+<h1>ИИ-проверка · поп-апы перед проверкой</h1>
+<p class="sub">Появляются после «Готово», если не хватает фото. Тап по кнопкам работает: «Добавить» возвращает на съёмку с нужным чипом, «Продолжить без задания» уходит к обработке.</p>
+<div class="tools">
+  <div class="seg" role="group" aria-label="Экзамен"><button id="kEge" aria-pressed="true">Сочинение ЕГЭ</button><button id="kOge" aria-pressed="false">Эссе ОГЭ</button></div>
+  <div class="seg" role="group" aria-label="Тема"><button id="tL" aria-pressed="false">Светлая</button><button id="tD" aria-pressed="false">Тёмная</button></div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <div class="ph cam" id="phA"></div>
+    <div class="cap" id="capA"></div><button class="again" data-again="A">Показать снова</button>
+  </div>
+  <div class="col">
+    <div class="ph cam" id="phB"></div>
+    <div class="cap" id="capB"></div><button class="again" data-again="B">Показать снова</button>
+  </div>
+</div>
+
+<div class="spec">
+<h2>Как это работает</h2>
+<ul>
+<li><b>Только работа</b> — «Добавить» → съёмка, активен чип «Задание». «Продолжить без задания» → обработка по тому, что есть; критерии про смысл исходного текста не оцениваются, ничего не додумывается.</li>
+<li><b>Только задание</b> — одна кнопка «Добавить» → съёмка, активен чип «Работа». Пропустить нельзя.</li>
+<li>Строки статуса повторяют чипы камеры. Золотая точка — можно продолжить, красная — нельзя. Фото в счётчике видны сразу.</li>
+<li>Фон и карточка — как у модалок раздела (<b>.ec-mod</b> / <b>.ec-mc</b>), цвета — токены кабинета, тёмная тема из макета. Тап по фону не закрывает: решение нужно принять.</li>
+<li>Код для внедрения — <b>popups-integration.md</b>.</li>
+</ul>
+</div>
+
+<script>
+(function(){
+var K={ege:{n:"сочинения",short:"сочинение"},oge:{n:"эссе",short:"эссе"}},kind="ege";
+var CFG={
+ A:{w:3,t:0,cap:"Есть работа, нет задания"},
+ B:{w:0,t:2,cap:"Есть задание, нет работы"}
+};
+function cnt(n){return n+" фото"}
+function cam(id){var c=CFG[id];
+ return '<div class="top"><i>‹</i> ИИ-проверка</div>'+
+ '<div class="view"><div class="frame">Положите лист в рамку</div><div class="chs"><button class="chip'+(c.w?' on':'')+'" data-c="w">Работа · '+c.w+'</button><button class="chip'+(!c.w?' on':'')+'" data-c="t">Задание · '+c.t+'</button></div></div>'+
+ '<div class="ctl"><div class="th">'+(c.w?'<b></b><b></b>':'<b class="t"></b>')+'<i>'+(c.w+c.t)+'</i></div><div class="shut"></div><button class="go" style="border:1px solid #e3c36a">Готово</button></div>'+
+ '<div class="next" data-next></div>'+
+ '<div class="ec-mod" data-mod></div>';}
+function ask(id){var c=CFG[id],noT=id==="A",k=K[kind];
+ var title=noT?"Не вижу задания":"Не вижу "+k.n;
+ var body=noT?"Без опорного текста и условия я оценю только <b>грамотность, речь и композицию</b>. Критерии про смысл текста пропущу — угадывать не буду."
+  :"Задание есть, а рукописного "+(kind==="ege"?"сочинения":"эссе")+" нет — проверять нечего. <b>Сфотографируйте работу</b>.";
+ var rows='<div class="eck-sr'+(c.w?'':' no req')+'"><span class="d">'+(c.w?'✓':'!')+'</span>Работа<span class="v">'+(c.w?cnt(c.w):'нет фото')+'</span></div>'+
+  '<div class="eck-sr'+(c.t?'':' no')+'"><span class="d">'+(c.t?'✓':'!')+'</span>Задание<span class="v">'+(c.t?cnt(c.t):'нет фото')+'</span></div>';
+ var cta=noT?"Добавить задание":"Добавить";
+ return '<div class="eck" role="dialog" aria-modal="true" aria-labelledby="ttl'+id+'"><div class="eck-av" aria-hidden="true"></div>'+
+ '<h3 id="ttl'+id+'">'+title+'</h3><p>'+body+'</p><div class="eck-st">'+rows+'</div>'+
+ '<button class="eck-bf" data-add><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>'+cta+'</button>'+
+ (noT?'<button class="eck-bg" data-skip>Продолжить без задания</button>':'')+'</div>';}
+function mount(id){var ph=document.getElementById("ph"+id);ph.innerHTML=cam(id);
+ var m=ph.querySelector("[data-mod]");m.innerHTML=ask(id);
+ document.getElementById("cap"+id).textContent=CFG[id].cap;
+ m.querySelector("[data-add]").onclick=function(){
+  m.hidden=true;var t=id==="A"?"t":"w";
+  ph.querySelectorAll(".chip").forEach(function(c){c.classList.toggle("on",c.dataset.c===t)});
+  ph.querySelector('.chip[data-c="'+t+'"]').classList.add("hit");
+  document.getElementById("cap"+id).textContent="→ Съёмка, чип «"+(t==="t"?"Задание":"Работа")+"» уже выбран";};
+ var s=m.querySelector("[data-skip]");
+ if(s)s.onclick=function(){m.hidden=true;var n=ph.querySelector("[data-next]");n.style.display="flex";
+  n.innerHTML='<div>Вишенка читает…<small>Проверка только по работе. Критерии про текст пропущены.</small></div>';
+  document.getElementById("cap"+id).textContent="→ Экран обработки";};
+ m.querySelector("[data-add]").focus({preventScroll:true});}
+function all(){mount("A");mount("B")}
+document.querySelectorAll("[data-again]").forEach(function(b){b.onclick=function(){mount(b.dataset.again)}});
+function setKind(k){kind=k;document.getElementById("kEge").setAttribute("aria-pressed",k==="ege");document.getElementById("kOge").setAttribute("aria-pressed",k==="oge");all()}
+document.getElementById("kEge").onclick=function(){setKind("ege")};document.getElementById("kOge").onclick=function(){setKind("oge")};
+function setTheme(t){var r=document.documentElement;if(t)r.setAttribute("data-theme",t);else r.removeAttribute("data-theme");
+ document.getElementById("tL").setAttribute("aria-pressed",t==="light");document.getElementById("tD").setAttribute("aria-pressed",t==="dark")}
+document.getElementById("tL").onclick=function(){setTheme("light")};document.getElementById("tD").onclick=function(){setTheme("dark")};
+all();
+})();
+</script>
+</body>
+</html>
