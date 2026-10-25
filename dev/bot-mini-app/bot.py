@@ -11,7 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
-                           MenuButtonWebApp, Message, ReplyKeyboardRemove, WebAppInfo)
+                           MenuButtonWebApp, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -569,6 +569,42 @@ def week_pdf(start):
     return buf.getvalue()
 
 # ---------- клавиатуры ----------
+# ---------- кнопки: видимость ----------
+# Требование владельца: кнопки в Telegram-боте сейчас неактуальны — прячем их ВСЕ.
+# Код клавиатур остаётся как есть (см. menu_kb() и все *_kb()), гасится только видимость:
+# любой уходящий в Telegram метод с reply_markup перехватывается в ОДНОЙ точке
+# (session.make_request), поэтому не нужно переписывать каждое место с клавиатурой.
+#
+#   BOT_BUTTONS=1  — вернуть кнопки обратно (по умолчанию выключены).
+#
+# Что это даёт: reply-клавиатуры («Расписание», «Новое занятие»…) не показываются, а если уже
+# показаны — снимаются через ReplyKeyboardRemove; inline-кнопки (пагинация, даты, «Войти»…)
+# просто не отправляются. Синяя кнопка «Кабинет» слева от поля ввода НЕ трогается: это вход
+# в мини-апп, без неё приложение из Telegram не открыть (см. main: set_chat_menu_button).
+BOT_BUTTONS = os.getenv("BOT_BUTTONS", "0") == "1"
+
+
+def _hide_buttons(method):
+    """Снять клавиатуру с одного исходящего вызова Telegram API (если она там есть)."""
+    if BOT_BUTTONS or not hasattr(method, "reply_markup"):
+        return
+    kb = getattr(method, "reply_markup", None)
+    if kb is None:
+        return
+    method.reply_markup = ReplyKeyboardRemove() if isinstance(kb, ReplyKeyboardMarkup) else None
+
+
+def mute_buttons(bot):
+    """Перехват всех исходящих вызовов API: код живёт, кнопки не видны."""
+    orig = bot.session.make_request
+
+    async def wrapped(bot_, method, timeout=None):
+        _hide_buttons(method)
+        return await orig(bot_, method, timeout)
+
+    bot.session.make_request = wrapped
+
+
 def menu_kb():
     # «Занятия сегодня» и «Фин. отчет» убраны из меню по требованию владельца —
     # их текстовые обработчики оставлены (доступны прямым вводом команды).
@@ -3017,6 +3053,7 @@ async def main():
     auth.require_config()
     fill_regular()
     bot = Bot(TOKEN)
+    mute_buttons(bot)   # кнопки бота скрыты по требованию владельца (см. BOT_BUTTONS)
     if not auth.BOT_USERNAME:                       # имя бота нужно ссылке «Войти через Telegram» в приложении
         try: auth.BOT_USERNAME = (await bot.get_me()).username or ""
         except Exception: log.warning("get_me не удался: вход через Telegram недоступен — задайте BOT_USERNAME")
