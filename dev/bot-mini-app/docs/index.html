@@ -1626,6 +1626,46 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .ec-hero2 .ec-who{max-width:calc(100% - 104px)}
 /* виджет правки «Вишенка» (ecVS → .ecvs в шторке #sheet) — поверх карточки ошибки .ec-mod (z-index:80), иначе уходит под неё */
 #sheet:has(.ecvs){z-index:95!important}
+/* ---------- Шапка календаря и форма «Новый ученик» ---------- */
+.ch{position:relative;overflow:hidden;margin-bottom:12px;padding:14px;border-radius:26px;color:#fff;background:radial-gradient(150px 120px at 96% 0,#ffc93c55,transparent 70%),radial-gradient(90% 70% at 0 100%,#ffffff12,transparent 65%),linear-gradient(145deg,#1B4DA8,#0F2E6E 58%,#081C45);box-shadow:0 18px 30px -20px #081C45,inset 0 1px 0 #ffffff40,inset 0 0 0 1px #ffffff14}
+.ch::after{content:"";position:absolute;right:-46px;top:-50px;width:160px;height:160px;border-radius:50%;border:1.5px solid #ffffff22;box-shadow:0 0 0 16px #ffffff0b;pointer-events:none}
+.ch>*{position:relative;z-index:1}
+.ch-top{display:flex;align-items:center;gap:8px}
+.ch-seg{flex:1;display:grid;grid-template-columns:1fr 1fr;padding:3px;border-radius:99px;background:#ffffff1f;box-shadow:inset 0 0 0 1px #ffffff2a}
+.ch-seg button{padding:8px 0;border-radius:99px;font-size:13px;font-weight:800;color:#ffffffd0;transition:background .2s,color .2s}
+.ch-seg button.on{background:#fff;color:#0F2E6E;box-shadow:0 4px 10px -4px #0007}
+.ch-ic,.ch-ar{flex:none;display:grid;place-items:center;border-radius:50%;color:#fff;background:#ffffff1f;box-shadow:inset 0 0 0 1px #ffffff2a;transition:transform .15s,background .2s}
+.ch-ic{width:38px;height:38px}.ch-ar{width:44px;height:44px}
+.ch-ic:active,.ch-ar:active{transform:scale(.92);background:#ffffff33}
+.ch-ic svg,.ch-ar svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.ch-td{flex:none;height:38px;padding:0 14px;border-radius:99px;background:var(--yel);color:var(--yon);font-size:13px;font-weight:800;box-shadow:0 6px 14px -8px #000a}
+.ch-td:active{transform:scale(.95)}
+.ch-nav{display:flex;align-items:center;gap:10px;margin-top:14px}
+.ch-ttl{flex:1;min-width:0;text-align:center}
+.ch-ttl b{display:block;font-size:25px;line-height:1.15;font-weight:900;letter-spacing:-.01em;text-transform:capitalize;white-space:nowrap;background:linear-gradient(180deg,#fff 40%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ch-ttl small{display:block;margin-top:2px;font-size:12.5px;font-weight:700;opacity:.85}
+.ns>*{animation:pnIn .55s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(.03s + var(--i,0)*55ms)}
+.ns h3{margin:0;padding:0;font-size:24px;font-weight:900;letter-spacing:-.01em}
+.ns .sub{margin:2px 0 0;font-size:14px}
+.ns .phc{margin:6px auto 4px}
+.ns .phc .av{width:104px;height:104px;font-size:38px;box-shadow:0 0 0 3px var(--bg),0 0 0 5px #FFD766,0 16px 26px -12px rgba(15,46,110,.55)}
+.ns .phc .pill{background:color-mix(in srgb,var(--yel) 24%,var(--card));color:#6B5200;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--yel) 55%,transparent)}
+.ns-c{margin-top:12px;padding:14px;border-radius:22px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 14px 26px -22px rgba(15,46,110,.45)}
+.ns-c label{margin:0 0 8px;font-size:12.5px;font-weight:800;color:var(--hint);letter-spacing:.01em}
+.ns-c label+label,.ns-c .gg+label,.ns-c .chips+input{margin-top:12px}
+.ns-c label em{font-style:normal;color:var(--red)}
+.ns-c input{margin:6px 0 0;padding:14px 15px;border-radius:15px;font-size:17px;font-weight:700;background:color-mix(in srgb,var(--bg) 62%,var(--card));box-shadow:inset 0 0 0 1px var(--ln);transition:box-shadow .2s,background .2s}
+.ns-c input::placeholder{font-weight:500;color:var(--hint);opacity:.75}
+.ns-c input:focus{outline:0;background:var(--card);box-shadow:0 0 0 2px var(--yel),0 10px 20px -12px rgba(255,170,0,.75)}
+.ns-c .gg{margin:6px 0 0}
+.ns-c .gg button{padding:12px 0;border-radius:14px;background:color-mix(in srgb,var(--bg) 62%,var(--card));box-shadow:inset 0 0 0 1px var(--ln)}
+.ns-c .gg button.on{background:var(--acc);box-shadow:0 8px 16px -8px var(--sh),inset 0 0 0 1.5px #FFD766}
+.ns-c .chips{padding:2px 1px 4px;margin:0}
+.ns-c .chips .pill{padding:9px 15px;font-size:14px;font-weight:800;background:color-mix(in srgb,var(--bg) 62%,var(--card));box-shadow:inset 0 0 0 1px var(--ln)}
+.ns-c .chips .pill:active{background:color-mix(in srgb,var(--yel) 30%,var(--card))}
+.ns .btns{margin-top:16px}
+.ns-go{padding:16px;border-radius:18px;font-size:16.5px;font-weight:800;background:linear-gradient(145deg,#1B4DA8,#0F2E6E 62%,#081C45);box-shadow:0 14px 24px -14px var(--sh),inset 0 1px 0 #ffffff40}
+@media (prefers-reduced-motion:reduce){.ns>*{animation:none}}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>
@@ -1939,15 +1979,21 @@ function grid(start,bw){
       return `<div class="ls" data-day="${l.day}" data-sid="${l.sid}" data-t="${l.time}" style="top:${top}px;height:${ht}px;background:${hue(l.sid)}" onclick="form(${l.id})">${esc(st.split(" ")[0])}<small>${l.time}–${hm(s+l.dur)}${l.rep?" ↻":""}</small></div>`}).join("")+`</div>`});
   return h+"</div></div>";
 }
+function schedHead(t,sub,prev,next,cur){
+  const ic=d=>`<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  return `<div class="ch"><div class="ch-top"><div class="ch-seg"><button class="${view=="w"?"on":""}" onclick="view='w';render()">Неделя</button><button class="${view=="m"?"on":""}" onclick="view='m';render()">Месяц</button></div>${cur?"":`<button class="ch-td" onclick="ws=w0;mo=new Date(T.getFullYear(),T.getMonth(),1);render()">Сегодня</button>`}${view=="w"?`<button class="ch-ic" onclick="printIt()" aria-label="Распечатать">${ic('<path d="M7 9V4h10v5M7 17H5a2 2 0 01-2-2v-4a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2"/><path d="M7 14h10v6H7z"/>')}</button>`:""}</div>
+  <div class="ch-nav"><button class="ch-ar" onclick="${prev}" aria-label="Назад">${ic('<path d="M15 6l-6 6 6 6"/>')}</button><div class="ch-ttl"><b>${t}</b><small>${sub}</small></div><button class="ch-ar" onclick="${next}" aria-label="Вперёд">${ic('<path d="M9 6l6 6-6 6"/>')}</button></div></div>`}
 function sched(){
-  const seg=`<button class="pill ${view=="w"?"on":""}" onclick="view='w';render()">Неделя</button><button class="pill ${view=="m"?"on":""}" onclick="view='m';render()">Месяц</button>`;
-  let h=`<div class="bar">${seg}<span style="flex:1"></span>${view=="w"?`<button class="pill" onclick="printIt()">🖨 Распечатать</button>`:""}</div>`;
+  const cnt=(a,b)=>L.filter(l=>l.day>=a&&l.day<=b).length,zan=n=>n+" зан.";
+  let h="";
   if(view=="w"){
     const e=addD(ws,6);
-    h+=`<div class="bar"><button class="pill" onclick="ws=addD(ws,-7);render()">‹</button><b class="ttl">${ws.getDate()} ${ws.toLocaleDateString("ru-RU",{month:"short"})} – ${e.getDate()} ${e.toLocaleDateString("ru-RU",{month:"short"})}</b><button class="pill" onclick="ws=addD(ws,7);render()">›</button></div><div class="sc">${grid(ws,0)}</div>`;
+    const n=cnt(iso(ws),iso(e)),k=iso(ws),r=k==iso(w0)?"Эта неделя":k==iso(addD(w0,7))?"Следующая":k==iso(addD(w0,-7))?"Прошлая":String(ws.getFullYear());
+    h+=schedHead(`${ws.getDate()} ${ws.toLocaleDateString("ru-RU",{month:"short"})} – ${e.getDate()} ${e.toLocaleDateString("ru-RU",{month:"short"})}`,`${r} · ${zan(n)}`,"ws=addD(ws,-7);render()","ws=addD(ws,7);render()",k==iso(w0))+`<div class="sc">${grid(ws,0)}</div>`;
   }else{
     const y=mo.getFullYear(),m=mo.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate();
-    h+=`<div class="bar"><button class="pill" onclick="mo=new Date(${y},${m-1},1);render()">‹</button><b class="ttl">${mo.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}</b><button class="pill" onclick="mo=new Date(${y},${m+1},1);render()">›</button></div><div class="g">${WD.map(d=>`<i>${d}</i>`).join("")}${"<span></span>".repeat(off)}`;
+    const mk=`${y}-${pad(m+1)}-`,nl=cnt(mk+"01",mk+"31"),curM=y==T.getFullYear()&&m==T.getMonth();
+    h+=schedHead(mo.toLocaleDateString("ru-RU",{month:"long",year:"numeric"}).replace(/\s?г\.$/,""),`${curM?"Этот месяц · ":""}${zan(nl)}`,`mo=new Date(${y},${m-1},1);render()`,`mo=new Date(${y},${m+1},1);render()`,curM)+`<div class="g">${WD.map(d=>`<i>${d}</i>`).join("")}${"<span></span>".repeat(off)}`;
     for(let d=1;d<=n;d++){
       const k=`${y}-${pad(m+1)}-${pad(d)}`,ls=L.filter(l=>l.day==k).sort((a,b)=>a.time<b.time?-1:1),sh=ls.length>3?ls.slice(0,2):ls;
       h+=`<div class="d ${k==iso(T)?"tod":""}" data-k="${k}" onclick="dayCard('${k}')"><span class="n">${d}</span>${sh.map(l=>`<span class="c" style="background:${hue(l.sid)}">${+l.time.slice(0,2)}:${l.time.slice(3)} ${esc(stName(l.sid).split(" ")[0])}</span>`).join("")}${ls.length>sh.length?`<span class="more">+${ls.length-sh.length}</span>`:""}</div>`}
@@ -2515,11 +2561,12 @@ const gradeSel=(id,cur)=>{cur=(cur||"").trim();const base=GRADES.map(String),all
 const priceField=(id,v)=>`<label>Цена за занятие, ₽</label><div class="chips" style="margin-bottom:6px">${PRICE_QUICK.map(a=>`<button class="pill" onclick="$('#${id}').value=${a}">${a.toLocaleString("ru-RU")}</button>`).join("")}</div><input id="${id}" type="number" inputmode="numeric" placeholder="Или введите свою цену" value="${v||""}">`;
 function studNew(after){
   if(after)nsAfter=after;                        // после сохранения — вернуться в форму-инициатор
-  open(`<h3>Новый ученик</h3><p class="sub">Обязательно только имя</p>${photoField("")}
-  <label>Имя и фамилия *<input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label>
-  <label>Класс</label>${gradeSel("ng","")}
-  <label>Предмет<input id="nsb" placeholder="Например: ЕГЭ по русскому"></label>${priceField("np","")}
-  <div class="btns"><button class="btn pri" onclick="studAdd()">Сохранить</button></div>`);
+  open(`<div class="ns"><div style="--i:0"><h3>Новый ученик</h3><p class="sub">Обязательно только имя</p></div>
+  <div style="--i:1">${photoField("")}</div>
+  <div class="ns-c" style="--i:2"><label>Имя и фамилия <em>*</em><input id="nn" placeholder="Как зовут ученика?" autocomplete="off"></label></div>
+  <div class="ns-c" style="--i:3"><label>Класс</label>${gradeSel("ng","")}<label>Предмет<input id="nsb" placeholder="Например: ЕГЭ по русскому"></label></div>
+  <div class="ns-c" style="--i:4">${priceField("np","")}</div>
+  <div class="btns" style="--i:5"><button class="btn pri ns-go" onclick="studAdd()">Сохранить</button></div></div>`);
 }
 async function studAdd(){
   const name=$("#nn").value.trim();if(!name)return toast("Введите имя ученика");
