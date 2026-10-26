@@ -92,6 +92,15 @@ MIGRATIONS = [
         "student_id integer, kind text not null, result text not null, created text default (datetime('now','localtime')))",
         "create index if not exists ix_essay_checks_student on essay_checks(student_id)",
     ],
+    [   # v5: файлы «Чата с ИИ» переживают рестарт сервиса (баг-репорт 013, часть 2).
+        # Раньше байты жили ТОЛЬКО в словаре процесса CHAT_FILES: ссылка подписана на сутки,
+        # а файл пропадал при перезапуске (Render делает это каждые 1–2 часа) — тап по старой
+        # карточке вёл на 404 «Файл устарел». tutor.db лежит на постоянном диске (/app/data),
+        # поэтому файлы переживают и рестарт, и деплой, и простой.
+        "create table if not exists chat_files(tok text primary key, uid integer not null, "
+        "data blob not null, name text not null, mime text, ts real not null, tg_fid text)",
+        "create index if not exists ix_chat_files_ts on chat_files(ts)",
+    ],
 ]
 
 def migrate(conn):
@@ -2300,25 +2309,103 @@ def _chat_file_uid(request):
 
 
 def chat_file_put(uid, data, name, mime=None, tg_fid=None):
-    """Кладёт готовый файл в память и возвращает подписанную ссылку для карточки в чате (см. api_chat_file).
+    """Кладёт готовый файл в память И на постоянный диск (tutor.db) и возвращает подписанную
+    ссылку для карточки в чате (см. api_chat_file).
     mime — тип файла (docx/pdf/png): без него пересылка из чата уходит как application/octet-stream.
     tg_fid — file_id этой же копии файла на серверах Telegram (появляется, когда ответ уходит в диалог
-    бота): по нему «Поделиться» пересылает САМ файл в исходном формате (см. api_chat_file_prepare)."""
+    бота): по нему «Поделиться» пересылает САМ файл в исходном формате (см. api_chat_file_prepare).
+    Дублирование «память + диск» намеренное: память — быстрый путь, диск — страховка от рестарта
+    сервиса (баг-репорт 013)."""
     now = time.time()
     for t in [t for t, r in CHAT_FILES.items() if now - r[4] > CHAT_FILE_TTL]:
         CHAT_FILES.pop(t, None)
+    try:
+        db.execute("delete from chat_files where ts < ?", (now - CHAT_FILE_TTL,))   # протухшие — и с диска тоже
+    except sqlite3.Error:
+        pass
     tok = secrets.token_urlsafe(12)
     CHAT_FILES[tok] = [uid, data, name, mime, now, tg_fid]
+    try:                                            # диск может быть недоступен — файл не должен из-за этого потеряться
+        db.execute("insert or replace into chat_files(tok,uid,data,name,mime,ts,tg_fid) values(?,?,?,?,?,?,?)",
+                   (tok, uid, sqlite3.Binary(data), name, mime, now, tg_fid))
+        db.commit()
+    except sqlite3.Error as e:
+        log.warning("chat file: не удалось сохранить на диск: %s", e)
     return f"/api/chat_file/{tok}/{quote(name)}?tok={chat_file_token(uid, tok)}"   # имя в пути: Telegram по нему называет присланный документ
+
+
+def chat_file_load(tok):
+    """Запись файла чата: сначала память процесса, потом постоянный диск.
+    Диск — это и есть переживание рестарта: память пуста, файл находится (баг-репорт 013)."""
+    rec = CHAT_FILES.get(tok)
+    if rec:
+        return rec
+    try:
+        row = db.execute("select uid,data,name,mime,ts,tg_fid from chat_files where tok=?", (tok,)).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    rec = [row["uid"], bytes(row["data"]), row["name"], row["mime"], row["ts"], row["tg_fid"]]
+    if time.time() - rec[4] > CHAT_FILE_TTL:        # протух — чистим и отдаём «нет файла»
+        chat_file_drop(tok)
+        return None
+    CHAT_FILES[tok] = rec                           # кладём в память: следующий запрос пойдёт без диска
+    return rec
+
+
+def chat_file_drop(tok):
+    CHAT_FILES.pop(tok, None)
+    try:
+        db.execute("delete from chat_files where tok=?", (tok,))
+        db.commit()
+    except sqlite3.Error:
+        pass
+
+
+def chat_file_set_fid(tok, fid):
+    """Запоминает file_id копии файла на серверах Telegram — и в памяти, и на диске,
+    чтобы «Поделиться» пересылал САМ файл и после рестарта сервиса."""
+    if not fid:
+        return
+    rec = CHAT_FILES.get(tok) or chat_file_load(tok)
+    if not rec:
+        return
+    rec[5] = fid
+    try:
+        db.execute("update chat_files set tg_fid=? where tok=?", (fid, tok))
+        db.commit()
+    except sqlite3.Error:
+        pass
+
+
+# mime, которые просмотрщик браузера/WebView ПОКАЗЫВАЕТ сам: их отдаём как inline.
+# Остальные (docx и пр.) показать нечем — они идут в скачивание, как и раньше.
+CHAT_FILE_VIEWABLE = {"application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif", "text/plain"}
+
+
+def chat_file_disposition(name, mime, download):
+    """Content-Disposition: просмотр для pdf/картинок, скачивание для остальных и по ?dl=1.
+    attachment на PDF — это и была причина «браузер молча скачал вместо открытия» (баг-репорт 013)."""
+    name = name.replace('"', "").replace("\n", " ").replace("\r", " ")
+    kind = "attachment" if (download or (mime or "").lower() not in CHAT_FILE_VIEWABLE) else "inline"
+    try:
+        name.encode("ascii")
+        return '%s; filename="%s"' % (kind, name)
+    except UnicodeEncodeError:
+        # имя по-русски: уезжает по RFC 5987 (filename*=UTF-8''), иначе не-ASCII имя ломает заголовок
+        return kind + "; filename*=UTF-8''" + quote(name)
 
 
 @guarded
 async def api_chat_file(request):
     """Файл ответа чата с ИИ для карточки в чате — та же копия, что ушла ботом в Telegram.
     Карточка открывается обычным переходом по ссылке (без X-Init/X-Session), поэтому ссылка
-    подписная (?tok=, как «Поделиться PDF»), файл живёт полчаса и только у своего владельца."""
+    подписная (?tok=, как «Поделиться PDF»), файл живёт сутки и только у своего владельца.
+    Байты берутся из памяти, а если процесс перезапустился — с постоянного диска (chat_file_load):
+    ссылка подписана на сутки и обязана работать все сутки (баг-репорт 013)."""
     tok = request.match_info["tok"]
-    rec = CHAT_FILES.get(tok)
+    rec = chat_file_load(tok)
     if not rec:
         return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
     uid, data, name, mime, ts = rec[:5]
@@ -2326,16 +2413,12 @@ async def api_chat_file(request):
     if mine is not None and mine != uid:
         return web.Response(status=403, text="Нет доступа к этому файлу")
     if time.time() - ts > CHAT_FILE_TTL:
-        CHAT_FILES.pop(tok, None)
+        chat_file_drop(tok)
         return web.Response(status=404, text="Файл устарел — попросите ответ ещё раз")
-    # имя файла по-русски: в Content-Disposition оно уезжает по RFC 5987 (filename*=UTF-8''),
-    # иначе не-ASCII имя ломает заголовок, и загрузчик получает мусор вместо имени
-    name = name.replace('"', "").replace("\n", " ").replace("\r", " ")
-    try:
-        name.encode("ascii")
-        disp = 'attachment; filename="%s"' % name
-    except UnicodeEncodeError:
-        disp = "attachment; filename*=UTF-8''" + quote(name)
+    # просмотр или скачивание: pdf/картинки браузер умеет показывать сам — им inline
+    # (?dl=1 форсирует скачивание); остальным показывать нечем — они идут в скачивание.
+    # Раньше всё отдавалось attachment, и PDF молча скачивался вместо открытия (баг-репорт 013).
+    disp = chat_file_disposition(name, mime, request.query.get("dl") in ("1", "true", "yes"))
     return web.Response(body=data, content_type=mime or "application/octet-stream",
                         headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=3600",
                                  # CORS обязателен для Telegram.WebApp.downloadFile (см. api_week_pdf)
@@ -2379,7 +2462,7 @@ async def api_chat_file_prepare(request):
     либо файл кладётся тихим сообщением, которое сразу удаляется (см. tg_upload_file_id)."""
     from aiogram.types import InlineQueryResultCachedDocument   # локально: функция самодостаточна для тестов
     tok = (await request.json()).get("tok", "")
-    rec = CHAT_FILES.get(tok) if isinstance(tok, str) else None
+    rec = chat_file_load(tok) if isinstance(tok, str) else None
     uid, tg_bot = user_id(request), request.app.get("bot")
     if not rec or not isinstance(uid, int) or uid <= 0 or tg_bot is None:
         return web.json_response({"error": "unavailable"}, status=503)
@@ -2387,7 +2470,7 @@ async def api_chat_file_prepare(request):
     if fuid != uid:                                  # чужой файл переслать нельзя
         return web.json_response({"error": "forbidden"}, status=403)
     if time.time() - ts > CHAT_FILE_TTL:
-        CHAT_FILES.pop(tok, None)
+        chat_file_drop(tok)
         return web.json_response({"error": "expired"}, status=404)
     fid = rec[5] if len(rec) > 5 else None
     if not fid:                                      # файла нет на серверах Telegram — кладём тихо
@@ -2424,7 +2507,7 @@ async def api_chat_file_rebuild(request):
     tok = j.get("tok") if isinstance(j, dict) else None
     uid = user_id(request)
     if isinstance(tok, str) and tok and isinstance(uid, int) and uid > 0:
-        rec = CHAT_FILES.get(tok)
+        rec = chat_file_load(tok)
         if rec and rec[0] == uid and time.time() - rec[4] <= CHAT_FILE_TTL:
             return web.json_response({"url": f"/api/chat_file/{tok}/{quote(rec[2])}?tok={chat_file_token(uid, tok)}"})
     text = j.get("text") if isinstance(j, dict) else None
@@ -2984,9 +3067,7 @@ async def ec_report_send(tg_bot, uid, r, kind, student=""):
             msg = await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
                                              disable_notification=sent)
             fid = getattr(getattr(msg, "document", None), "file_id", None)
-            rec = CHAT_FILES.get(links[ext]["tok"])
-            if fid and rec:
-                rec[5] = fid
+            chat_file_set_fid(links[ext]["tok"], fid)
             sent = True
         except TelegramAPIError as e:
             log.warning("essay report: %s не ушёл tg_id=%s err=%s", ext, uid, e)
