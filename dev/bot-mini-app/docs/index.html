@@ -3760,15 +3760,31 @@ async function chFresh(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u||!chIsDoc
       body:JSON.stringify({tok,text:src.slice(0,100000),name:x.n}),cache:"no-store"});
     if(r.ok){const d=await r.json();if(d&&d.url)return Object.assign({},x,{u:d.url})}}catch(e){}
   return x}
-async function chOpen(i,j){const x=await chFresh(i,j);if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
+/* ОТКРЫТИЕ ФАЙЛА — СИНХРОННО В ОБРАБОТЧИКЕ ТАПА (баг-репорт 013).
+   tg.openLink честно обрабатывается Telegram ТОЛЬКО в ответ на тап: любой await перед вызовом
+   (хотя бы сетевой запрос за свежей ссылкой) выносит вызов из user-gesture, и клиенты его
+   МОЛЧА игнорируют. Отсюда и разница, которую видел пользователь: «Скачать АПК» работал
+   (там openLink без await), а PDF — нет. Поэтому здесь НЕТ ни одного await до вызова Telegram,
+   а свежая ссылка подогревается В ФОНЕ (chRefresh) и кладётся обратно в карточку к следующему тапу. */
+function chPut(i,j,x){const a=((CH[i]||{}).a||[])[j];if(a&&x&&x.u){a.u=x.u;if(x.m)a.m=x.m}return a||x}
+async function chRefresh(i,j){try{const f=await chFresh(i,j);if(f&&f.u){chPut(i,j,f);const a=((CH[i]||{}).a||[])[j];if(a)a._rf=Date.now()}}catch(e){}
+  return ((CH[i]||{}).a||[])[j]}
+function chOpen(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u){toast("Файл устарел — попросите ответ ещё раз");return false}
   const u=chAbs(x),A=window.Android||{},mime=chMime(x);
+  let done=false;
   try{
-    if(A.openFile){A.openFile(u,x.n,mime);return true}   // APK: скачать + открыть на экране системным просмотрщиком
-    if(A.shareFile){toast("Обновите приложение — эта версия не умеет открывать файлы");return false}   // старый APK без openFile
-    if(!APP&&tg&&tg.openLink){tg.openLink(u);return true}   // Telegram: система скачивает файл и открывает его
-    if(!APP&&tg&&tg.downloadFile){tg.downloadFile({url:u,file_name:x.n,mime_type:mime});return true}   // Telegram без openLink
-    const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();return true
-  }catch(e){toast("Не получилось открыть файл");return false}}
+    if(A.openFile){A.openFile(u,x.n,mime);done=true}   // APK: скачать + открыть на экране системным просмотрщиком
+    else if(A.shareFile){toast("Обновите приложение — эта версия не умеет открывать файлы")}   // старый APK без openFile
+    else if(!APP&&tg&&tg.openLink){tg.openLink(u);done=true}   // Telegram: система скачивает файл и открывает его
+    else if(!APP&&tg&&tg.downloadFile){tg.downloadFile({url:u,file_name:x.n,mime_type:mime});done=true}   // Telegram без openLink
+    else{const a=document.createElement("a");a.href=u;a.download=x.n;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();done=true}   // браузер: обычное скачивание
+  }catch(e){toast("Не получилось открыть файл");done=false}
+  chRefresh(i,j).catch(()=>{});   /* подогрев ссылки к следующему тапу — строго ПОСЛЕ синхронного вызова */
+  return done}
+/* Прогрев ссылок на файлы: карточка получает свежую ссылку заранее, чтобы тап открывал файл сразу */
+function chPrefetch(){try{(CH||[]).forEach((c,i)=>{(((c&&c.a)||[]).forEach((x,j)=>{
+  if(!x||!x.u||!chIsDoc(x))return;if(x._rf&&Date.now()-x._rf<60000)return;x._rf=Date.now();
+  chRefresh(i,j).catch(()=>{})}))})}catch(e){}}
 function chDl(i,j){chOpen(i,j)}   // кнопка «Скачать» — ровно тот же путь, что и тап по файлу/стикеру
 /* УНИВЕРСАЛЬНАЯ ссылка на САМУЮ ПОСЛЕДНЮЮ сборку APK:
    GitHub-релиз «apk-latest» — CI при каждой сборке ПЕРЕЗАЛИВАЕТ туда файлы, поэтому адрес
