@@ -2842,13 +2842,21 @@ async def api_essay_check_photo(request):
     uid = ec_uid(request)
     sid, st = j.get("sid"), j.get("set")
     if not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,40}", sid) or st not in ("w", "t"):
+        # F-6: это ошибка ЗАПРОСА (клиент прислал не то), а не «нет интернета» — код "bad" остаётся,
+        # статус 400; фронт по ecUpWhy покажет «файл не распознан», не «проверьте интернет».
         return web.json_response({"error": "bad"}, status=400)
     now = time.time()
     store = EC_PHOTOS.setdefault(sid, {})
     for k in [k for k, v in store.items() if now - v["ts"] > EC_PHOTO_TTL]:
         store.pop(k, None)                            # протухшие фото чистим по пути
     if len(store) >= EC_MAX_PHOTOS:
-        return web.json_response({"error": "bad"}, status=400)
+        # F-6 (баг-репорт 014): переполнение копилки — НЕ универсальный 400 {"error":"bad"}.
+        # Раньше «мусорный файл», «лимит» и «протухшее» отвечали одинаково — фронт физически
+        # не мог показать честный текст и сваливал всё в ложное «проверьте интернет».
+        # Клиентская ошибка (клиент прислал лишнее), поэтому статус остаётся 400, но КОД причины
+        # свой — "limit" (контракт test_essay_check_bugs.py T-01в: 400 + код != "bad").
+        # Фронт по ecUpWhy() покажет «слишком много фото», а не «проверьте интернет».
+        return web.json_response({"error": "limit"}, status=400)
     try:
         raw = chatfiles._b64(j.get("d") if isinstance(j.get("d"), str) else None)
         jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw)

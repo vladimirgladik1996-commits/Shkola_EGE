@@ -115,13 +115,27 @@ globalThis.XMLHttpRequest=XHR;
     r = subprocess.run(["node"], input=harness, capture_output=True, text=True)
     assert r.returncode == 0, f"node: {r.stderr[-500:]}"
     res = json.loads([ln for ln in r.stdout.splitlines() if ln.startswith("RESULT:")][0][7:])
-    assert res["stallRes"] is None and res["stallMs"] < 3000, \
-        f"мёртвая сеть должна обрываться за EC_UP_IDLE, а не висеть: {res}"
-    assert res["slowRes"] == {"id": "p1"} and res["slowMs"] > 150, \
+    # F-1 (баг-репорт 014, Push 3): контракт ecUpApi изменён с "null при сбое" на {ok,status,body} —
+    # иначе вызывающий не различал «нет связи» и «сервер сказал нет»: всё сваливалось в «проверьте интернет».
+    # Мигрированы ТОЛЬКО проверки ФОРМЫ ответа; поведенческие стражи ниже (обрыв по тишине,
+    # живая сеть с прогрессом не убивается, abort по тишине) сохранены дословно.
+    def shaped(v):
+        return isinstance(v, dict) and "ok" in v and "status" in v and "body" in v
+    assert shaped(res["stallRes"]) and res["stallRes"]["ok"] is False \
+           and res["stallRes"]["status"] == 0 and not res["stallRes"]["body"] \
+           and res["stallMs"] < 3000, \
+        f"мёртвая сеть должна обрываться за EC_UP_IDLE (status=0, body=null), а не висеть: {res}"
+    assert shaped(res["slowRes"]) and res["slowRes"]["ok"] is True \
+           and res["slowRes"]["body"] == {"id": "p1"} and res["slowMs"] > 150, \
         f"медленная, но живая сеть (есть прогресс) не должна убиваться сторожем: {res}"
-    assert res["httpRes"] is None and res["netRes"] is None, f"сбой HTTP/сети — честный null: {res}"
+    assert shaped(res["httpRes"]) and res["httpRes"]["ok"] is False and res["httpRes"]["status"] == 500, \
+        f"ошибка сервера — статус ДОХОДИТ до вызывающего («сервис перегружен»), а не null: {res}"
+    assert shaped(res["netRes"]) and res["netRes"]["ok"] is False and res["netRes"]["status"] == 0 \
+           and not res["netRes"]["body"], \
+        f"обрыв сети — status=0 и пустое тело (ТОЛЬКО он даёт «нет интернет»): {res}"
     assert res["aborted"] >= 1, f"по тишине запрос должен прерываться (abort): {res}"
-    ok("ecUpApi: мёртвая сеть обрывается за EC_UP_IDLE, живая (с прогрессом) доезжает, сбой = null")
+    ok("ecUpApi: мёртвая сеть обрывается за EC_UP_IDLE, живая (с прогрессом) доезжает, "
+       "сбой даёт {ok,status,body} (F-1) и abort по тишине")
 
 # ---------- 3. бэкенд: копилка фото и мгновенная сборка сеанса по id ----------
 async def main():

@@ -3062,9 +3062,15 @@ function ecAskSkip(){close_();ecUpload(true)}   /* продолжить без �
    могло зависнуть навсегда — экран и кнопка «Готово» висли вечно. --- */
 const EC_UP_IDLE=30000,EC_UP_MAX=90000;   /* тишина отправки / общий потолок одного фото, мс */
 function ecUpApi(p,b){   /* POST с прогрессом отправки (XHR): по прогрессу перезапускается сторож
-     тишины — медленная, но живая сеть НЕ убивается, а мёртвая обрывается за EC_UP_IDLE, а не висит вечно */
+     тишины — медленная, но живая сеть НЕ убивается, а мёртвая обрывается за EC_UP_IDLE, а не висит вечно.
+     F-1 (баг-репорт 014): возвращает {ok,status,body} на ЛЮБОЙ исход — раньше любой сбой отдавал null,
+     и вызывающий не различал «сервер сказал нет» и «нет связи»: всё сваливалось в «проверьте интернет». */
   return new Promise(res=>{let x=null,idle=null,max=null,done=false;
-    const fin=v=>{if(done)return;done=true;if(idle)clearTimeout(idle);if(max)clearTimeout(max);res(v)};
+    /* F-1: fin нормализует null (обрыв/таймаут/abort) в {ok:false,status:0,body:null} —
+       вызывающий ВСЕГДА получает одну и ту же форму {ok,status,body} и может различить
+       «нет связи» (status=0) и ошибку сервера (status>=400). Форма контракта — test_essay_check_bugs.py T-01. */
+    const fin=v=>{if(done)return;done=true;if(idle)clearTimeout(idle);if(max)clearTimeout(max);res(v===null||v===undefined?{ok:false,status:0,body:null}:v)};
+    const shape=(ok,st,body)=>({ok:!!ok,status:(st|0),body:(body&&typeof body==="object")?body:null});
     const arm=()=>{if(idle)clearTimeout(idle);idle=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_IDLE)};
     try{
       x=new XMLHttpRequest();
@@ -3073,28 +3079,47 @@ function ecUpApi(p,b){   /* POST с прогрессом отправки (XHR):
       try{x.setRequestHeader("X-Init",tg&&tg.initData?tg.initData:"")}catch(e){}   /* initData нет/пуст — уходим без подписи, сервер ответит 401/403 честно */
       if(APP&&localStorage.sesTok){try{x.setRequestHeader("X-Session",localStorage.sesTok)}catch(e){}}
       x.upload.onprogress=()=>arm();
-      x.onload=()=>{if(x.status==401||x.status==403){lockScreen(x.status);return fin(null)}
-        if(x.status<200||x.status>=300)return fin(null);
-        let j=null;try{j=JSON.parse(x.responseText)}catch(e){}fin(j&&typeof j==="object"?j:null)};
+      x.onload=()=>{   /* статус и тело ДОХОДЯТ до вызывающего во всех случаях (F-1) */
+        let j=null;try{j=JSON.parse(x.responseText)}catch(e){}
+        const body=(j&&typeof j==="object")?j:null;
+        if(x.status==401||x.status==403){lockScreen(x.status);return fin(shape(false,x.status,body))}
+        if(x.status<200||x.status>=300)return fin(shape(false,x.status,body));
+        fin(shape(true,x.status,body))};
+      /* реальный обрыв/таймаут — ЕДИНСТВЕННЫЙ случай без статуса (status=0, body=null):
+         только он имеет право давать «нет интернет». Ошибка сервера — уже не «нет интернет». */
       x.onerror=()=>fin(null);x.onabort=()=>fin(null);x.ontimeout=()=>fin(null);
       max=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_MAX);arm();x.send(JSON.stringify(b));
     }catch(e){fin(null)}   /* синхронный сбой — это «не загрузилось», а не вечная загрузка (bug-reports/012) */
   })}
+/* F-1: честный текст ошибки по статусу/коду причины от сервера. Тексты разведены намеренно —
+   универсальный «проверьте интернет» при живой сети и был главным симптомом баг-репорта 014. */
+function ecUpWhyMsg(r){   /* НЕ ecUpWhy — это имя уже занято переменной причины сбоя (F-4): let ecUpWhy="";
+     в одном скоупе function ecUpWhy + let ecUpWhy = SyntaxError, который убивает весь <script> */
+  if(!r||!r.status)return "Нет интернета — проверьте соединение и нажмите «Повторить»";   /* onerror/abort/timeout */
+  const e=(r.body&&r.body.error)||"";
+  if(e==="gone")return "Фото устарели — перезаливаю их заново, нажмите «Повторить»";
+  if(e==="limit")return "Слишком много фото — уберите лишние и нажмите «Повторить»";
+  if(r.status>=500)return "Сервис перегружен — подождите немного и нажмите «Повторить»";
+  if(e==="bad"||r.status==400)return "Файл не распознан как фото — снимите его заново";
+  return "Не получилось загрузить фото (код "+r.status+") — нажмите «Повторить»"}
+function ecUpErrPick(){   /* первый проваленный пуск — чтобы показать ПРИЧИНУ, а не общую отмазку */
+  for(const p of ecShots.w.concat(ecShots.t)){if(p.st=="fail"&&p.err)return p.err}return null}
 async function ecUpOne(p){   /* одно фото на сервер; p: {src,set,id,st} — st: wait|up|ok|fail */
   if(!p||p.st=="ok")return true;
   if(p.jn)return p.jn;   /* уже грузится — ждём тот же запрос, не дублируем */
-  p.st="up";
-  const j=(async()=>{let r=null;
-    try{r=await ecUpApi("/api/essay_check/photo",{sid:ecUpId,set:p.set,n:"photo.jpg",d:p.src.split(",")[1]||"",mime:"image/jpeg"})}catch(e){r=null}
+  p.st="up";p.err=null;
+  const j=(async()=>{let r={ok:false,status:0,body:null};
+    try{r=await ecUpApi("/api/essay_check/photo",{sid:ecUpId,set:p.set,n:"photo.jpg",d:p.src.split(",")[1]||"",mime:"image/jpeg"})}catch(e){r={ok:false,status:0,body:null}}
     if(p.jn===j)p.jn=null;   /* снимаем «в полёте» ВСЕГДА: раньше при сбое p.jn оставался отклонённым промисом
                                 навсегда — фото было невозможно догрузить, «Готово» падал на нём же раз за разом (bug-reports/012) */
-    if(r&&r.id){p.id=r.id;p.st="ok";return true}
-    p.st="fail";return false})();
+    if(r&&r.ok&&r.body&&r.body.id){p.id=r.body.id;p.st="ok";p.err=null;return true}
+    p.err=r;p.st="fail";return false})();   /* F-1: причину отказа сохраняем — из неё строится текст ошибки */
   p.jn=j;
   return j}
 function ecUpKick(){ecShots.w.concat(ecShots.t).forEach(p=>{if(p.st=="wait")Promise.resolve(ecUpOne(p)).catch(()=>{})})}   /* фоновая загрузка после съёмки; сбой одного фото не роняет остальные */
 async function ecUpAll(){   /* дозагрузить всё, что не ушло фоном (сбой сети, перезапуск сервиса) */
   let ok=true;for(const p of ecShots.w.concat(ecShots.t)){if(!(await ecUpOne(p)))ok=false}return ok}
+/* ^ примечание: ecUpAll по-прежнему возвращает bool; ПРИЧИНУ первого сбоя даёт ecUpErrPick() (F-1). */
 async function ecUpload(skip){if(ecBusy)return;
   if(!ecCnt()){toast("Сначала сделайте хотя бы одно фото");return}
   if(!ecShots.w.length){ecAskWork();return}   /* только задание: ни при каких условиях дальше не пускаем */
@@ -3116,11 +3141,11 @@ async function ecUpload(skip){if(ecBusy)return;
   try{
     /* фото обычно уже на сервере (грузятся сразу после съёмки) — собираем сеанс по id и стартуем
        проверку мгновенно; догрузка нужна только после сбоя сети или перезапуска сервиса */
-    if(!await ecUpAll())return fail("Не получилось загрузить фото — проверьте интернет и нажмите «Повторить»");
+    if(!await ecUpAll())return fail(ecUpWhyMsg(ecUpErrPick()));   /* F-1: честная причина вместо общего «проверьте интернет» */
     let r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     if(!r||!r.id){   /* сервис перезапустился и потерял копилку фото — перезальём и соберём заново */
-      for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null}
-      if(!await ecUpAll())return fail("Не получилось загрузить фото — проверьте интернет и нажмите «Повторить»");
+      for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null;p.err=null}
+      if(!await ecUpAll())return fail(ecUpWhyMsg(ecUpErrPick()));
       r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     }
     if(!r||!r.id)return fail("Не получилось отправить фото на сервер — нажмите «Повторить»");
