@@ -25,8 +25,11 @@ for cid in CATS:
         page = read("materials", cid, "v%02d.html" % n)
         assert "fonts.googleapis" not in page and "<link" not in page, (cid, n)   # страница самодостаточна: без внешних шрифтов и стилей
         assert page.count('class="tab"') == (2 if cid.startswith("ege") else 4) and page.count('role="tabpanel"') == page.count('class="tab"'), (cid, n)
-        # хлебные крошки: Оглавление › Вариант N › текст | 27 (ЕГЭ) или текст | 13.1 | 13.2 | 13.3 (ОГЭ)
-        assert 'data-nav="toc">Оглавление</button>' in page and ('data-nav="var">Вариант %d</button>' % n) in page, (cid, n)
+        # хлебные крошки (один ряд): Оглав. › В. N › текст | 27 (ЕГЭ) или текст | 13.1 | 13.2 | 13.3 (ОГЭ)
+        assert 'data-nav="toc" aria-label="Оглавление">Оглав.</button>' in page and ('data-nav="var" aria-label="Вариант %d">В. %d</button>' % (n, n)) in page, (cid, n)
+        nav = page.split("</nav>")[0]
+        assert ">Оглавление</button>" not in nav and (">Вариант %d</button>" % n) not in nav, (cid, n)   # в крошках только сокращения (полное слово — в aria-label)
+        assert "flex-wrap:nowrap" in page and "flex-wrap:wrap" not in page.split(".bar{")[1].split("}")[0] and page.count("height:48px") >= 2, (cid, n)   # крошки и вкладки — в один ряд, цель нажатия 48px
         labels = re.findall(r'role="tab" data-p="[^"]+" aria-selected="(?:true|false)"(?: aria-label="[^"]*")?>([^<]+)</button>', page)
         assert labels == (["Текст", "27"] if cid.startswith("ege") else ["Текст", "13.1", "13.2", "13.3"]), (cid, n, labels)
         assert ('<div class="num">%d</div>' % n) in page and page.count('class="rd"') >= 1, (cid, n)
@@ -39,8 +42,8 @@ for cid in CATS:
             assert page.count('class="qb"') == 3 and page.count('<details class="cr">') == 12 and "норма ОГЭ" in page, (cid, n)
             assert page.count('<p class="at">(По ') == (1 if cid == "oge-essays-2027" else 0), (cid, n)   # автор: отдельной строкой либо в шапке (каталог «до 80 слов»)
     about = read("materials", cid, "about.html")
-    assert "Дощинск" in about and "критери" in about and 'data-nav="toc">Оглавление</button>' in about and 'h.style.scrollBehavior' in about, cid
-    ok(f"materials/{cid}/: index.json + about.html + 36 страниц вариантов в дизайне приложения (хлебные крошки: Оглавление › Вариант › {'текст | 27' if cid.startswith('ege') else 'текст | 13.1 | 13.2 | 13.3'})")
+    assert "Дощинск" in about and "критери" in about and 'data-nav="toc" aria-label="Оглавление">Оглав.</button>' in about and 'h.style.scrollBehavior' in about, cid
+    ok(f"materials/{cid}/: index.json + about.html + 36 страниц вариантов в дизайне приложения (хлебные крошки в один ряд: Оглав. › В. N › {'текст | 27' if cid.startswith('ege') else 'текст | 13.1 | 13.2 | 13.3'})")
 
 # --- бэкенд: маршруты под @guarded, имена файлов — только из белого списка
 for cid in CATS:
@@ -55,10 +58,29 @@ for t in ("Каталог эссе для ОГЭ-2027. Русский язык. 
           "Каталог эссе для ОГЭ-2027. Русский язык. По сборнику Р.А. Дощинского (До 80 слов)",
           "Каталог сочинений ЕГЭ-2027. Русский язык. По сборнику Р.А. Дощинского"):
     assert t in front, t
-assert 'tab=="mt"?mat()' in front and "function matCatOpen" in front and "function matGrid" in front and "function matOpen(ci,part)" in front
+assert 'tab=="mt"?mat()' in front and "function matCatOpen" in front and "function matGrid" in front and "function matOpen(ci,part,sec)" in front
 assert 'class="mt-chip mt-v"' in front and "Вариант ${v.n}" in front and ".mt-grid{" in front and "/api/materials/\"+m.id" in front and "/api/materials/\"+key" in front
 ok("во фронте: чипсины каталогов → сетка чипсин всех вариантов (с поиском) → открытие варианта")
 assert 'data-theme="\'+matTheme()' in front and "function matTheme" in front and 'e.data.matNav==="toc"' in front and "#mv.pg .mvb{display:none}" in front
+assert 'class="mt-chip mt-back" type="button" onclick="matBack()"' in front and ".mt-back{min-height:52px" in front and "position:sticky;top:calc(56px" in front, "в оглавлении нужна крупная кнопка «Материалы»"
+assert 'class="mvc" type="button" onclick="matClose()" aria-label="Оглавление">Оглав.</button>' in front and '"В. "+part' in front and "‹ Варианты" not in front
+ok("оглавление: крупная приклеенная кнопка «Материалы»; полоса загрузки варианта — те же крошки «Оглав. › В. N»")
+front_nb = re.sub(r"data:[a-z/+-]+;base64,[A-Za-z0-9+/=]+", "", front)   # для проверок «такого в коде нет»: символы base64 внутри встроенных картинок не в счёт
+assert 'const MAT_ART="data:image/webp;base64,' in front and front.count("${matArt()}") == 2 and ".mt-art{" in front, "иллюстрация внизу каталогов и оглавления"
+assert "matOpen(ci,n,sec)" in front and "matShow" in front and "c.cat=MATS[matCat].id" in front, "голос: страница открывается на нужной вкладке"
+assert 'if raw.get("cat") is not None:' in bot and "_material_nav" in read("assist.py") and "import kimi, matlib, matnav, whisper" in read("assist.py")
+assert all("matShow" in read("materials", c, f) for c in CATS for f in ["about.html"] + ["v%02d.html" % n for n in range(1, 37)]), "страницы принимают matShow"
+ok("голос: «Открой эссе 13.2 варианта 7 ОГЭ» → сервер отдаёт stage open, мини-апп открывает страницу; иллюстрация внизу «Материалов»")
+assert "function viewTurn(" in front and "function ptCurl(" in front and "function ptGeom(" in front and "ptScreenTurn(false)" in front and "ptScreenTurn(true,fin)" in front and "viewTurn(true," in front and "viewTurn(false," in front, "листание с изгибом в оболочке"
+assert "prefers-reduced-motion" in front and "ptOK()" in front and "REDUCE" in front, "при «уменьшении анимации» листание отключается"
+assert ".pt-k{overflow:hidden;background:var(--bg)}" in front and "function ptFix(" in front and "ptFix(c,host)" in front, "лист непрозрачный и совмещён с оригиналом: новая страница не просвечивает сквозь поворачиваемый лист"
+for cid in CATS:
+    for f in ["about.html"] + ["v%02d.html" % n for n in range(1, 37)]:
+        pg = read("materials", cid, f)
+        assert "function swap(" in pg and "function place(" in pg and "function ptCurl(" in pg and "prefers-reduced-motion" in pg and ".thumb{" in pg, (cid, f)
+        assert ".pt-k{overflow:hidden;background:var(--bg)}" in pg and "ptFix(src,se)" in pg, (cid, f)
+        assert ('<span class="thumb" aria-hidden="true"></span>' in pg) == (f != "about.html"), (cid, f)
+ok("анимации: жидкая «капля» между вкладками крошек, листание с изгибом (разделы, экраны, варианты); без анимации при «уменьшении движения»")
 ok("страница варианта подстраивается под тему приложения (светлая/тёмная)")
 assert front.count('img:"data:image/jpeg;base64,') == 3 and 'class="mi mc"><img src="${m.img}"' in front and ".mt-list .mi.mc{flex:0 0 58px;height:58px" in front
 ok("у каталогов круглые иконки-обложки (встроены в приложение, 58px вместо 40px)")

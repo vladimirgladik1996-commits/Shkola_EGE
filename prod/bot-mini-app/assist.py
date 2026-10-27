@@ -23,7 +23,7 @@
 import json, logging, re, time
 from datetime import date, timedelta
 
-import kimi, matlib, whisper
+import kimi, matlib, matnav, whisper
 import bot                      # цикл импортов осознанный: bot.* используется только при вызовах
 
 log = logging.getLogger("tutor.assist")
@@ -1078,6 +1078,37 @@ def _mat_response(m):
     return {"stage": "answer", "reply": m.get("reply") or "Готово.", "confirm": None}
 
 
+def _material_nav(uid, text, ctx):
+    """«Открой страницу эссе 13.2 для варианта 7 ОГЭ» → {"stage": "open", "open": {cat, n, part}}.
+    Разбор правилами (matnav.py), без модели: цель только из белого списка (каталог, вариант 1…36, вкладка страницы).
+    None — это не такая просьба (поиск по автору/тексту, «каталог не назван», задачи по варианту): дальше работает matlib.
+    Вне «Материалов» нужны и каталог, и вариант — иначе «открой вариант 5» в расписании ничего не значит."""
+    here = ctx.get("tab") == "mt"
+    mat = ctx.get("mat") or {}
+    nctx = {"cat": mat.get("cat") or ctx.get("cat"), "variant": mat.get("n")}   # открыт вариант — его каталог и номер; иначе открытый каталог
+    p = _live(uid)
+    partial = (p.get("task") or {}).get("params") if p and p.get("phase") == "page_nav" else None
+    found = matnav.parse(text)
+    if not matnav.is_nav(text, found, has_prev=bool(partial)):
+        if partial:
+            PENDING.pop(uid, None)
+        return None
+    if not here and not partial and not ("cat" in found and "n" in found):
+        return None
+    found = matnav.merge(partial, found)
+    res = matnav.resolve(found, nctx, here=here)
+    if res[0] == "ok":
+        PENDING.pop(uid, None)
+        return {"stage": "open", "reply": "Открываю: " + matnav.describe(res[1]) + ".", "confirm": None, "open": res[1]}
+    if res[0] == "ask" and res[2] == "cat":     # каталог не назван — пусть найдёт matlib (покажет, где такой вариант есть, и спросит)
+        PENDING.pop(uid, None)
+        return None
+    if res[0] == "err":
+        found.pop(res[2], None)                 # неверное забываем, понятое оставляем для следующей реплики
+    _keep(uid, phase="page_nav", task=_task_state("open_material", found, []))
+    return {"stage": "clarify", "reply": res[1], "confirm": None}
+
+
 async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
     """Запрос из мини-аппа → {"reply", "stage": answer|clarify|confirm|open|stub, "confirm": текст|None}.
 
@@ -1094,6 +1125,9 @@ async def handle_page(uid, text, ctx, *, images=None, docs=None, voice=False):
         mat_docs = (mat_docs + "\n" if mat_docs else "") + matlib.page_text(ctx["mat"]["cat"], ctx["mat"]["n"])
     if not text:
         return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Голос пока не распознаётся.", "confirm": None}
+    nav = _material_nav(uid, text, ctx)         # навигация по структуре материалов — правилами, работает и без KIMI_API_KEY
+    if nav is not None:
+        return nav
     if not kimi.enabled():
         return {"stage": "stub", "reply": f"Команда получена на экране «{where}». Ассистент не подключён: нет KIMI_API_KEY.", "confirm": None}
     p = _live(uid)

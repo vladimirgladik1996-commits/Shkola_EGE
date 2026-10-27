@@ -1996,6 +1996,9 @@ def voice_context(raw):
             part = m.get("part") or "other"
             if part not in FRAG_PARTS: raise ValueError
             ctx["mat"] = {"cat": m["cat"], "n": n, "part": part}
+        if raw.get("cat") is not None:       # открыт список вариантов каталога (варианта ещё нет)
+            if raw["cat"] not in MATERIALS: raise ValueError
+            ctx["cat"] = raw["cat"]
     return ctx
 
 def voice_audio(j):
