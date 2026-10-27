@@ -1221,6 +1221,8 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-view .ec-chip.on{background:var(--yel);color:#0E2250;border-color:transparent}
 .ec-ctl .ec-go{justify-self:center;margin:0;padding:10px 14px;font-size:13px;border-radius:14px}
 .ec-ctl{display:grid;grid-template-columns:1fr 64px 1fr;align-items:center;padding:8px 0 14px}
+.ec-uperr{position:absolute;left:14px;right:14px;top:14px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(18,24,40,.92);border:1px solid rgba(255,120,140,.35);border-radius:16px;padding:14px 12px}
+.ec-uperr .ec-note{margin:0;color:#ffd9e0}   /* причина ошибки на тёмном фоне видоискателя */
 .ec-th{position:relative;width:46px;height:48px;justify-self:center;margin:0}
 .ec-th .ec-slot{position:absolute;left:50%;top:5px;width:34px;height:42px;margin-left:-17px;border:2px dashed rgba(255,255,255,.32);border-radius:8px;display:grid;place-items:center}
 .ec-th .ec-slot svg{width:18px;height:18px;fill:none;stroke:rgba(255,255,255,.45);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -2939,16 +2941,16 @@ const EC_SHUT="data:image/webp;base64,"+"UklGRnZWAABXRUJQVlA4WAoAAAAQAAAA7wAA7QA
 let ecStep=0,ecKind="ege",ecSet="w",ecShots={w:[],t:[]},ecBusy=false;
 let ecSess="",ecState="run",ecWhy="",ecLive=[],ecWait=[],ecThink="",ecRes=null,ecTab="e",ecFix=false,ecRunId=0;   /* ecThink — дозаписываемый стрим мышления Вишенки для карточки на прелоадере */
 const ecUpGen=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,10);   /* sid копилки фото: своя на каждый запуск съёмки */
-let ecUpId=ecUpGen();
+let ecUpId=ecUpGen(),ecUpWhy="",ecUpSkip=false;   /* ecUpWhy — причина сбоя загрузки (F-4), ecUpSkip — режим «продолжить без задания» для повтора */
 let ecSid=null,ecSaved=0,ecView="",ecViewInfo="",ecHist={sid:"all",list:null,busy:false};   /* ученик, «сохранено», просмотр из истории (пуш 7) */
 function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки и оценит по критериям ФИПИ</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
 <button class="ec-pb a" onclick="ecStart('ege')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/></svg></span><span class="ec-pbt"><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
 <button class="ec-pb b" onclick="ecStart('oge')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><span class="ec-pbt"><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>`}
-function ecStart(k){ecKind=k;ecStep=1;ecUpId=ecUpGen();render();scrollTo(0,0);ecCamOpen()}
+function ecStart(k){ecKind=k;ecStep=1;ecUpId=ecUpGen();ecUpWhy="";render();scrollTo(0,0);ecCamOpen()}
 function ecBack(){   /* по макету: «Назад» с разбора — к съёмке (goCam), из просмотра истории — в список */
   if(ecStep===3){if(ecView=="hist"){ecHistOpen()}else{ecStep=1;render();scrollTo(0,0);ecCamOpen()}return}
   if(ecStep===1||ecStep===4){ecStep=0;ecView="";render()}}
-function ecReset(){ecRunId++;ecBusy=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecThink="";ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecFragClose();ecShots={w:[],t:[]};ecStep=0;render();scrollTo(0,0)}
+function ecReset(){ecRunId++;ecBusy=false;ecUpWhy="";ecUpSkip=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecThink="";ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecFragClose();ecShots={w:[],t:[]};ecStep=0;render();scrollTo(0,0)}
 /* --- ученик и история (пуш 7): привязка проверки к ученику, «Сохранить за учеником»,
    история сохранённых проверок и повторный просмотр разбора (без запуска модели) --- */
 function ecStuName(){const s=ecSid!=null&&S.find(x=>x.id==ecSid&&!x.deleted);return s?s.name:""}
@@ -3075,33 +3077,38 @@ async function ecUpload(skip){if(ecBusy)return;
   if(!ecCnt()){toast("Сначала сделайте хотя бы одно фото");return}
   if(!ecShots.w.length){ecAskWork();return}   /* только задание: ни при каких условиях дальше не пускаем */
   if(!skip&&!ecShots.t.length){ecAskTask();return}   /* только работа: спрашиваем — добавить задание или продолжить без */
-  ecBusy=true;
-  /* Кнопка «Готово» обязана вернуться в исходное состояние В ЛЮБОМ исходе (bug-reports/012).
-     Раньше подпись «Загружаю фото…» снималась только через render() под условием tab=="ai"&&ecStep===1:
-     любой другой исход оставлял кнопку с вечной «Загружаю…» и бегущей полосой — выглядело как зависшая
-     загрузка при исправном интернете и живом сервере. */
-  const btn0=$("#ec-go"),was=btn0&&btn0.textContent?btn0.textContent:"Готово";
-  if(btn0){btn0.textContent="Загружаю фото…";btn0.classList.add("busy")}
+  ecBusy=true;ecUpWhy="";ecUpSkip=!!skip;
+  /* Кнопка «Готово» НЕ мутирует (F-2): подпись не переписывается ни при каких условиях —
+     «Загружаю фото…» в две строки разрывало сетку .ec-ctl (1fr 64px 1fr). Busy-состояние —
+     только класс .busy (бегущая полоса .ec-go.busy::after), восстановление — каноническое
+     (снятие класса + render()), без снимков текста «до» — узел мог пересоздать render() (T-06). */
+  const b0=$("#ec-go");if(b0)b0.classList.add("busy");
   let finished=false;
   const done=()=>{
     if(finished)return;finished=true;ecBusy=false;
-    const b=$("#ec-go");if(b){b.textContent=was;b.classList.remove("busy")}
+    const b=$("#ec-go");if(b)b.classList.remove("busy");
     if(tab=="ai"&&ecStep===1)render()};
+  const fail=why=>{   /* F-4: при ЛЮБОМ сбое — ЯВНОЕ состояние ошибки с причиной и «Повторить»
+     на экране съёмки, а не только тост: пользователь не остаётся без объяснений */
+    ecUpWhy=why;toast(why);done()};
   try{
     /* фото обычно уже на сервере (грузятся сразу после съёмки) — собираем сеанс по id и стартуем
        проверку мгновенно; догрузка нужна только после сбоя сети или перезапуска сервиса */
-    if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");return done()}
+    if(!await ecUpAll())return fail("Не получилось загрузить фото — проверьте интернет и нажмите «Повторить»");
     let r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     if(!r||!r.id){   /* сервис перезапустился и потерял копилку фото — перезальём и соберём заново */
       for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null}
-      if(!await ecUpAll()){toast("Не получилось загрузить фото — проверьте интернет и нажмите «Готово» ещё раз");return done()}
+      if(!await ecUpAll())return fail("Не получилось загрузить фото — проверьте интернет и нажмите «Повторить»");
       r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
     }
-    if(!r||!r.id){toast("Не получилось отправить фото — попробуйте ещё раз");return done()}
+    if(!r||!r.id)return fail("Не получилось отправить фото на сервер — нажмите «Повторить»");
     ecSess=r.id;ecStep=2;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
     render();scrollTo(0,0);ecRun();
-  }catch(e){toast("Не получилось загрузить фото — попробуйте ещё раз")}
+  }catch(e){fail("Прервалась связь с сервером при загрузке фото — нажмите «Повторить»")}
   finally{done()}}
+/* Явное состояние ошибки загрузки (F-4): причина + «Повторить» на экране съёмки;
+   повтор дозагружает фото и собирает сеанс заново (ecUpload с тем же режимом skip). */
+function ecUpErrHtml(){return ecUpWhy?`<div class="ec-uperr"><div class="ec-note ec-err2">${esc(ecUpWhy)}</div><button class="ec-go" onclick="ecUpload(ecUpSkip)">Повторить</button></div>`:""}
 /* --- экран обработки: лог этапов — log макета: ✓ сделано, ● текущий этап, будущие скрыты; полоса прогресса --- */
 function ecLogHtml(){
   const first="Собрала "+(ecShots.w.length+ecShots.t.length)+" фото в одно сочинение";   /* макет: «Собрала 3 фото в одно сочинение» */
@@ -3304,13 +3311,13 @@ function ecRepLinks(){   /* один запрос на разбор и учен�
   return p}
 async function ecRepShare(kind,btn){
   if(!ecRes||btn.disabled)return;
-  const all=document.querySelectorAll(".ec-rep .ec-rp"),lab=btn.querySelector("span"),was=lab.textContent;
+  const all=document.querySelectorAll(".ec-rep .ec-rp"),lab=btn.querySelector("span"),labWas=lab.textContent;
   all.forEach(x=>x.disabled=true);lab.textContent="Готовлю файл…";btn.classList.add("busy");
   try{
     const f=await ecRepLinks(),x=f&&f.find(z=>z.kind===kind);
     if(!x){toast("Не получилось подготовить файл — попробуйте ещё раз");return}
     await chShareX({u:x.url,n:x.name,m:x.mime,k:"out"})   /* та же пересылка, что «Поделиться» под файлом в чате */
-  }finally{if(btn.isConnected){all.forEach(z=>z.disabled=false);lab.textContent=was;btn.classList.remove("busy")}}}
+  }finally{if(btn.isConnected){all.forEach(z=>z.disabled=false);lab.textContent=labWas;btn.classList.remove("busy")}}}
 function ecTabSet(t){ecTab=t=="f"?"f":"e";ecErrClose();ecFragClose();   /* вкладки переключаются на месте — без перерисовки экрана */
   const ve=$("#ec-ve"),vf=$("#ec-vf"),te=$("#ec-te"),tf=$("#ec-tf");
   if(!ve||!vf||!te||!tf){if(tab=="ai"&&ecStep===3)render();return}
@@ -3533,7 +3540,7 @@ function ecVChat(){clearTimeout(ecVT);close_();tab="ch";render();scrollTo(0,0)}
 function ecShot(){const w=ecSet==="w";
   return `<div class="ec-top"><button class="ec-back" onclick="ecBack()" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="ec-lab">${ecKind==="oge"?"Фото ОГЭ эссе":"Фото ЕГЭ сочинения"}</span></div>
 <div class="ec-view"><div class="ec-cam"><video id="ec-cv" playsinline autoplay muted></video></div><div class="ec-frame">${w?"Положите лист ровно,<br>чтобы вошли все строки":"Снимите условие задания<br>и весь опорный текст"}</div><div class="ec-chs"><button type="button" class="ec-chip${w?" on":""}" id="ec-c1" onclick="ecSetCh('w')">${ecLbl(ecShots.w.length,"Работа")}</button><button type="button" class="ec-chip${w?"":" on"}" id="ec-c2" onclick="ecSetCh('t')">${ecLbl(ecShots.t.length,"Задание")}</button></div>
-<div class="ec-ctl"><div class="ec-th" id="ec-th">${ecThHtml()}</div><button class="ec-shut" style="background:url(${EC_SHUT}) center/contain no-repeat" onclick="ecCamShot()" aria-label="Сделать фото"></button><button class="ec-go${ecCnt()?"":" off"}" id="ec-go" onclick="ecUpload()">Готово</button></div></div>`}
+${ecUpErrHtml()}<div class="ec-ctl"><div class="ec-th" id="ec-th">${ecThHtml()}</div><button class="ec-shut" style="background:url(${EC_SHUT}) center/contain no-repeat" onclick="ecCamShot()" aria-label="Сделать фото"></button><button class="ec-go${ecCnt()?"":" off"}" id="ec-go" onclick="ecUpload()">Готово</button></div></div>`}
 /* метка набора — lbl() макета: «Работа · N», при нуле фото — без числа */
 function ecLbl(n,t){return t+(n?" · "+n:"")}
 /* стопка страниц: максимум 3 верхних + счётчик; пустой набор — пунктирный слот (renderTh макета); тап по странице — убрать фото */
