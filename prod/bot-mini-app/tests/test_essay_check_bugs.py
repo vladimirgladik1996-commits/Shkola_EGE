@@ -131,13 +131,15 @@ t("перезаливаю" in html and "не распознан" in html and "п
 async def t01_backend():
     async with TestClient(TestServer(bot.make_app())) as c:
         r = await c.post("/api/essay_check/photo", json={"sid": "sess-t01-bugs", "set": "w", "d": "мусор!"}, headers=H)
-        bad = await r.json()
+        bad, bad_status = await r.json(), r.status   # статус И тело — от запроса «мусора» (не переприсваивать r!)
         sid = "sess-t01-limit"
+        # F-3: повторы идемпотентны и лимит не занимают (T-03) — переполнение задаём УНИКАЛЬНЫМИ фото
+        uniq = [jpg((i * 17 % 256, 40, 60)) for i in range(bot.EC_MAX_PHOTOS + 1)]
         for i in range(bot.EC_MAX_PHOTOS):
-            await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": JPG_W}, headers=H)
-        r = await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": JPG_W}, headers=H)
+            await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": uniq[i]}, headers=H)
+        r = await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": uniq[bot.EC_MAX_PHOTOS]}, headers=H)
         lim = await r.json()
-        t(r.status == 400 and bad.get("error") == "bad", "T-01: мусор вместо картинки → 400 {error:bad}")
+        t(bad_status == 400 and bad.get("error") == "bad", "T-01: мусор вместо картинки → 400 {error:bad}")
         t(not (lim.get("error") == "bad" and r.status == 400),
           "T-01: переполнение копилки НЕ должно отвечать универсальным 400 «bad» — "
           f"нужен свой код/статус (413/429/limit), сейчас {r.status} {lim}")

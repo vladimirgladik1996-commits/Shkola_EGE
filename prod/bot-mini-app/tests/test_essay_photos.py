@@ -192,13 +192,21 @@ async def main():
         assert (await c.post("/api/essay_check/upload", json={"w": [{"d": JPG1}] * 13, "t": []}, headers=H)).status == 400
         ok("upload (старый формат): работает как раньше — прежние сборки APK не ломаются")
 
-        # --- 3д. лимит копилки ---
+        # --- 3д. лимит копилки (F-3: лимит считает УНИКАЛЬНЫЕ фото — повторы идемпотентны, T-03) ---
         sid = "sess-000009"
+        uniq = [jpg((i * 17 % 256, 40, 60))[0] for i in range(bot.EC_MAX_PHOTOS + 1)]
         for i in range(bot.EC_MAX_PHOTOS):
-            r = await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": JPG1}, headers=H)
+            r = await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": uniq[i]}, headers=H)
             assert r.status == 200
-        assert (await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": JPG1}, headers=H)).status == 400
-        ok(f"photo: не больше {bot.EC_MAX_PHOTOS} фото в копилке сеанса → 400")
+        assert (await c.post("/api/essay_check/photo", json={"sid": sid, "set": "w", "d": uniq[bot.EC_MAX_PHOTOS]}, headers=H)).status == 400
+        ok(f"photo: не больше {bot.EC_MAX_PHOTOS} УНИКАЛЬНЫХ фото в копилке сеанса → 400")
+
+        # F-3 (баг-репорт 014): повтор того же фото идемпотентен — тот же pid, копилка не растёт
+        r1 = await c.post("/api/essay_check/photo", json={"sid": "sess-000010", "set": "w", "d": JPG1}, headers=H)
+        r2 = await c.post("/api/essay_check/photo", json={"sid": "sess-000010", "set": "w", "d": JPG1}, headers=H)
+        assert (await r1.json())["id"] == (await r2.json())["id"], "F-3: повтор того же фото обязан отдавать тот же pid"
+        assert len(bot.EC_PHOTOS["sess-000010"]) == 1, "F-3: дубли не должны наращивать копилку (T-03)"
+        ok("photo: повтор того же фото идемпотентен (тот же pid, копилка не растёт)")
 
     bot.EC_PHOTOS, bot.EC_CHECKS = real_photo, real_upload
     print("test_essay_photos: OK")

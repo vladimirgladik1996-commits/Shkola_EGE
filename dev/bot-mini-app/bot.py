@@ -2757,7 +2757,7 @@ EC_CHECKS = {}                                   # id → [uid, {"w": [jpeg_b64]
 # несколько МБ base64) уходили ОДНИМ тяжёлым запросом прямо по «Готово»: на мобильной сети это
 # минуты «долгой загрузки» без признаков жизни, а соединение без таймаута зависало навсегда.
 EC_PHOTO_TTL = 60 * 60                           # незабранные «копилки» фото живут час
-EC_PHOTOS = {}                                   # sid → {pid: {"uid", "set", "jpeg", "ts"}}
+EC_PHOTOS = {}                                   # sid → {pid: {"uid", "set", "jpeg", "ts", "sha"}}
 EC_TTL = 30 * 60                                 # полчаса — как подписные ссылки файлов чата
 EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
 
@@ -2849,21 +2849,32 @@ async def api_essay_check_photo(request):
     store = EC_PHOTOS.setdefault(sid, {})
     for k in [k for k, v in store.items() if now - v["ts"] > EC_PHOTO_TTL]:
         store.pop(k, None)                            # протухшие фото чистим по пути
+    try:
+        raw = chatfiles._b64(j.get("d") if isinstance(j.get("d"), str) else None)
+        jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw)
+    except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
+        return web.json_response({"error": "bad"}, status=400)
+    # F-3 (баг-репорт 014): повтор того же фото ИДЕМПОТЕНТЕН — тот же владелец+набор+содержимое
+    # = ТОТ ЖЕ pid, копилка не растёт. Раньше каждая повторная догрузка (ретрай после сбоя сети,
+    # двойная отправка при гонке) добавляла ДУБЛЬ: копилка упиралась в EC_MAX_PHOTOS и отвечала
+    # ложным «limit» → клиент показывал ложное «нет интернет» (T-03). Повтор ещё и «подновляет»
+    # запись (ts) — живое фото не протухает под ногами у ретрая.
+    sha = hashlib.sha256(jpeg.encode()).hexdigest()
+    for pid0, v in store.items():
+        if v.get("uid") == uid and v.get("set") == st and v.get("sha") == sha:
+            v["ts"] = now
+            return web.json_response({"id": pid0})
     if len(store) >= EC_MAX_PHOTOS:
         # F-6 (баг-репорт 014): переполнение копилки — НЕ универсальный 400 {"error":"bad"}.
         # Раньше «мусорный файл», «лимит» и «протухшее» отвечали одинаково — фронт физически
         # не мог показать честный текст и сваливал всё в ложное «проверьте интернет».
         # Клиентская ошибка (клиент прислал лишнее), поэтому статус остаётся 400, но КОД причины
         # свой — "limit" (контракт test_essay_check_bugs.py T-01в: 400 + код != "bad").
+        # Лимит считает УНИКАЛЬНЫЕ фото — повторы выше идемпотентны и в лимит не попадают (T-03).
         # Фронт по ecUpWhy() покажет «слишком много фото», а не «проверьте интернет».
         return web.json_response({"error": "limit"}, status=400)
-    try:
-        raw = chatfiles._b64(j.get("d") if isinstance(j.get("d"), str) else None)
-        jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw)
-    except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
-        return web.json_response({"error": "bad"}, status=400)
     pid = secrets.token_urlsafe(9)
-    store[pid] = {"uid": uid, "set": st, "jpeg": jpeg, "ts": now}
+    store[pid] = {"uid": uid, "set": st, "jpeg": jpeg, "ts": now, "sha": sha}
     log.info("essay photo: tg_id=%s sid=%s set=%s ok", uid, sid, st)   # диагностика зависаний (баг 007/жёлоб)
     return web.json_response({"id": pid})
 
