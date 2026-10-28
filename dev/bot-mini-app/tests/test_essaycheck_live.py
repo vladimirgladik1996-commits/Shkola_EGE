@@ -54,10 +54,12 @@ ok("_bind_coords(): координаты модели перезаписываю
 ESSAY = "Автор поднимает проблему влияния книги на человека."
 m = essaycheck._msg("ege", "", ESSAY, essaycheck.CRITERIA["ege"])
 assert "сочинение ЕГЭ" in m and essaycheck.TASK_MISSING in m and ESSAY in m
+assert "координат" not in m.lower() and "разметк" not in m.lower()   # координаты — КОД (_bind_coords), модель о них не спрашивается
 m = essaycheck._msg("oge", "Опорный текст: …", ESSAY, essaycheck.CRITERIA["oge"])
 assert "эссе для ОГЭ" in m and "Опорный текст: …" in m and essaycheck.TASK_MISSING not in m
-assert "НЕ ВЫДУМЫВАЙ" in m or "не придумывай" in m.lower()
-ok("_msg(): контекст ЕГЭ/ОГЭ, блок задания или запрет выдумывать, текст работы в промте")
+assert "не выдумывай" in m.lower()   # запрет выдумывать факты есть в любом режиме (TASK_MISSING или «Не выдумывай фактов»)
+assert "координат" not in m.lower() and "разметк" not in m.lower()   # страж: запрос координат у модели не возвращается (баг-репорт 015)
+ok("_msg(): контекст ЕГЭ/ОГЭ, блок задания или запрет выдумывать, текст работы в промте; координаты — только кодом")
 
 # ---------- 6. разбор JSON модели (с мусором и без) ----------
 assert essaycheck._parse_json('{"a": 1}') == {"a": 1}
