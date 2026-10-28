@@ -3107,12 +3107,15 @@ function ecUpErrPick(){   /* первый проваленный пуск — ч
 async function ecUpOne(p){   /* одно фото на сервер; p: {src,set,id,st} — st: wait|up|ok|fail */
   if(!p||p.st=="ok")return true;
   if(p.jn)return p.jn;   /* уже грузится — ждём тот же запрос, не дублируем */
+  if(p.pid){p.id=p.pid;p.st="ok";p.err=null;return true}   /* F-5: фото УЖЕ принято сервером (p.pid — память
+     об успехе, её не трогает сброс p.st/p.id после сбоя сборки): повтор НЕ переотправляет его без честного
+     «gone» от сервера — двойная отправка = дубли в EC_PHOTOS и ложные 400 (T-05) */
   p.st="up";p.err=null;
   const j=(async()=>{let r={ok:false,status:0,body:null};
     try{r=await ecUpApi("/api/essay_check/photo",{sid:ecUpId,set:p.set,n:"photo.jpg",d:p.src.split(",")[1]||"",mime:"image/jpeg"})}catch(e){r={ok:false,status:0,body:null}}
     if(p.jn===j)p.jn=null;   /* снимаем «в полёте» ВСЕГДА: раньше при сбое p.jn оставался отклонённым промисом
                                 навсегда — фото было невозможно догрузить, «Готово» падал на нём же раз за разом (bug-reports/012) */
-    if(r&&r.ok&&r.body&&r.body.id){p.id=r.body.id;p.st="ok";p.err=null;return true}
+    if(r&&r.ok&&r.body&&r.body.id){p.id=r.body.id;p.pid=r.body.id;p.st="ok";p.err=null;return true}
     p.err=r;p.st="fail";return false})();   /* F-1: причину отказа сохраняем — из неё строится текст ошибки */
   p.jn=j;
   return j}
@@ -3142,14 +3145,16 @@ async function ecUpload(skip){if(ecBusy)return;
     /* фото обычно уже на сервере (грузятся сразу после съёмки) — собираем сеанс по id и стартуем
        проверку мгновенно; догрузка нужна только после сбоя сети или перезапуска сервиса */
     if(!await ecUpAll())return fail(ecUpWhyMsg(ecUpErrPick()));   /* F-1: честная причина вместо общего «проверьте интернет» */
-    let r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
-    if(!r||!r.id){   /* сервис перезапустился и потерял копилку фото — перезальём и соберём заново */
-      for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null;p.err=null}
+    /* F-5: сборка — через ecUpApi, чтобы видеть код причины: ТОЛЬКО честный «gone» (сервис потерял копилку)
+       разрешает полную перезаливку. Сетевой сбой/5xx НЕ сбрасывают загруженное — «Повторить» дожимает без переотправки. */
+    let r=await ecUpApi("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)});
+    if(r&&r.body&&r.body.error==="gone"){   /* сервис перезапустился и потерял копилку фото — перезальём и соберём заново */
+      for(const p of ecShots.w.concat(ecShots.t)){p.st="wait";p.id=null;p.pid=null;p.err=null}
       if(!await ecUpAll())return fail(ecUpWhyMsg(ecUpErrPick()));
-      r=await api("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)},{idle:60000,silent:true});
+      r=await ecUpApi("/api/essay_check/upload",{sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)});
     }
-    if(!r||!r.id)return fail("Не получилось отправить фото на сервер — нажмите «Повторить»");
-    ecSess=r.id;ecStep=2;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
+    if(!(r&&r.ok&&r.body&&r.body.id))return fail(r&&r.ok?"Не получилось отправить фото на сервер — нажмите «Повторить»":ecUpWhyMsg(r));
+    ecSess=r.body.id;ecStep=2;ecState="run";ecWhy="";ecLive=[];ecWait=EC_STAGES.slice();
     render();scrollTo(0,0);ecRun();
   }catch(e){fail("Прервалась связь с сервером при загрузке фото — нажмите «Повторить»")}
   finally{done()}}
