@@ -3033,7 +3033,7 @@ var scr=null,vctx=null;
   for(const k in M){const f=window[k];if(typeof f!=="function")continue;
     window[k]=function(...a){scr={n:M[k],a:a.filter(x=>typeof x==="number"||(typeof x==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(x))).slice(0,4)};return f.apply(this,a)}}})();
 function voiceCtx(){const c={tab,screen:scr?scr.n:null,screen_args:scr?scr.a:[]};
-  try{if(tab=="c"){c.view=view;c.week_start=iso(ws);c.month=iso(mo)}
+  try{if(tab=="c"){c.view=view=="d"?"w":view;c.week_start=iso(ws);c.month=iso(mo)}   /* сервер знает только «неделя»/«месяц»: «День» для него — неделя, в которой лежит этот день */
     else if(tab=="p"){if(pst!=="all")c.student_id=pst;if(pd1)c.date_from=pd1;if(pd2)c.date_to=pd2}
     else if(tab=="s"&&pf&&pf!=="all")c.filter=String(pf).slice(0,20)
     else if(tab=="mt"&&matCur&&matCur.n)c.mat={cat:matCur.cat,n:matCur.n,part:matCur.part||"other"}
