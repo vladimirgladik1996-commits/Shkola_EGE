@@ -1822,6 +1822,22 @@ async def api_week_send(request):
     return web.json_response({"ok": True})
 
 @guarded
+async def api_week_file(request):
+    """«Переслать контакту» для PDF расписания — ровно как «Поделиться» под файлом в «Чате с ИИ».
+    Собирает PDF недели и регистрирует его карточкой файла чата (chat_file_put: та же подписная ссылка и tok).
+    Дальше мини-апп вызывает общую пересылку чата (chShareX): /api/chat_file/prepare → tg.shareMessage —
+    открывается родное окно Telegram «Отправить в…», а выбранный контакт получает САМ файл raspisanie_<неделя>.pdf
+    (не ссылку и не копию в чате с ботом). Без бота и без Telegram-id (standalone, uid 0) пересылать нечем → 503:
+    страница тогда идёт по прежним путям (системный шаринг / отправка PDF в чат с ботом / скачивание)."""
+    start = monday((await request.json())["start"])
+    uid, tg_bot = user_id(request), request.app.get("bot")
+    if not isinstance(uid, int) or uid <= 0 or tg_bot is None:
+        return web.json_response({"error": "unavailable"}, status=503)
+    name = f"raspisanie_{start}.pdf"
+    url = chat_file_put(uid, week_pdf(start), name, "application/pdf")
+    return web.json_response({"file": {"kind": "pdf", "name": name, "mime": "application/pdf", "url": url}})
+
+@guarded
 async def api_pdf_link(request):
     """Подписанная ссылка на PDF для нативного скачивания (Telegram ≥ 8.0 «Сохранить в Загрузки»
     и DownloadManager в APK): загрузчики идут по URL без заголовков авторизации.
@@ -3254,6 +3270,7 @@ def make_app():
     app.router.add_get("/api/pdf_link", api_pdf_link)
     app.router.add_post("/api/pdf_link", api_pdf_link)   # POST — для закэшированной страницы, см. api_pdf_link
     app.router.add_post("/api/week/send", api_week_send)
+    app.router.add_post("/api/week/file", api_week_file)   # «Переслать контакту» для PDF расписания: файл → chShareX → tg.shareMessage
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)
     app.router.add_post("/api/lesson/cancel", api_cancel)

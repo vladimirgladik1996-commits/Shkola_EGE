@@ -1674,6 +1674,36 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 /* ---------- Шапка календаря и форма «Новый ученик» ---------- */
 .ch{position:relative;overflow:hidden;margin-bottom:12px;padding:14px;border-radius:26px;color:#fff;background:radial-gradient(150px 120px at 96% 0,#ffc93c55,transparent 70%),radial-gradient(90% 70% at 0 100%,#ffffff12,transparent 65%),linear-gradient(145deg,#1B4DA8,#0F2E6E 58%,#081C45);box-shadow:0 18px 30px -20px #081C45,inset 0 1px 0 #ffffff40,inset 0 0 0 1px #ffffff14}
 .ch::after{content:"";position:absolute;right:-46px;top:-50px;width:160px;height:160px;border-radius:50%;border:1.5px solid #ffffff22;box-shadow:0 0 0 16px #ffffff0b;pointer-events:none}
+
+/* ---------- Экран «Предпросмотр печати» (PDF расписания): «Назад» вверху, принтер, анимация нажатий ---------- */
+.prt{margin:0;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 8px;flex:none}
+.prh{display:flex;flex-direction:column;line-height:1.2;min-width:0}.prh b{font-size:14px}.prh small{font-size:11.5px;color:var(--hint)}
+.prn{position:relative;flex:none;height:46px;margin:2px 12px 0;padding:0 16px;border-radius:16px 16px 6px 6px;background:var(--acc);color:var(--on);display:flex;align-items:center;gap:10px;font:800 13px "Nunito",system-ui,sans-serif;z-index:2;box-shadow:0 8px 16px -10px var(--sh)}
+.prn::before{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:7px;border-radius:4px 4px 0 0;background:rgba(5,12,32,.78)}
+.prn .led{width:9px;height:9px;border-radius:50%;background:#5DE08A;box-shadow:0 0 0 3px rgba(93,224,138,.28);flex:none}
+.prn .t1,.prn .t2{white-space:nowrap}.prn .t2{position:absolute;left:35px;opacity:0}
+#pr.on{animation:prIn .34s cubic-bezier(.22,1,.36,1) both}
+#pr.on.out{animation:prOut .24s cubic-bezier(.5,0,.75,0) forwards}
+#pr.on .prn{animation:prShake .08s linear .3s 26 alternate}
+#pr.on .led{animation:prLed .3s linear .3s 8 alternate}
+#pr.on .prn .t1{animation:prT1 .12s linear 2.3s forwards}
+#pr.on .prn .t2{animation:prT2 .3s ease 2.3s forwards}
+#pr.on .paper{animation:prFeed 2.2s steps(44,end) .3s both}
+#pr.on>div:last-child{animation:prBar .45s cubic-bezier(.22,1,.36,1) 1.4s both}
+@keyframes prIn{from{opacity:0;transform:translateY(26px)}}
+@keyframes prOut{to{opacity:0;transform:translateY(18px)}}
+@keyframes prShake{from{transform:translateX(-.6px)}to{transform:translateX(.6px)}}
+@keyframes prLed{from{opacity:.3}to{opacity:1}}
+@keyframes prT1{to{opacity:0}}@keyframes prT2{to{opacity:1}}
+@keyframes prFeed{from{transform:translateY(calc(-100% - 18px))}to{transform:none}}
+@keyframes prBar{from{opacity:0;transform:translateY(16px)}}
+#pr button{position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform .45s cubic-bezier(.34,1.56,.64,1),filter .2s,box-shadow .3s}
+#pr button:active:not(:disabled){transform:scale(.93);transition-duration:.09s}
+#pr .btn.pri:active:not(:disabled){box-shadow:0 2px 6px -4px var(--sh)}
+#pr button::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;background:color-mix(in srgb,currentColor 22%,transparent)}
+#pr button.rp::after{animation:prRip .6s ease-out}
+@keyframes prRip{from{opacity:1;clip-path:circle(0 at var(--rx,50%) var(--ry,50%))}to{opacity:0;clip-path:circle(150% at var(--rx,50%) var(--ry,50%))}}
+@media (prefers-reduced-motion:reduce){#pr.on,#pr.on.out,#pr.on .paper,#pr.on .prn,#pr.on .led,#pr.on>div:last-child,#pr.on .prn .t1,#pr.on .prn .t2{animation:none!important}.prn .t1{opacity:0}.prn .t2{opacity:1}#pr button{transition:none}#pr button.rp::after{animation:none}}
 .ch>*{position:relative;z-index:1}
 .ch-top{display:flex;align-items:center;gap:8px}
 .ch-seg{flex:1;display:grid;grid-template-columns:1fr 1fr;padding:3px;border-radius:99px;background:#ffffff1f;box-shadow:inset 0 0 0 1px #ffffff2a}
@@ -1956,7 +1986,7 @@ frame()
 <div id="aic-c" hidden></div>   <!-- поле ввода чата с ИИ: вне #app, монтируется в render() и не прыгает при анимации перехода -->
 <button id="fab" onclick="fabGo()">+ Занятие</button><button id="chw" type="button" aria-label="Голосовой помощник Вишенка" onclick="chatOpen()"><span class="chi"><img id="chimg" alt=""></span><svg class="cht" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 3.6C22.6 10.6 23.7 17.4 24.6 24.6 17.4 23.8 8.6 22.8 1.2 21Z"/></svg></button>
 <div id="sheet"></div>
-<div id="pr"><div class="pscroll"><p class="sub" style="text-align:center">Предпросмотр печати · A4 альбомная</p><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" style="flex:1" onclick="prClose()">Назад</button><button class="btn pri" id="prs" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
+<div id="pr"><div class="ec-top prt"><button class="ec-back" type="button" aria-label="Назад" onclick="prClose()"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="prh"><b>Предпросмотр печати</b><small>A4 альбомная</small></span></div><div class="prn" aria-hidden="true"><i class="led"></i><span class="t1">Печатаю расписание…</span><span class="t2">Готово к печати</span></div><div class="pscroll"><div class="paper" id="paper"></div></div><div style="padding:10px 12px;display:flex;gap:8px"><button class="btn" id="prb" style="flex:1" onclick="sendPdfBot()">Прислать в бота</button><button class="btn pri" id="prs" style="flex:1" onclick="sharePdf()">Поделиться PDF</button></div></div>
 <div id="mv" role="dialog" aria-modal="true" aria-label="Материал"><div class="mvb"><button class="mvc" type="button" onclick="matClose()" aria-label="Оглавление">Оглав.</button><span class="mvs" aria-hidden="true">›</span><span class="mvc here" id="mvt"></span></div><div id="mvl" hidden>Загружаю…</div><iframe id="mvf" title="Материал"></iframe></div>
 <div id="toast"></div>
 <script>
@@ -2331,13 +2361,12 @@ function schedEl(day,sid,time){return view=="m"?`.d[data-k="${day}"]`:view=="d"?
     if(view=="d"?sd==iso(T):iso(ws)<=iso(T)&&iso(T)<=iso(addD(ws,6)))render()};
   addEventListener("scroll",stuckUpd,{passive:true});addEventListener("resize",()=>{fitLs();stuckUpd()});if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitLs);
   setInterval(tick,20000);document.addEventListener("visibilitychange",()=>{if(!document.hidden){sxMin=-1;tick()}})})();
-function prClose(){const pr=$("#pr");if(REDUCE||!pr.classList.contains("on")){pr.classList.remove("on");return}
-  pr.classList.add("out");setTimeout(()=>pr.classList.remove("on","out"),230)}
 function printIt(){
   const start=ws,e=addD(start,6),f=d=>d.toLocaleDateString("ru-RU");pdfStart=iso(start);
   $("#paper").innerHTML=`<h4>Расписание на неделю<span>${f(start)} – ${f(e)}</span></h4><div class="sc">${grid(start,1)}</div>`;
-  $("#pr").classList.add("on");fitNames($("#paper"));
-  pdfBlob=null;const tok=++pdfTok,sb=$("#prs");pdfBusy=false;sb.disabled=false;sb.textContent="Поделиться PDF";
+  $("#pr").classList.remove("out");$("#pr").classList.add("on");fitNames($("#paper"));
+  pdfBlob=null;pdfFile=null;const tok=++pdfTok,sb=$("#prs");pdfBusy=false;sb.disabled=false;sb.textContent="Поделиться PDF";
+  const bb=$("#prb");bb.disabled=false;bb.textContent="Прислать в бота";bb.style.display=(!APP&&tg&&tg.initData)?"":"none";   /* «в бота» — только в Telegram: есть чат с ботом */
   /* PDF забираем заранее: шаринг/скачивание должны срабатывать сразу по тапу, без сетевой паузы */
   fetch(API_BASE+"/api/week.pdf?start="+pdfStart,{headers:APP&&localStorage.sesTok?{"X-Session":localStorage.sesTok}:{"X-Init":tg.initData}})
       .then(r=>r.ok?r.blob():null).then(b=>{if(tok==pdfTok)pdfBlob=b}).catch(()=>{if(tok==pdfTok)pdfBlob=null});   /* tok: ответ по закрытой/другой неделе не подменяет файл */
@@ -2446,45 +2475,82 @@ function cancelL(id){const l=L.find(x=>x.id==id);
     buttons:[{id:"one",type:"default",text:"Только этот урок"},{id:"all",type:"destructive",text:"Этот и все последующие"},{type:"cancel"}]},
     async b=>{if(b!="one"&&b!="all")return;if(await api(b=="one"?"/api/lesson/cancel":"/api/lesson/stop",{id})){close_();load();toast(b=="one"?"Урок отменён":"Этот и последующие уроки отменены")}})}
 function del(p,id,q){tg.showConfirm(q,async ok=>{if(ok&&await api(p,{id})){close_();load()}})}
-let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false;
+let pdfStart="",pdfBlob=null,pdfTok=0,pdfBusy=false,pdfFile=null;
 /* «Поделиться PDF»: файл скачивается И одновременно открывается окно шаринга
    («Переслать в мессенджеры»).
    1) APK (Android) — нативный мост: DownloadManager сохраняет файл в «Загрузки» и сразу
       открывает системный chooser «Переслать файл»;
-   2) клиент с Web Share API (браузер, часть WebView/клиентов Telegram) — скачивание +
-      navigator.share с файлом;
-   3) Telegram WebApp — документ уходит в диалог Telegram, откуда его пересылает сам пользователь
-      (нативно открыть окно пересылки из веб-страницы Telegram не позволяет — есть только
-      downloadFile/shareMessage/shareToStory). */
+   2) Telegram 8.0+ — «ПЕРЕСЛАТЬ КОНТАКТУ», ровно как «Поделиться» под файлом в «Чате с ИИ»:
+      сервер регистрирует PDF недели файлом чата (/api/week/file), дальше общая пересылка чата
+      chShareX → /api/chat_file/prepare → tg.shareMessage: родное окно «Отправить в…», выбранный
+      контакт получает сам raspisanie_<неделя>.pdf (не ссылку и не копию в чате с ботом);
+   3) клиент с Web Share API (браузер, часть WebView) — скачивание + navigator.share с файлом;
+   4) Telegram без shareMessage (< 8.0) или файл не подготовился — документ уходит в диалог с ботом,
+      откуда его пересылает сам пользователь. */
 const NATIVE_SHARE=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["%PDF"],"a.pdf",{type:"application/pdf"})]}))}catch(e){return false}})();
 const pdfName=()=>"raspisanie_"+pdfStart+".pdf";
 function dlBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)}
+/* Закрытие экрана предпросмотра: плавный уход вниз (при «уменьшить движение» — сразу) */
+function prClose(){const pr=$("#pr");if(!pr.classList.contains("on")||pr.classList.contains("out"))return;
+  if(REDUCE){pr.classList.remove("on");return}
+  pr.classList.add("out");setTimeout(()=>pr.classList.remove("on","out"),250)}
+/* Нажатие кнопок экрана: волна от точки касания (класс rp + --rx/--ry, рисует ::after) и лёгкий отклик телефона */
+document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest("#pr button");if(!b||b.disabled)return;
+  try{tg.HapticFeedback.impactOccurred("light")}catch(x){}
+  if(REDUCE)return;const r=b.getBoundingClientRect();
+  b.classList.remove("rp");void b.offsetWidth;b.style.setProperty("--rx",(e.clientX-r.left)+"px");b.style.setProperty("--ry",(e.clientY-r.top)+"px");b.classList.add("rp")},{passive:true});
+document.addEventListener("animationend",e=>{if(e.animationName==="prRip"&&e.target.classList)e.target.classList.remove("rp")});
+/* Файл PDF недели для пересылки контакту: сервер собирает PDF и регистрирует его карточкой файла чата
+   (/api/week/file → chat_file_put), дальше — общая пересылка чата chShareX. Один запрос на открытие превью:
+   повторные нажатия берут тот же файл (и уже загруженный в Telegram file_id), а новое превью (printIt) его
+   сбрасывает — изменённое расписание не подменяется старым файлом. null — файл не выдан (нет бота/входа, сеть). */
+async function pdfShareFile(){
+  const st=pdfStart;
+  if(pdfFile&&pdfFile.s===st)return pdfFile.x;
+  let r=null;try{r=await api("/api/week/file",{start:st},{silent:true,idle:20000})}catch(e){}
+  const x=r&&r.file&&r.file.url?{u:r.file.url,n:r.file.name,m:r.file.mime,k:"out"}:null;
+  if(x&&st===pdfStart)pdfFile={s:st,x};
+  return x}
 async function sharePdf(){
-  if(pdfBusy)return;pdfBusy=true;const btn=$("#prs");btn.disabled=true;btn.textContent="Открываю…";
+  if(pdfBusy)return;pdfBusy=true;const btn=$("#prs"),bb=$("#prb");btn.disabled=true;bb.disabled=true;btn.textContent="Открываю…";
   try{
     /* 1) APK: скачивание + системное окно «Переслать» одним действием */
     if(window.Android&&Android.sharePdf){
       const r=await api("/api/pdf_link?start="+encodeURIComponent(pdfStart));
       if(r&&r.url){Android.sharePdf((API_BASE||location.origin)+r.url,pdfName());return}
       throw new Error("pdf_link")}
-    /* 2) Клиент с Web Share API (браузер, часть WebView/клиентов Telegram): файл скачивается
+    /* 2) Telegram 8.0+: окно «Отправить в…» с САМИМ файлом — та же пересылка, что в «Чате с ИИ» (chShareX).
+       Файл не подготовился (нет бота/входа, сеть) — не тупик: идём прежними путями ниже */
+    if(!APP&&tg&&tg.initData&&tg.shareMessage&&(!tg.isVersionAtLeast||tg.isVersionAtLeast("8.0"))){
+      btn.textContent="Готовлю файл…";
+      const x=await pdfShareFile();
+      if(x){await chShareX(x);return}
+      btn.textContent="Открываю…"}
+    /* 3) Клиент с Web Share API (браузер, часть WebView/клиентов Telegram): файл скачивается
        И сразу уходит в системное окно шаринга */
     if(NATIVE_SHARE&&pdfBlob){
       dlBlob(pdfBlob,pdfName());
       const f=new File([pdfBlob],pdfName(),{type:"application/pdf"});
       await navigator.share({files:[f]});return}
-    /* 3) Telegram WebApp: документ уходит в диалог Telegram */
+    /* 4) Telegram WebApp без пересылки контакту: документ уходит в диалог Telegram */
     if(!APP&&tg.initData){
       btn.textContent="Отправляю…";
       await api("/api/week/send",{start:pdfStart});
       return}
-    /* 4) запасной вариант — просто скачать */
+    /* 5) запасной вариант — просто скачать */
     if(pdfBlob){dlBlob(pdfBlob,pdfName());toast("Файл сохранён — перешлите его из «Загрузок»");return}
     toast("Не получилось подготовить файл — попробуйте ещё раз");
   }catch(e){if(!e||e.name!=="AbortError")toast("Не получилось поделиться файлом")}
-  finally{pdfBusy=false;btn.disabled=false;btn.textContent="Поделиться PDF"}
+  finally{pdfBusy=false;btn.disabled=false;bb.disabled=false;btn.textContent="Поделиться PDF"}
 }
+/* «Прислать в бота» — прежнее поведение «Поделиться PDF» в Telegram: бот сам присылает PDF недели в чат с
+   пользователем (/api/week/send). Файл там можно скачать, открыть или переслать обычной кнопкой Telegram «Переслать». */
+async function sendPdfBot(){
+  if(pdfBusy)return;pdfBusy=true;const bb=$("#prb"),sb=$("#prs");bb.disabled=true;sb.disabled=true;bb.textContent="Отправляю…";
+  try{const r=await api("/api/week/send",{start:pdfStart});if(r)toast("PDF отправлен в чат с ботом")}
+  catch(e){toast("Не получилось отправить файл")}
+  finally{pdfBusy=false;bb.disabled=false;sb.disabled=false;bb.textContent="Прислать в бота"}}
 /* Распределение оплат: все оплаты ученика идут по порядку и закрывают его занятия от старых к новым (каждое по своей цене).
    Результат для каждой оплаты: на какие занятия она пошла, полностью или частично; остаток — предоплата без занятия. */
 function allocate(sid){
