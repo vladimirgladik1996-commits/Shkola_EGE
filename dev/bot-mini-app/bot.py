@@ -3066,7 +3066,9 @@ EC_REPORT_MAX = 40          # столько разборов держим в п
 async def ec_report_files(uid, r, kind, student=""):
     """Собирает PDF и Word с разбором ОДИН раз на разбор: Telegram-отправка и кнопки «Переслать» на экране
     превью берут один и тот же результат (ключ — essayreport.cache_key), а не собирают файлы дважды.
-    Возвращает (запись кэша, {формат: (байты, имя)}); пустой словарь — не собралось ничего."""
+    Возвращает (запись кэша, {формат: (байты, имя)}); пустой словарь — не собралось ничего.
+    В кэш идёт только ПОЛНАЯ сборка (essayreport.complete): упавшая или неполная вычищается сразу —
+    иначе «отравленный кэш» навсегда лишит отчёт недостающего формата (конкретно — PDF)."""
     now = time.time()
     for k in [k for k, e in EC_REPORTS.items() if now - e["ts"] > CHAT_FILE_TTL]:
         EC_REPORTS.pop(k, None)
@@ -3077,9 +3079,16 @@ async def ec_report_files(uid, r, kind, student=""):
     if ent is None:
         ent = EC_REPORTS[key] = {"ts": now, "links": None,
                                  "fut": asyncio.get_running_loop().run_in_executor(None, essayreport.build, r, kind, student)}
-    files = await ent["fut"]
-    if not files:
+    try:
+        files = await ent["fut"]
+    except Exception as e:                       # упавшая сборка не живёт в кэше — иначе «отравленный кэш»
         EC_REPORTS.pop(key, None)
+        log.warning("essay report: сборка отчёта упала tg_id=%s key=%s: %r", uid, key[:12], e)
+        return ent, {}
+    if not essayreport.complete(files):          # неполная сборка (нет формата/пустой файл) — тоже без кэша
+        EC_REPORTS.pop(key, None)
+        log.warning("essay report: неполная сборка tg_id=%s key=%s: %s (в кэш не идёт)", uid, key[:12],
+                    ", ".join(sorted(files)) or "ничего")
     return ent, files
 
 
@@ -3098,24 +3107,36 @@ def ec_report_links(ent, uid, files):
 async def ec_report_send(tg_bot, uid, r, kind, student=""):
     """Собирает PDF (A4) и Word с разбором и присылает ботом в чат пользователя двумя документами.
     Сборка — essayreport (HTML-макет → Chromium → PDF; Word — те же страницы). Любой сбой — только в лог:
-    отчёт не должен ломать проверку, а один недоставленный формат — второй. True — хоть что-то доставлено.
+    отчёт не должен ломать проверку, а один недоставленный формат — второй. Доставка каждого файла —
+    с повтором (один сбой Telegram не должен лишать отчёта), всё пишется в лог с размерами файлов.
+    True — хоть что-то доставлено.
     Файлы заодно регистрируются карточками чата (ec_report_links) — кнопки «Переслать» на экране превью
     отдают тот же файл, а file_id из Telegram сохраняется, чтобы пересылка не загружала его заново."""
-    ent, files = await ec_report_files(uid, r, kind, student)
-    links = ec_report_links(ent, uid, files)
+    try:
+        ent, files = await ec_report_files(uid, r, kind, student)
+        links = ec_report_links(ent, uid, files)
+    except Exception as e:
+        log.warning("essay report: отчёт не собрался tg_id=%s: %r", uid, e)
+        return False
     cap, sent = essayreport.caption(r, kind, student)[:1000], False
     for ext in ("pdf", "docx"):
         if ext not in files:
+            log.warning("essay report: %s не собран — отправлять нечего tg_id=%s", ext, uid)
             continue
         data, name = files[ext]
-        try:
-            msg = await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
-                                             disable_notification=sent)
-            fid = getattr(getattr(msg, "document", None), "file_id", None)
-            chat_file_set_fid(links[ext]["tok"], fid)
-            sent = True
-        except TelegramAPIError as e:
-            log.warning("essay report: %s не ушёл tg_id=%s err=%s", ext, uid, e)
+        for attempt in (1, 2):                   # повтор доставки: временный сбой Telegram ≠ потерянный отчёт
+            try:
+                msg = await tg_bot.send_document(uid, BufferedInputFile(data, filename=name), caption=cap if not sent else None,
+                                                 disable_notification=sent)
+                fid = getattr(getattr(msg, "document", None), "file_id", None)
+                chat_file_set_fid(links[ext]["tok"], fid)
+                log.info("essay report: %s доставлен tg_id=%s %d КБ (попытка %d)", ext, uid, len(data) // 1024, attempt)
+                sent = True
+                break
+            except TelegramAPIError as e:
+                log.warning("essay report: %s не ушёл tg_id=%s (попытка %d/2): %s", ext, uid, attempt, e)
+                if attempt < 2:
+                    await asyncio.sleep(2)       # пауза перед повтором: флуд-контроль Telegram
     return sent
 
 

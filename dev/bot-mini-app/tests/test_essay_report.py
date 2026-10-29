@@ -149,6 +149,8 @@ if chromium:
     x = z.read("word/document.xml").decode()
     assert x.count("<wp:inline") == 3 and sum(n.startswith("word/media/page") for n in z.namelist()) == 3
     assert 'cx="' in x and "влияния" in x, "текст страниц — в альт-тексте картинок"
+    assert "Приложение: текст работы" in x and x[x.index("Приложение"):].count("<w:t") > 5, \
+        "текст работы после страниц — настоящим текстом Word (задача 4а)"
     ok("HTML-движок: PDF A4 из макета, 3 страницы «Стр. N из 3»; Word — 3 страницы-картинки с альт-текстом")
 
     big = dict(R, errors=[dict(R["errors"][0], i=k + 1, found="влеяния", why="очень длинное правило " * 20) for k in range(60)])
@@ -199,4 +201,32 @@ for s_ in ("async function chShareX(x)", "return chShareX(x)}", "function ecRepB
 i_hero, i_box = html_src.index('class="ec-hero2"'), html_src.index("${ecRepBox(r)}")
 assert i_box > i_hero and html_src.index("function ecTabSet(t)") > i_box, "кнопки — сразу под блоком прогнозного балла (внизу экрана превью)"
 ok("кнопки «Переслать PDF/Word» под блоком балла; пересылка — общий chShareX чата; файлы и кэш — на сервере")
+
+# 12. пуш 5: текст работы в Word настоящим текстом (приложение к страницам-картинкам) + кэш только полных сборок
+png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+dxp = er.docx_pages([png, png], ["стр 1", "стр 2"], "Разбор", R)
+z2 = zipfile.ZipFile(io.BytesIO(dxp)); assert z2.testzip() is None
+x2 = z2.read("word/document.xml").decode()
+assert x2.count("<wp:inline") == 2 and "стр 1" in x2, "страницы-картинки с альт-текстом целы"
+i2 = x2.index("Приложение: текст работы")
+assert i2 > x2.index("<wp:inline"), "приложение — после страниц-картинок"
+assert x2.index("влеяния", i2) > i2 and "книги. Я " in x2[i2:] and " чтение важно." in x2[i2:], \
+    "текст работы — настоящим текстом Word, а не только альт-текст картинок"
+assert "<w:t>[1]</w:t>" in x2 and "<w:t>[4]</w:t>" in x2, "пометки ошибок [N] сохранены и в приложении"
+for r0 in (None, dict(R, text="")):
+    assert "Приложение" not in zipfile.ZipFile(io.BytesIO(er.docx_pages([png], ["стр"], "Разбор", r0))) \
+        .read("word/document.xml").decode(), "без текста работы приложение не добавляем"
+ok("Word: после страниц-картинок — приложение с текстом работы настоящим текстом (с пометками [N])")
+
+assert er.complete({"pdf": (b"p", "a.pdf"), "docx": (b"d", "a.docx")})
+for bad_ in (None, {}, {"docx": (b"d", "a.docx")}, {"pdf": (b"", "a.pdf"), "docx": (b"d", "a.docx")},
+             {"pdf": (b"p", "a.pdf"), "docx": (b"d", "a.docx"), "x": (b"1", "a.x")}):
+    assert not er.complete(bad_), bad_
+ok("complete(): для кэша годится только полная сборка (оба формата, файлы непустые)")
+
+for s_ in ("essayreport.complete(files)", "for attempt in (1, 2)", "отчёт не собрался tg_id=%s", "(попытка %d/2)"):
+    assert s_ in bot_src, s_
+assert bot_src.count("EC_REPORTS.pop(key, None)") == 2, \
+    "и упавшая, и неполная сборка вычищаются из кэша (отравленный кэш — причина «PDF не доходит»)"
+ok("bot.py: упавшая/неполная сборка не кэшируется; доставка с повтором и диагностикой в лог")
 print("OK")

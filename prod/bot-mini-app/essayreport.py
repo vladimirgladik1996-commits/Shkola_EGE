@@ -12,7 +12,8 @@ essaycheck._result(); пустые блоки (missing) показываются
   html      — отчёт верстается тем же HTML/CSS, что макет (assets/essay-report.css — стили макета дословно,
               assets/essay-report.js — раскладка по страницам A4), PDF печатает Chromium (playwright): это
               точная копия макета. Word — те же страницы A4 картинками на всю страницу: другого способа
-              получить в Word «ровно как в HTML» нет (текст при этом не редактируется; он лежит в альт-тексте).
+              получить в Word «ровно как в HTML» нет (текст страниц — в альт-тексте картинок; сам текст работы
+              после страниц идёт НАСТОЯЩИМ текстом приложением — см. _docx_appendix).
   reportlab — прежний запасной путь (PDF рисуется вручную, Word — текстовый). Включается сам, если Chromium
               не запустился: отчёт не должен ронять проверку.
 """
@@ -648,9 +649,30 @@ def pdf_pages_png(pdf, dpi=200):
     return out
 
 
-def docx_pages(pngs, texts, title):
+def _docx_appendix(r):
+    """Приложение к страницам-картинкам: текст работы НАСТОЯЩИМ текстом Word (копируется, ищется, правится)
+    с теми же пометками ошибок [N]. Без него Word приходит «без текста работы»: в HTML-движке текст живёт
+    только в альт-тексте картинок, а для Word это не текст документа."""
+    out = ['<w:p><w:pPr><w:pageBreakBefore/><w:spacing w:before="0" w:after="160"/></w:pPr>'
+           '<w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr>'
+           '<w:t xml:space="preserve">Приложение: текст работы</w:t></w:r></w:p>']
+    for para in _paras(r.get("text"), r.get("errors")):
+        runs = ""
+        for s, i in para:
+            runs += (f'<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{escape(s)}</w:t></w:r>'
+                     f'<w:r><w:rPr><w:b/><w:vertAlign w:val="superscript"/></w:rPr><w:t>[{i}]</w:t></w:r>') if i \
+                else f'<w:r><w:t xml:space="preserve">{escape(s)}</w:t></w:r>'
+        out.append(f'<w:p><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr>{runs}</w:p>')
+    out.append('<w:p><w:pPr><w:spacing w:before="120"/></w:pPr><w:r><w:rPr><w:i/><w:sz w:val="16"/></w:rPr>'
+               '<w:t xml:space="preserve">Подчёркнуто — найденные ошибки, [N] — номер в списке разбора. '
+               'Текст распознан с фото, ошибки ученика сохранены.</w:t></w:r></w:p>')
+    return "".join(out)
+
+
+def docx_pages(pngs, texts, title, r=None):
     """Word: каждая страница A4 — картинка на всю страницу (поля 0). Картинка чуть ниже листа (295 из 297 мм),
-    иначе Word добавит пустую страницу из-за знака абзаца. Текст страницы — в альт-тексте картинки."""
+    иначе Word добавит пустую страницу из-за знака абзаца. Текст страницы — в альт-тексте картинки, а переданный
+    разбор r добавляет после страниц приложение с текстом работы настоящим текстом (см. _docx_appendix)."""
     NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
           'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
           'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
@@ -676,6 +698,8 @@ def docx_pages(pngs, texts, title):
             '</wp:inline></w:drawing></w:r></w:p>')
         rels.append(f'<Relationship Id="rId{10 + i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
                     f'Target="media/page{i}.png"/>')
+    if r is not None and (r.get("text") or "").strip():
+        body.append(_docx_appendix(r))       # текст работы настоящим текстом — иначе Word «без текста»
     X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
     doc = (X + f'<w:document {NS}><w:body>' + "".join(body) +
            '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
@@ -720,7 +744,7 @@ def build(r, kind="ege", student="", now=None):
             pdf, texts = render_pdf(html_report(r, kind, student, now))
             out["pdf"] = (pdf, f"{stem}.pdf")
             try:
-                out["docx"] = (docx_pages(pdf_pages_png(pdf), texts, _title(kind)), f"{stem}.docx")
+                out["docx"] = (docx_pages(pdf_pages_png(pdf), texts, _title(kind), r), f"{stem}.docx")
             except Exception as e:
                 log.exception("essayreport: Word из страниц PDF не собрался: %r", e)
         except Exception as e:
@@ -732,7 +756,22 @@ def build(r, kind="ege", student="", now=None):
             out[ext] = (fn(r, kind, student, now), f"{stem}.{ext}")
         except Exception as e:
             log.exception("essayreport: %s не собрался: %r", ext, e)
+    # диагностика доставки: что собралось и каким движком — без неё «PDF не доходит» не отлаживается
+    if out:
+        log.info("essayreport: отчёт собран (движок %s): %s", ENGINE,
+                 ", ".join(f"{ext} {len(data) // 1024} КБ" for ext, (data, _) in sorted(out.items())))
+    lost = [ext for ext in ("pdf", "docx") if ext not in out]
+    if lost:
+        log.warning("essayreport: отчёт НЕПОЛНЫЙ (движок %s): нет %s", ENGINE, ", ".join(lost))
     return out
+
+
+def complete(files):
+    """Сборка годится для кэша только полная: оба формата и оба файла непустые. Неполная или упавшая сборка
+    в кэше = «отравленный кэш»: следующие запросы не увидят недостающий формат и не соберут его заново."""
+    return (isinstance(files, dict) and set(files) == {"pdf", "docx"}
+            and all(isinstance(f, tuple) and len(f) == 2 and isinstance(f[0], (bytes, bytearray)) and f[0]
+                    and isinstance(f[1], str) and f[1] for f in files.values()))
 
 
 def cache_key(uid, r, kind="ege", student=""):
