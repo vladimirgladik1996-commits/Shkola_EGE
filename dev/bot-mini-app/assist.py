@@ -21,7 +21,14 @@
   • модель не получает и не может изменить ничего, кроме снимка данных кабинета.
 """
 import json, logging, re, time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+MSK = timezone(timedelta(hours=3))   # расписание — по Москве (UTC+3)
+
+
+def today_msk():
+    return datetime.now(MSK).date()
+
 
 import kimi, matlib, matnav, whisper
 import bot                      # цикл импортов осознанный: bot.* используется только при вызовах
@@ -52,7 +59,7 @@ def norm_day(x, today=None):
     if not isinstance(x, str):
         return None
     s = x.strip()
-    today = today or date.today()
+    today = today or today_msk()
     try:
         if DAY_FMT.fullmatch(s):
             return date.fromisoformat(s).isoformat()
@@ -301,7 +308,7 @@ ASK = {"student": "Как зовут ученика?", "name": "Как зову�
 def prepare(params, action):
     """params от модели → (канон, список недостающих полей). Всё проверяется здесь, а не в модели."""
     p, need = {}, []
-    today = date.today()
+    today = today_msk()
     if action in ("add_lesson", "move_lesson", "cancel_lesson"):
         p["day"] = norm_day(params.get("day"), today)
         p["time"] = norm_time(params.get("time"))

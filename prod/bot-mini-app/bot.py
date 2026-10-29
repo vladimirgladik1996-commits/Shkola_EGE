@@ -1,5 +1,12 @@
 import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+MSK = timezone(timedelta(hours=3))   # всё расписание и календарь — по Москве (UTC+3), в какой бы зоне ни стоял сервер
+
+
+def today_msk():
+    return datetime.now(MSK).date()
+
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
@@ -163,7 +170,7 @@ def conflict(day, t, dur, ex=0):
 
 def fill_regular():
     """Раскладывает регулярные занятия на ближайшие недели. Возвращает число пропущенных из-за занятого времени."""
-    today = date.today()
+    today = today_msk()
     end = today + timedelta(weeks=WEEKS_AHEAD)
     skipped = 0
     for g in q("select r.* from regular r join students s on s.id=r.student_id where coalesce(s.deleted,0)=0"):
@@ -241,7 +248,7 @@ def stop_series(lid):
     db.commit()
 
 # ---------- баланс ----------
-PAST = "datetime(l.day||' '||l.time) <= datetime('now','localtime')"
+PAST = "datetime(l.day||' '||l.time) <= datetime('now','+3 hours')"   # МСК = UTC+3, не зависит от зоны сервера
 
 def stats():
     """done — проведённые занятия, spent — их стоимость: каждое по своей цене
@@ -260,7 +267,7 @@ def set_price(sid, new):
     if old == new: return
     if old:
         db.execute(f"update lessons set price=? where student_id=? and price is null and "
-                   f"datetime(day||' '||time) <= datetime('now','localtime')", (old, sid))
+                   f"datetime(day||' '||time) <= datetime('now','+3 hours')", (old, sid))
     db.execute("update students set price=? where id=?", (new, sid))
     db.commit()
 
@@ -346,7 +353,7 @@ def end_time(t, dur):
     return f"{e // 60 % 24:02d}:{e % 60:02d}"
 
 def today_report():
-    today = date.today()
+    today = today_msk()
     ds = today.isoformat()
     head = f"Сегодня:\n{WD_FULL[today.weekday()]} ({today:%d.%m.%Y})"
     ls = q("""select l.time, coalesce(l.dur,60) dur, s.id sid, s.name, s.grade, s.subject
@@ -386,7 +393,7 @@ def chunks(head, blocks, limit=3800):
     return msgs
 
 def finance_report():
-    today = date.today(); ds = today.isoformat()
+    today = today_msk(); ds = today.isoformat()
     month = today.strftime("%Y-%m")
     got = q("select coalesce(sum(amount),0) s from payments where strftime('%Y-%m',created)=?", month)[0]["s"]
     held = 0; debt_rows = []; pre_total = 0
@@ -635,7 +642,7 @@ MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май"
 def dates_kb(off):
     """Календарь месяца: сверху месяц со стрелками, затем дни недели и сетка дат (прошедшие дни неактивны)."""
     import calendar
-    today = date.today()
+    today = today_msk()
     y, mo = divmod(today.year * 12 + today.month - 1 + off, 12)
     y, mo = y, mo + 1
     b = InlineKeyboardBuilder()
@@ -922,7 +929,7 @@ async def fin_report(m: Message, state: FSMContext):
 
 def weeks_kb():
     """4 кнопки друг под другом: текущая неделя и три следующие (на кнопках — даты недель)."""
-    mon0 = date.today() - timedelta(days=date.today().weekday())
+    mon0 = today_msk() - timedelta(days=today_msk().weekday())
     b = InlineKeyboardBuilder()
     for i in range(4):
         s_ = mon0 + timedelta(weeks=i)
@@ -1107,7 +1114,7 @@ def pay_alloc(sid, pid):
 def pay_report(sid, pid, amount):
     s = next(x for x in stats() if x["id"] == sid)
     got, left = pay_alloc(sid, pid)
-    today = date.today().isoformat()
+    today = today_msk().isoformat()
     groups = {"Долги": [], "Сегодня": [], "Предоплаты": []}
     for day, price, cov in got:
         key = "Долги" if day < today else "Сегодня" if day == today else "Предоплаты"
@@ -2036,7 +2043,7 @@ def stt_prompt():
 def voice_snapshot():
     """Снимок кабинета для ассистента: дата, ученики с балансом, ближайшие занятия, оплаты за неделю.
     Обрезается по размеру — большой снимок ест токены и замедляет ответ."""
-    today = date.today()
+    today = today_msk()
     t = today.isoformat()
     out = [f"Сегодня {dmy(t)}, {WD_FULL[today.weekday()]}.", ""]
     info = {r["id"]: r for r in q("select id, grade, subject from students")}
