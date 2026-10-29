@@ -139,11 +139,13 @@ create table if not exists auth_pins(username text primary key, tg_id integer no
 create table if not exists auth_sessions(tg_id integer primary key, exp real not null);
 create table if not exists auth_fails(tg_id integer not null, ts real not null);
 create table if not exists api_tokens(h text primary key, tg_id integer not null, exp real not null);
-create table if not exists auth_tg(code_h text primary key, poll_h text not null, exp real not null, tg_id integer);
+create table if not exists auth_tg(code_h text primary key, poll_h text not null, exp real not null, tg_id integer, name text, photo text);
 """)
     for stmt in ("alter table auth_sessions add column fp text",       # сессии версии 1 без отпечатка — недействительны
                  "alter table auth_links add column uname text",
-                 "alter table api_tokens add column fp text"):        # токены без отпечатка — недействительны
+                 "alter table api_tokens add column fp text",          # токены без отпечатка — недействительны
+                 "alter table auth_tg add column name text",           # имя и аватар из Telegram — панель приложения
+                 "alter table auth_tg add column photo text"):
         try:
             db.execute(stmt)
         except Exception:
@@ -329,6 +331,20 @@ APP_ENV = os.getenv("APP_ENV", "").strip().lower()
 # схема возврата в APK: dev-сборка и prod-сборка стоят на одном телефоне — схемы разные
 APK_SCHEME = os.getenv("APK_SCHEME", "").strip() or ("kabinet-dev" if APP_ENV == "dev" else "kabinet")
 TG_CODE_RE = re.compile(r"[A-Za-z0-9_-]{16,40}")
+TG_PHOTO_RE = re.compile(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+")
+TG_NAME_MAX = 60                # имя из Telegram — только для панели приложения
+TG_PHOTO_MAX = 64_000           # маленький квадрат профиля (~160px) в base64; больше — не берём
+
+
+def _tg_profile(name, photo):
+    """Имя и аватар из Telegram — для панели приложения (вход через Telegram в АПК). Мусор отсекается:
+    имя — без управляющих символов и не длиннее 60, аватар — только маленький data:image/jpeg
+    (никаких URL и посторонних форматов); не прошло — остаётся пусто, панель покажет инициалы."""
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name if isinstance(name, str) else "").strip()[:TG_NAME_MAX]
+    photo = photo if isinstance(photo, str) else ""
+    if not (TG_PHOTO_RE.fullmatch(photo) and len(photo) <= TG_PHOTO_MAX):
+        photo = ""
+    return name, photo
 
 def tg_start():
     """Новая заявка → (код для ссылки бота, секрет опроса) или None, если очередь переполнена."""
@@ -341,17 +357,20 @@ def tg_start():
     _db.commit()
     return code, poll
 
-def tg_confirm(code, tg_id, username=""):
-    """Бот: человек подтвердил вход. True — заявка привязана к его ID."""
+def tg_confirm(code, tg_id, username="", name="", photo=""):
+    """Бот: человек подтвердил вход. True — заявка привязана к его ID. Имя и аватар из Telegram сохраняются:
+    приложение показывает их в панели («Войти через Telegram» в АПК — без них имя будет просто «Профиль»)."""
     if not isinstance(code, str) or not TG_CODE_RE.fullmatch(code) or not allowed(tg_id, username):
         return False
+    name, photo = _tg_profile(name, photo)
     now = time.time()
-    cur = _db.execute("update auth_tg set tg_id=? where code_h=? and exp>? and tg_id is null", (tg_id, _h(code), now))
+    cur = _db.execute("update auth_tg set tg_id=?, name=?, photo=? where code_h=? and exp>? and tg_id is null",
+                      (tg_id, name, photo, _h(code), now))
     if cur.rowcount != 1:
         return False
     _pin(tg_id, username)                                      # ник → числовой ID, как при входе по паролю
     _db.commit()
-    log.info("tg login confirmed: tg_id=%s", tg_id)
+    log.info("tg login confirmed: tg_id=%s name=%r photo=%d", tg_id, name, len(photo))
     return True
 
 def tg_cancel(code):
@@ -359,25 +378,27 @@ def tg_cancel(code):
         _db.execute("delete from auth_tg where code_h=? and tg_id is null", (_h(code),)); _db.commit()
 
 def tg_poll(poll):
-    """Приложение: (статус, токен). pending — ждём подтверждения; ok — токен выдан (один раз); gone — истекла/неизвестна."""
+    """Приложение: (статус, токен, профиль). pending — ждём подтверждения; ok — токен выдан (один раз);
+    gone — истекла/неизвестна. Профиль {name, photo} — имя и аватар из Telegram для панели приложения."""
     if not isinstance(poll, str) or not TOKEN_RE.fullmatch(poll):
-        return "gone", None
+        return "gone", None, {}
     now = time.time()
-    row = _db.execute("select exp, tg_id from auth_tg where poll_h=?", (_h(poll),)).fetchone()
+    row = _db.execute("select exp, tg_id, name, photo from auth_tg where poll_h=?", (_h(poll),)).fetchone()
     if row is None or row[0] < now:
         if row is not None:
             _db.execute("delete from auth_tg where poll_h=?", (_h(poll),)); _db.commit()
-        return "gone", None
+        return "gone", None, {}
     if row[1] is None:
-        return "pending", None
+        return "pending", None, {}
     if not allowed(row[1]):                                             # список мог измениться за это время
         _db.execute("delete from auth_tg where poll_h=?", (_h(poll),)); _db.commit()
-        return "gone", None
+        return "gone", None, {}
     # Заявка закрывается не сразу, а через TG_GRACE с: если страница перезагрузилась и ответ с токеном потерялся
     # (возврат из Telegram), тот же держатель секрета опроса получит новый токен. Подтвердить заявку заново нельзя.
     _db.execute("update auth_tg set exp=? where poll_h=?", (min(row[0], now + TG_GRACE), _h(poll)))
     _db.commit()
-    return "ok", issue_token(row[1])
+    prof = {k: v for k, v in (("name", row[2] or ""), ("photo", row[3] or "")) if v}
+    return "ok", issue_token(row[1]), prof
 
 def tg_link(code):
     """(tg://-ссылка, https-ссылка) на бота с кодом заявки."""
@@ -519,8 +540,8 @@ def setup(app, on_login=None, on_alert=None):
             poll = j.get("poll") if isinstance(j, dict) else None
         except (ValueError, RecursionError):
             poll = None
-        st, tok = tg_poll(poll)
-        return web.json_response({"ok": st == "ok", "status": st, **({"token": tok} if tok else {})},
+        st, tok, prof = tg_poll(poll)
+        return web.json_response({"ok": st == "ok", "status": st, **({"token": tok} if tok else {}), **(prof if tok else {})},
                                  status=200 if st != "gone" else 410, headers=headers)
 
     async def back(request):

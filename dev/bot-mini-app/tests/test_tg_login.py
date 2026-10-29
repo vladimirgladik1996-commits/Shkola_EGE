@@ -102,6 +102,17 @@ async def flow():
     db.execute("delete from auth_tg"); db.commit()
     ok("очередь заявок ограничена (429)")
 
+    # --- имя и аватар из Telegram — в панель приложения (задача 5: вход через Telegram в АПК) ---
+    c5, p5 = auth.tg_start()
+    assert auth.tg_confirm(c5, 7, "", "  Иван\x00 Петров ", "data:image/jpeg;base64,QUJD")
+    j = (await POLL(pollreq(p5))).body
+    assert j["ok"] and j["token"] and j["name"] == "Иван Петров" and j["photo"] == "data:image/jpeg;base64,QUJD", j
+    c6, p6 = auth.tg_start()
+    assert auth.tg_confirm(c6, 7, "", "X" * 200, "https://evil.example/a.jpg")   # имя длиннее 60, аватар-ссылка — мусор
+    j = (await POLL(pollreq(p6))).body
+    assert j["name"] == "X" * 60 and "photo" not in j, j
+    ok("имя и аватар из Telegram доходят до приложения; мусорный аватар и имя длиннее 60 отсекаются")
+
     # --- страница возврата в APK ---
     r = await BACK(Req()); assert r.status == 200 and "kabinet://login" in r.text and "kabinet-dev" not in r.text
     assert "script-src 'nonce-" in r.headers["Content-Security-Policy"]
@@ -129,6 +140,11 @@ for side, scheme in (("dev", "kabinet-dev"), ("prod", "kabinet")):
     assert "get_me()" in bot, side
     assert "localStorage.tgLogin&&document.visibilityState" in html, f"{side}: wake не должен перезагружать страницу во время входа"
     assert 'auth.BASE.startswith("https://")' in bot, side
+    assert "localStorage.sesName=j.name" in html and "localStorage.sesPhoto=j.photo" in html, side
+    assert '$("#drawer .mn-foot").hidden' in html and "Скачать АПК" in html, side
+    assert "def tg_profile(" in bot and "get_user_profile_photos" in bot and "name, photo)" in bot, side
+    assert "alter table auth_tg add column photo" in a and "_tg_profile" in a, side
+    ok(f"{side}: панель АПК — имя/аватар из Telegram при входе, «Скачать АПК» в приложении скрыт")
     assert "tgl:y:" not in bot and "auth.logout(c.from_user.id)" in bot, side   # вход без вопросов + кнопка отзыва
     ok(f"{side}: манифест ({scheme}://login, singleTask), MainActivity, страница и бот связаны")
 print("OK")

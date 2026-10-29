@@ -2013,9 +2013,12 @@ const APP=!tg.initData;   // открыто не из Telegram (standalone-пр�
 if(APP){tg.showConfirm=(q,cb)=>cb(window.confirm(q));tg.showAlert=(m,cb)=>{window.alert(m);if(cb)cb()};
   tg.showPopup=(o,cb)=>{window.alert((o&&o.message)||"");if(cb)cb(o&&o.buttons&&o.buttons[0]&&o.buttons[0].id||"ok")};}
 (function(){const u=(tg.initDataUnsafe&&tg.initDataUnsafe.user)||{},nm=[u.first_name,u.last_name].filter(Boolean).join(" ")||u.username||"Профиль";
+  const av_=p=>{const im=new Image();im.alt="";im.referrerPolicy="no-referrer";im.onload=()=>$("#mnav").appendChild(im);im.src=p};
   $("#mnname").textContent=nm;$("#mnini").textContent=(nm[0]||"?").toUpperCase();
-  if(u.photo_url){const im=new Image();im.alt="";im.referrerPolicy="no-referrer";im.onload=()=>$("#mnav").appendChild(im);im.src=u.photo_url}})();
-if(APP&&localStorage.sesName){const n=localStorage.sesName;$("#mnname").textContent=n;$("#mnini").textContent=(n[0]||"?").toUpperCase()}
+  if(u.photo_url)av_(u.photo_url);
+  if(APP){if(localStorage.sesName){const n=localStorage.sesName;$("#mnname").textContent=n;$("#mnini").textContent=(n[0]||"?").toUpperCase()}
+    const ph=safePhoto(localStorage.sesPhoto);if(ph)av_(ph);   /* АПК: имя и аватар из Telegram — при входе через Telegram */
+    $("#drawer .mn-foot").hidden=true}})();                     /* «Скачать АПК» — только в Telegram mini app */
 /* тема берётся из самого Telegram (а не из системной), а шапка и фон окна красятся в цвет бренда */
 function brand(){document.documentElement.dataset.theme="light";   // тёмной темы нет — приложение всегда светлое
  
@@ -2064,7 +2067,9 @@ function loginScreen(code){document.body.textContent="";const d=document.createE
     try{const r=await fetch(API_BASE+"/api/tglogin/poll",{method:"POST",credentials:"omit",cache:"no-store",
         headers:{"Content-Type":"application/json"},body:JSON.stringify({poll:st.poll})});
       const j=await r.json().catch(()=>({}));
-      if(r.ok&&j.token){localStorage.removeItem("tgLogin");localStorage.sesTok=j.token;location.reload();return}
+      if(r.ok&&j.token){localStorage.removeItem("tgLogin");localStorage.sesTok=j.token;
+        if(j.name)localStorage.sesName=j.name;if(j.photo)localStorage.sesPhoto=j.photo;   /* имя и аватар из Telegram — в панель */
+        location.reload();return}
       if(r.status==410){tgStop();tgMsg("Заявка устарела — нажмите «Войти через Telegram» ещё раз");return}
     }catch(e){}
     finally{tgBusy=false}

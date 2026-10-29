@@ -1,4 +1,4 @@
-import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
+import asyncio, base64, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
 from datetime import date, timedelta
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
@@ -861,12 +861,31 @@ async def student_done(m: Message, state: FSMContext, name, price, grade="", sub
         await make_lesson(m, day, hm(t), sid, False, mode == "r")
 
 # ---------- меню ----------
+async def tg_profile(bot_, u):
+    """Имя и аватар из Telegram для панели приложения («Войти через Telegram» в АПК): имя — из профиля,
+    аватар — маленькая квадратная фотография профиля (getUserProfilePhotos). Сбой аватара входу не мешает —
+    панель покажет инициалы; имя без профиля — тоже не помеха."""
+    name = " ".join(x for x in (getattr(u, "first_name", ""), getattr(u, "last_name", "")) if x).strip()[:60]
+    photo = ""
+    try:
+        ph = await bot_.get_user_profile_photos(u.id, limit=1)
+        sizes = ph.photos[0] if ph.total_count else []
+        if sizes:                                    # photos[0] — самый маленький (160px) — для панели хватает
+            buf = io.BytesIO()
+            await bot_.download(await bot_.get_file(sizes[0].file_id), buf)
+            photo = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception as e:
+        log.warning("tg profile: аватар не скачался tg_id=%s: %r", u.id, e)
+    return name, photo
+
+
 @pub.message(CommandStart())
 async def start(m: Message, state: FSMContext, command: CommandObject):
     await state.clear()
     arg = command.args or ""
     if arg.startswith("login_"):                                   # быстрый вход в приложение (APK): /start login_<код> — без вопросов
-        if not auth.tg_confirm(arg[6:], m.from_user.id, m.from_user.username or ""):
+        name, photo = await tg_profile(m.bot, m.from_user)         # имя и аватар из Telegram — в панель приложения
+        if not auth.tg_confirm(arg[6:], m.from_user.id, m.from_user.username or "", name, photo):
             await m.answer("Ссылка устарела. Нажмите «Войти через Telegram» в приложении ещё раз.")
             return
         rows = [[InlineKeyboardButton(text="🚫 Это не я — отозвать вход", callback_data="tgl:r")]]
