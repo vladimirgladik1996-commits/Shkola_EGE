@@ -169,7 +169,8 @@ h3,h2{font-weight:800}
 #toast{background:#0E2250;color:#fff;top:calc(env(safe-area-inset-top,0px) + 66px);z-index:70;border:1px solid #ffffff30;box-shadow:0 8px 22px -8px #0008}
 
 /* --- верхняя панель --- */
-#top{position:fixed;z-index:5;top:0;left:0;right:0;height:calc(56px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 14px 0 68px;display:flex;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:box-shadow .25s}
+:root{--hdh:calc(56px + env(safe-area-inset-top,0px))}   /* высота фиксированного хедера: от неё отсчитываются липкие панели */
+#top{position:fixed;z-index:5;top:0;left:0;right:0;height:var(--hdh);padding:env(safe-area-inset-top,0px) 14px 0 68px;display:flex;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:box-shadow .25s}
 #top.scr{box-shadow:0 1px 0 var(--ln),0 10px 18px -14px var(--sh)}
 #ttl{display:inline-block;font-size:21px;font-weight:900;letter-spacing:-.01em;white-space:nowrap}
 #tmk{display:none}
@@ -282,6 +283,18 @@ input,select{box-shadow:0 0 0 1px var(--ln)}
 .gg button:disabled{opacity:.35}
 .gg sup{margin-left:2px;font-size:9.5px;font-weight:700;opacity:.7}
 .fold .in .gg button{background:var(--bg)}.fold .in .gg button.on{background:var(--acc)}
+/* фильтр по классам: обычный выпадающий список под кнопкой; на кнопке фильтра — бейдж выбранного класса */
+.gfd{position:absolute;z-index:4;right:0;top:calc(100% - 4px);min-width:220px;max-width:calc(100vw - 20px);max-height:min(56vh,360px);overflow-y:auto;overscroll-behavior:contain;padding:6px;border-radius:18px;background:var(--card);box-shadow:0 0 0 1px var(--ln),0 18px 36px -12px rgba(15,46,110,.4);transform-origin:100% 0;animation:gfdIn .18s cubic-bezier(.2,.9,.3,1.1)}
+.gfd hr{border:0;height:1px;margin:4px 8px;background:var(--ln)}
+.gfi{display:flex;align-items:center;gap:8px;width:100%;height:44px;padding:0 12px;border-radius:12px;text-align:left;font-size:15px;font-weight:600;color:var(--tx);transition:background .15s}
+.gfi span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gfi em{font-style:normal;font-size:12.5px;font-weight:700;color:var(--hint);font-variant-numeric:tabular-nums}
+.gfi .ck{flex:none;width:18px;height:18px;fill:none;stroke:var(--acc);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.gfi:active{background:color-mix(in srgb,var(--acc) 10%,var(--card))}
+.gfi.on{background:color-mix(in srgb,var(--acc) 9%,var(--card));font-weight:800}.gfi.on .ck{opacity:1}
+.ib .fb{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--yel);color:var(--yon);font-size:11px;font-weight:800;font-style:normal;line-height:20px;text-align:center;box-shadow:0 0 0 2px var(--bg);animation:fbPop .35s cubic-bezier(.3,1.7,.5,1)}
+@keyframes gfdIn{from{opacity:0;transform:translateY(-6px) scale(.96)}}@keyframes fbPop{from{transform:scale(0)}}
+@media (prefers-reduced-motion:reduce){.gfd,.ib .fb{animation:none}}
 .fold .in .pill{background:var(--bg)}.fold .in .pill.on{background:var(--acc)}
 .srow .info b{overflow:hidden;text-overflow:ellipsis}
 /* Ученики: шапка раздела, липкий поиск, строки списка */
@@ -292,7 +305,10 @@ input,select{box-shadow:0 0 0 1px var(--ln)}
 .s-tag{flex:none;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
 .s-tag.neg{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .s-tag.pos{background:color-mix(in srgb,var(--grn) 12%,transparent);color:var(--grn)}
-.sbar{position:sticky;top:0;z-index:6;padding:8px 0;margin:0 0 4px;background:var(--bg)}
+/* липкая панель поиска/фильтров: прилипает ПОД хедером (раньше top:0 и z-index выше хедера — панель наезжала на него и скрывала) */
+.sbar{position:sticky;top:var(--hdh);z-index:4;padding:8px 0;margin:0 0 4px;background:var(--bg)}
+.sbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:16px;pointer-events:none;background:linear-gradient(var(--bg),color-mix(in srgb,var(--bg) 0%,transparent))}   /* чипсины плавно уходят под поиск, без жёсткого среза */
+.sbar.free{position:relative;top:auto;z-index:auto;padding-top:0;margin-top:-8px}.sbar.free::after{display:none}   /* страница учеников: поиск едет вместе с лентой, ничего не прилипает */
 /* строка ученика */
 /* чипсина ученика: аватар · имя / класс + предмет. Строго два ряда текста, каждый в одну строку; цена, число занятий и баланс — в карточке.
    Статус оплаты — плашка справа без сумм */
@@ -2819,18 +2835,21 @@ let sq="",sg="all",ph,freshSt=0;   // поиск, фильтр класса, в�
 const gtxt=g=>{g=(g||"").trim();return /^\d+$/.test(g)?g+" класс":g};
 function stuGrades(){return [...new Set(act().map(s=>(s.grade||"").trim()).filter(Boolean))].sort((a,b)=>(+a||99)-(+b||99)||a.localeCompare(b))}
 function stu(){
-  const gs=stuGrades(),all=act(),debt=all.filter(s=>s.b<0).length,pre=all.filter(s=>s.b>0).length;
-  return `${debt||pre?`<div class="s-head"><span class="sp"></span>${debt?`<span class="s-tag neg">${debt} с долгом</span>`:""}${pre?`<span class="s-tag pos">${pre} наперёд</span>`:""}</div>`:""}
-  <div class="sbar"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
-  <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></div><div id="slist">${stuList()}</div>`}
+  const gs=stuGrades();
+  return `  <div class="sbar free"><input id="ssr" class="srch" type="search" placeholder="🔍 Поиск по имени" value="${esc(sq)}" oninput="sq=this.value;stuUpd()">
+  <button class="ib ${sg!="all"?"on":""}" id="sfl" onclick="gradeFilter()" aria-label="Фильтр по классу"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${sgBadge()}</button></div><div id="slist">${stuList()}</div>`}
 function stuUpd(){$("#slist").innerHTML=stuList()}
+const sgBadge=()=>sg=="all"?"":`<i class="fb">${esc(sg=="none"?"–":sg.length>2?"•":sg)}</i>`;
+function gfClose(){const d=$("#gfd");if(d)d.remove();const f=$("#sfl");if(f)f.setAttribute("aria-expanded","false")}
 function gradeFilter(){
-  const cnt=g=>act().filter(s=>(s.grade||"").trim()==g).length,none=act().filter(s=>!(s.grade||"").trim()).length,
-        all=[...new Set([...GRADES.map(String),...stuGrades()])];
-  open(`<h3>Класс</h3><p class="sub">Показать учеников выбранного класса</p>
-  <div class="gg">${all.map(g=>{const c=cnt(g);return `<button type="button" class="${sg==g?"on":""}" data-g="${esc(g)}" ${c?"":"disabled"} onclick="setSg(this.dataset.g)">${esc(g)}${c?`<sup>${c}</sup>`:""}</button>`}).join("")}</div>
-  <div class="btns" style="margin-top:4px"><button class="btn ${sg=="all"?"pri":""}" onclick="setSg('all')">Все классы · ${act().length}</button>${none?`<button class="btn ${sg=="none"?"pri":""}" onclick="setSg('none')">Без класса · ${none}</button>`:""}</div>`)}
-function setSg(v){sg=v;close_();stuUpd();$("#sfl").classList.toggle("on",sg!="all")}
+  if($("#gfd")){gfClose();return}
+  const A=act(),cnt=g=>A.filter(s=>(s.grade||"").trim()==g).length,none=A.filter(s=>!(s.grade||"").trim()).length;
+  const it=(v,t,c)=>`<button type="button" class="gfi${sg==v?" on":""}" role="option" aria-selected="${sg==v}" data-g="${esc(v)}" onclick="setSg(this.dataset.g)"><span>${esc(t)}</span><em>${c}</em><svg class="ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`;
+  $(".sbar").insertAdjacentHTML("beforeend",`<div id="gfd" class="gfd" role="listbox">${it("all","Все классы",A.length)}<hr>${stuGrades().map(g=>it(g,gtxt(g),cnt(g))).join("")}${none?`<hr>${it("none","Без класса",none)}`:""}</div>`);
+  $("#sfl").setAttribute("aria-expanded","true")}
+document.addEventListener("pointerdown",e=>{if($("#gfd")&&!e.target.closest("#gfd,#sfl"))gfClose()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")gfClose()});
+function setSg(v){sg=v;gfClose();stuUpd();const f=$("#sfl");f.classList.toggle("on",sg!="all");const o=f.querySelector(".fb");if(o)o.remove();f.insertAdjacentHTML("beforeend",sgBadge())}
 function stuList(){
   if(!act().length)return '<div class="empty0"><div class="e0i">🎓</div><b>Учеников пока нет</b><p>Добавьте первого — потом его можно будет выбрать в расписании.</p><button class="btn pri" style="width:100%" onclick="studNew()">+ Добавить ученика</button></div>';
   const q_=sq.trim().toLowerCase(),f=act().map(bal).filter(s=>(!q_||nameMatch(s.name,q_))&&(sg=="all"||(sg=="none"?!(s.grade||"").trim():(s.grade||"").trim()==sg)));
