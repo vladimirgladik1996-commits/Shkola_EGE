@@ -747,7 +747,7 @@ def cache_key(uid, r, kind="ege", student=""):
     return hashlib.sha1(json.dumps(keep, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
-def from_client(res):
+def from_client(res, kind=""):
     """Разбор в том виде, как его держит экран превью (ecNrm) → нормализованный разбор essaycheck._result.
     Данным с клиента не доверяем: нумерация, баллы и типы ошибок пересчитываются на сервере, как при самой проверке.
     None — пересылать нечего (не словарь, слишком длинный текст, нет ни ошибок, ни критериев)."""
@@ -761,7 +761,7 @@ def from_client(res):
         if len(text) > 100_000:
             return None
         raw = {k: res.get(k) for k in ("errors", "criteria", "recommendations") if k not in miss}
-        r = essaycheck._result(raw, text.strip(), task.strip()[:20000])
+        r = essaycheck._result(raw, text.strip(), task.strip()[:20000], kind=kind)
     except Exception as e:
         log.warning("essayreport.from_client: разбор не нормализовался: %r", e)
         return None

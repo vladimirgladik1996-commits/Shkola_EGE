@@ -124,6 +124,7 @@ JPG = base64.b64encode(_buf.getvalue()).decode()
 
 # --- 7. пайплайн essaycheck (боевой путь): OCR yavision + стрим kimi, нормализация, сбои ---
 import essaycheck, kimi, yavision
+essaycheck.MIN_WORDS = {"ege": 0, "oge": 0}   # фикстуры короткие: правило объёма — в test_essaycheck_fipi
 real_ask_json, real_key = kimi.ask_json, kimi.API_KEY
 real_recognize, real_stream = yavision.recognize_many, kimi.ask_stream
 yavision.API_KEY = "x"   # боевой пайплайн требует оба ключа (bot.api_essay_check_run)
@@ -140,7 +141,7 @@ ANALYSIS = {"errors": [
     {"type": "Пунктуация", "found": ""},                       # без фрагмента — мимо
 ], "criteria": [
     {"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""},
-    {"name": "К2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"},   # зажмётся до 6
+    {"name": "К2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"},   # зажмётся до 3 (эталон К2 = 3)
 ], "recommendations": [{"title": "r1", "text": "t1", "badge": "+1"}]}
 
 async def fake_recognize(imgs):
@@ -178,8 +179,8 @@ async def pipeline():
     assert res["text"] == PAGE["text"] and res["task"] == PAGE_T["text"]
     assert [e["i"] for e in res["errors"]] == [1, 2]               # мимо-запись отсеяна, номера подряд
     assert res["errors"][1]["type"] == "Речь"                      # неизвестный тип → «Речь»
-    assert res["criteria"][1]["got"] == 6                          # зажато в максимум критерия
-    assert res["score"] == {"got": 7, "max": 7, "percent": 100, "level": "Отлично"}
+    assert res["criteria"][1]["got"] == 3                          # зажато до максимума эталонной таблицы (К2 = 3)
+    assert res["score"] == {"got": 4, "max": 22, "percent": 18, "level": "Нужно доработать"}   # К1 1 + К2 3 из 22 (эталон ФИПИ)
     assert res["missing"] == [] and res["why"] == "", (res["missing"], res["why"])   # все блоки с данными — выдумывать нечего
     e1 = res["errors"][0]                                          # координаты — из разметки OCR
     assert e1["page"] == 0 and abs(e1["x"] - 47.5) < 0.3 and abs(e1["y"] - 7.5) < 0.3, e1
@@ -259,9 +260,9 @@ async def main():
         evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
         assert r.status == 200 and [e["t"] for e in evs].count("status") == 5 and evs[-1]["t"] == "done", evs
         res = evs[-1]["result"]
-        assert res["score"]["max"] == 7 and res["errors"][0]["found"] == "влеяния"
+        assert res["score"]["max"] == 22 and res["errors"][0]["found"] == "влеяния"
         assert {"text", "task", "errors", "criteria", "recommendations", "score"} <= set(res), sorted(res)
-        assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Отлично"
+        assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Нужно доработать"
         assert res["missing"] == [] and res["why"] == "", (res.get("missing"), res.get("why"))
         assert {"i", "type", "found", "correct", "why", "src", "page", "x", "y"} <= set(res["errors"][0]), sorted(res["errors"][0])
         assert set(res["criteria"][0]) == {"name", "got", "max", "why", "tip"}

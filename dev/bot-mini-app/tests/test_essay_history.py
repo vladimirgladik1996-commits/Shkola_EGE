@@ -64,6 +64,8 @@ os.environ.update(BOT_TOKEN="***", PUBLIC_URL="https://bot.example.com", LOG_LEV
 for k in ("ALLOWED_USERNAMES", "ALLOWED_IDS", "OWNER_ID"): os.environ.pop(k, None)
 sys.path.insert(0, ROOT)
 import auth, bot, kimi
+import essaycheck
+essaycheck.MIN_WORDS = {"ege": 0, "oge": 0}   # фикстуры короткие: правило объёма — в test_essaycheck_fipi
 from aiohttp.test_utils import TestClient, TestServer
 
 routes = {}
@@ -97,8 +99,10 @@ RES = {"text": "Автор поднимает проблему влеяния к
            {"type": "Орфография", "found": "влеяния", "correct": "влияния", "why": "проверка гласной", "src": "Розенталь, §…"},
            {"type": "Неведомый тип", "found": "считаю что", "correct": "считаю, что", "why": "запятая перед «что»", "src": "…"}],
        "criteria": [
-           {"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""},
-           {"name": "К2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"}],   # зажмётся до 6
+           {"name": "СК1", "got": 1, "max": 1, "why": "ок", "tip": ""},
+           {"name": "СК2", "got": 9, "max": 6, "why": "перебор", "tip": "совет"},   # зажмётся до 4 (эталон СК2)
+           {"name": "СК3", "got": 2, "max": 2, "why": "ок", "tip": ""},
+           {"name": "СК4", "got": 1, "max": 1, "why": "ок", "tip": ""}],
        "recommendations": [{"title": "r1", "text": "t1", "badge": "+1"}]}
 
 REAL_KEY = kimi.API_KEY
@@ -156,7 +160,7 @@ async def main():
                     "got", "max", "percent", "level"} <= set(x), sorted(x)
         st = [x for x in mine if x["id"] == d["id"]][0]
         assert st["kind"] == "oge" and st["student_id"] == sid and st["student_name"] == "Анна Петрова", st
-        assert st["got"] == 7 and st["max"] == 7 and st["percent"] == 100 and st["level"] == "Отлично", st
+        assert st["got"] == 8 and st["max"] == 8 and st["percent"] == 100 and st["level"] == "Отлично", st
         assert [x for x in mine if x["id"] == d2["id"]][0]["student_id"] is None
         assert (await (await post("/api/essay_check/history", {"student_id": sid})).json())["checks"] == [st], "фильтр по ученику не работает"
         assert (await (await post("/api/essay_check/history", {"student_id": 999999})).json())["checks"] == []
@@ -177,7 +181,7 @@ async def main():
         res = v["result"]
         assert res["text"] == RES["text"] and res["task"] == RES["task"]
         assert [e["i"] for e in res["errors"]] == [1, 2] and res["errors"][1]["type"] == "Речь"   # нормализация сохранена
-        assert res["criteria"][1]["got"] == 6 and res["score"] == {"got": 7, "max": 7, "percent": 100, "level": "Отлично"}
+        assert res["criteria"][1]["got"] == 4 and res["score"] == {"got": 8, "max": 8, "percent": 100, "level": "Отлично"}   # СК2 зажат до эталонных 4
         assert set(res) == {"text", "task", "errors", "criteria", "recommendations", "score", "missing", "why"}, sorted(res)
         assert res["missing"] == [] and res["why"] == "", (res["missing"], res["why"])   # все блоки с данными
         ok("повторный просмотр: полный разбор (ошибки, критерии ФИПИ, статистика, балл) из сохранённых данных")

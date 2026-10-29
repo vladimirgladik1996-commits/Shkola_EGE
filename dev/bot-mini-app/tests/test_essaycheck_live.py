@@ -5,6 +5,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ.update(BOT_TOKEN="***", LOG_LEVEL="CRITICAL")
 sys.path.insert(0, ROOT)
 import essaycheck
+essaycheck.MIN_WORDS = {"ege": 0, "oge": 0}   # фикстуры короткие: правило объёма — в test_essaycheck_fipi
 def ok(c): print("  ✓", c)
 
 def words(*specs):   # (текст, x1, y1, x2, y2)
@@ -76,7 +77,7 @@ def run_pipeline():
     async def fake_stream(messages, **kw):
         yield "think", "думаю"
         yield "text", ('{"errors":[{"type":"Пунктуация","found":"считаю что","correct":"считаю, что",'
-                       '"why":"запятая перед «что»","src":""}],"criteria":[{"name":"К1","got":1,"max":1,'
+                       '"why":"запятая перед «что»","src":""}],"criteria":[{"name":"СК1","got":1,"max":1,'
                        '"why":"ок","tip":""}],"recommendations":[]}')
     async def fake_criteria(kind, fallback=""):
         return fallback
@@ -105,7 +106,7 @@ r = [v for k, v in evs if k == "done"][0]
 e = r["errors"][0]
 assert e["src"] == essaycheck.SRC_TEMPLATE, e
 assert e["page"] == 0 and abs(e["x"] - 23.5) < 0.2
-assert r["score"] == {"got": 1, "max": 1, "percent": 100, "level": "Отлично"} or r["score"]["got"] == 1
+assert r["score"]["got"] == 1 and r["score"]["max"] == 8 and r["criteria"][0]["name"].startswith("СК1"), r["score"]   # эталон ОГЭ: СК1–СК4, итог в шкале 8 баллов
 ok("run() боевой путь: status → think → done, пустой src → шаблон, координаты из OCR, балл посчитан кодом")
 
 print("test_essaycheck_live: все проверки прошли")

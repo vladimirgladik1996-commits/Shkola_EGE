@@ -24,6 +24,14 @@ log = logging.getLogger("tutor.fipicache")
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 TTL = 30 * 24 * 3600          # критерии перечитываем раз в месяц
 FETCH_TIMEOUT = 30.0
+MAX_CRITERIA_TEXT = 4000     # потолок текста критериев в промте: компактная таблица, а не выжимка сайта
+
+
+def _like(text):
+    """Похоже ли выкачанное на таблицу критериев? Страницы fipi.ru — лендинги со ссылками на PDF:
+    без этой проверки в промт уходил информационный мусор (лишние токены и путаница у модели)."""
+    t = (text or "").lower()
+    return bool(re.search(r"(?i)(к|ск)\s*1\b", t)) and "балл" in t
 
 # страницы критериев на fipi.ru (демоверсии/кодификаторы — разделы с критериями оценивания)
 URLS = {
@@ -102,20 +110,23 @@ async def criteria(kind, fallback=""):
     """Текст критериев для промта: свежий кэш → обновление с fipi.ru → старый кэш → fallback."""
     kind = kind if kind in URLS else "ege"
     cur = _load(kind)
-    if cur and time.time() - cur["ts"] < TTL:
+    if cur and _like(cur["text"]) and time.time() - cur["ts"] < TTL:
         return cur["text"]
     if not kimi.enabled():                       # без ключа обновить нечем — что есть, то и берём
-        return (cur or {}).get("text") or fallback
+        t = (cur or {}).get("text") or ""
+        return t if _like(t) else fallback
     lock = _locks.setdefault(kind, asyncio.Lock())
     async with lock:                             # параллельные проверки не дёргают fetch вдвойне
         cur = _load(kind)
-        if cur and time.time() - cur["ts"] < TTL:
+        if cur and _like(cur["text"]) and time.time() - cur["ts"] < TTL:
             return cur["text"]
         raw = await _fetch(URLS[kind])
         text = _clean(raw)
-        if len(text) > 200:                      # мусор/пустая страница — не затираем кэш
+        if len(text) > 200 and _like(text):       # мусор/пустая/не-критерии — не затираем кэш
+            text = text[:MAX_CRITERIA_TEXT]
             _save(kind, text)
             log.info("fipicache: критерии %s обновлены (%d символов)", kind, len(text))
             return text
         log.warning("fipicache: fetch %s не дал критериев — работаю со старой версией", kind)
-        return (cur or {}).get("text") or fallback
+        t = (cur or {}).get("text") or ""
+        return t if _like(t) else fallback

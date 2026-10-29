@@ -8,6 +8,7 @@ import itertools, os, random, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import essaycheck
+essaycheck.MIN_WORDS = {"ege": 0, "oge": 0}   # фикстуры короткие: правило объёма — в test_essaycheck_fipi
 
 def ok(c): print("  ✓", c)
 
@@ -75,7 +76,8 @@ essaycheck._bind_coords(a, PAGES)
 e = a["errors"][0]
 assert (e["page"], e["x"], e["y"]) == (0, 20.0, 12.0), e   # центр бокса слова из OCR
 r = essaycheck._result(a, "текст", "задание")
-assert r["score"] == {"got": 2, "max": 2, "percent": 100, "level": "Отлично"}, r["score"]
+assert r["score"] == {"got": 1, "max": 22, "percent": 5, "level": "Нужно доработать"}, r["score"]   # К1 зажат до эталонного максимума 1
+assert r["criteria"][0]["name"] == "К1 Отражение позиции автора" and r["criteria"][0]["max"] == 1
 ok("честный разбор: координаты из OCR и баллы по критериям на месте")
 
 # --- 7. _near: дешёвый префильтр перед _lev1 НЕ отбрасывает совпадений (звук) ---

@@ -1,12 +1,5 @@
 import asyncio, collections, hashlib, hmac, io, json, logging, os, re, secrets, sqlite3, time
-from datetime import date, datetime, timedelta, timezone
-
-MSK = timezone(timedelta(hours=3))   # всё расписание и календарь — по Москве (UTC+3), в какой бы зоне ни стоял сервер
-
-
-def today_msk():
-    return datetime.now(MSK).date()
-
+from datetime import date, timedelta
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
@@ -20,6 +13,13 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
                            MenuButtonWebApp, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+
+from datetime import datetime, timezone
+MSK = timezone(timedelta(hours=3))   # всё расписание и календарь — по Москве (UTC+3), в какой бы зоне ни стоял сервер
+
+
+def today_msk():
+    return datetime.now(MSK).date()
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tutor")
@@ -3114,10 +3114,10 @@ async def api_essay_report(request):
     except Exception:
         return web.json_response({"error": "bad"}, status=400)
     uid = user_id(request)
-    r = essayreport.from_client(j.get("result")) if isinstance(j, dict) else None
+    kind = "oge" if j.get("kind") == "oge" else "ege"
+    r = essayreport.from_client(j.get("result"), kind) if isinstance(j, dict) else None
     if r is None or not isinstance(uid, int) or uid <= 0:
         return web.json_response({"error": "bad"}, status=400)
-    kind = "oge" if j.get("kind") == "oge" else "ege"
     student = re.sub(r"\s+", " ", j["student"] if isinstance(j.get("student"), str) else "").strip()[:60]
     try:
         ent, files = await ec_report_files(uid, r, kind, student)
@@ -3151,14 +3151,14 @@ EC_MAX_RESULT = 300_000     # байт JSON разбора — страховк�
 EC_KINDS = ("ege", "oge")   # типы работы: сочинение ЕГЭ / эссе ОГЭ — как essaycheck.WHAT
 
 
-def ec_result(raw):
+def ec_result(raw, kind=""):
     """Разбор от клиента → нормализованная запись истории: та же нормализация, что у essaycheck._result
-    (типы ошибок из закрытого списка, номера подряд, баллы в рамках критериев, итог — сумма критериев).
+    (типы ошибок из закрытого списка, номера подряд, баллы по эталонной таблице ФИПИ, итог — её сумма).
     Мусор или пустой разбор — ValueError (→ 400)."""
     if not isinstance(raw, dict) or len(json.dumps(raw, ensure_ascii=False)) > EC_MAX_RESULT:
         raise ValueError
     r = essaycheck._result(raw, raw.get("text") if isinstance(raw.get("text"), str) else "",
-                           raw.get("task") if isinstance(raw.get("task"), str) else "")
+                           raw.get("task") if isinstance(raw.get("task"), str) else "", kind=kind)
     if not (r["errors"] or r["criteria"]):
         raise ValueError
     return r
@@ -3182,7 +3182,7 @@ async def api_essay_check_save(request):
             raise ValueError
         if not q("select 1 from students where id=? and coalesce(deleted,0)=0", sid):
             return web.json_response({"error": "no_student"}, status=400)   # привязка — только к живому ученику
-    r = ec_result(j.get("result"))
+    r = ec_result(j.get("result"), kind)
     n = q("select count(*) c from essay_checks where tg_id=?", uid)[0]["c"]
     for row in q("select id from essay_checks where tg_id=? order by id limit ?", uid, max(0, n - EC_MAX_SAVED + 1)):
         run("delete from essay_checks where id=?", row["id"])                # лимит истории: старые записи уходят первыми
