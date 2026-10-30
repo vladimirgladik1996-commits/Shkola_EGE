@@ -86,6 +86,14 @@ services:
       - key: YANDEX_API_KEY
         sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
 
+      # --- сводка счетов (/balance): OpenRouter, Render и биллинг Яндекса ---
+      - key: OPENROUTER_API_KEY
+        sync: false # ключ https://openrouter.ai/settings/keys — кредиты в сводке /balance
+      - key: RENDER_API_KEY
+        sync: false # ключ Render (Dashboard → Account Settings → API Keys) — лимиты сервисов в /balance
+      - key: YANDEX_OAUTH_TOKEN
+        sync: false # OAuth-токен (yandex.ru/oauth): баланс Яндекса в /balance (Billing API не берёт Api-Key)
+
       # --- обычные настройки ---
       # Render сам выдаёт PORT — bot.py его читает (os.getenv("PORT", "8080")).
       - key: CURRENCY
@@ -154,6 +162,13 @@ services:
       # «ИИ-проверка»: YANDEX_API_KEY — в панели (секрет, как KIMI_API_KEY); EC_LIVE=1 — фото уходят в API
       - key: YANDEX_API_KEY
         sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
+      # сводка счетов (/balance): OpenRouter, Render и биллинг Яндекса
+      - key: OPENROUTER_API_KEY
+        sync: false # ключ https://openrouter.ai/settings/keys — кредиты в сводке /balance
+      - key: RENDER_API_KEY
+        sync: false # ключ Render (Dashboard → Account Settings → API Keys) — лимиты сервисов в /balance
+      - key: YANDEX_OAUTH_TOKEN
+        sync: false # OAuth-токен (yandex.ru/oauth): баланс Яндекса в /balance (Billing API не берёт Api-Key)
       - key: CURRENCY
         value: "₽"
       - key: APP_ENV
