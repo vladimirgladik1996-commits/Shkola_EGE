@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, chatfiles, essaycheck, essayreport, kimi, matlib, whisper, yavision
+import assist, auth, billing, chatfiles, essaycheck, essayreport, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -918,21 +918,9 @@ async def logout(m: Message, state: FSMContext):
 
 @r.message(Command("balance"))
 async def cmd_balance(m: Message, state: FSMContext):
-    """Баланс аккаунта Кими (Moonshot) — /balance: сколько денег осталось на API."""
+    """Сводка по всем счетам — /balance: Кими, Яндекс Cloud, OpenRouter и Render одним сообщением."""
     await state.clear()
-    b = await kimi.balance()
-    if b is None:
-        await m.answer("Не получилось узнать баланс Кими. Проверьте KIMI_API_KEY и попробуйте ещё раз.")
-        return
-    def f(x):
-        try: return f"{float(x):,.2f}".replace(",", " ").replace(".", ",")
-        except (TypeError, ValueError): return "—"
-    await m.answer("\n".join([
-        "💳 Баланс Кими (Moonshot), CNY:",
-        f"• Доступно: {f(b.get('available_balance'))}",
-        f"• Ваучеры: {f(b.get('voucher_balance'))}",
-        f"• Основной счёт: {f(b.get('cash_balance'))}",
-    ]))
+    await m.answer(await billing.report())
 
 
 @r.message(F.text == "Занятия сегодня")
