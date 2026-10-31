@@ -892,7 +892,8 @@ async def start(m: Message, state: FSMContext, command: CommandObject):
         if auth.BASE.startswith("https://"):                       # Telegram не принимает кнопку-ссылку без https-адреса
             rows.insert(0, [InlineKeyboardButton(text="↩️ Вернуться в приложение", url=f"{auth.BASE}/app-return")])
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
-        await m.answer("✅ Вход в приложение выполнен" + ENV_TAG + ". Вернитесь в приложение.", reply_markup=kb)
+        await m.answer("✅ Вход в приложение выполнен" + ENV_TAG + ". Вернитесь в приложение — если кнопка ниже не открыла его, "
+                       "просто переключитесь на приложение вручную: вход уже подтверждён.", reply_markup=kb)
         return
     if auth.is_authorized(m.from_user.id):
         await m.answer("Готово к работе. Выберите действие в меню." + ENV_TAG, reply_markup=menu_kb())
