@@ -608,7 +608,7 @@ async def run(w, t, kind="ege"):
             log.warning("essaycheck: OCR задания не прошёл (%s) — продолжаю без задания", terr)
         else:
             yield "status", "Прочитано задание и опорный текст"
-    yield "status", "Проверены орфографию и пунктуацию"
+    yield "status", "Проверяю орфографию, пунктуацию, грамматику и речь"   # четыре типа ошибок (ERRORS_PROMPT)
     criteria_text = CRITERIA[kind] + (("\n\nДополнительно — материалы ФИПИ с fipi.ru:\n" + extra[:1500])
                                       if extra else "")   # эталонная таблица всегда в промте, добавка — ограничена
     msg_crit, msg_err = _msg(kind, task, essay, criteria_text), _msg_errors(kind, essay)
