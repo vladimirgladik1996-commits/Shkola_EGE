@@ -117,6 +117,9 @@ async def flow():
     r = await BACK(Req()); assert r.status == 200 and "kabinet://login" in r.text and "kabinet-dev" not in r.text
     assert "script-src 'nonce-" in r.headers["Content-Security-Policy"]
     ok("/app-return открывает kabinet://login (схема prod), CSP с nonce")
+    assert "intent://login#Intent;scheme=kabinet;package=ru.kabinet.tutor;end" in r.text and "ru.kabinet.tutor.dev" not in r.text
+    assert 'id="a" href="kabinet://login"' in r.text and "__P__" not in r.text and "__S__" not in r.text and "hidden" in r.text
+    ok("/app-return: на Android — intent://-ссылка с пакетом prod, запасная kabinet://, подсказка «не открылось»")
 
 run(flow())
 

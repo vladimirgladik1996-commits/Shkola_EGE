@@ -330,6 +330,8 @@ BOT_USERNAME = os.getenv("BOT_USERNAME", "").strip().lstrip("@")   # бот за
 APP_ENV = os.getenv("APP_ENV", "").strip().lower()
 # схема возврата в APK: dev-сборка и prod-сборка стоят на одном телефоне — схемы разные
 APK_SCHEME = os.getenv("APK_SCHEME", "").strip() or ("kabinet-dev" if APP_ENV == "dev" else "kabinet")
+# пакет APK для intent://-ссылки (dev- и prod-сборки стоят на одном телефоне — пакеты разные, как и схемы)
+APK_PACKAGE = os.getenv("APK_PACKAGE", "").strip() or ("ru.kabinet.tutor.dev" if APP_ENV == "dev" else "ru.kabinet.tutor")
 TG_CODE_RE = re.compile(r"[A-Za-z0-9_-]{16,40}")
 TG_PHOTO_RE = re.compile(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+")
 TG_NAME_MAX = 60                # имя из Telegram — только для панели приложения
@@ -470,8 +472,15 @@ BACK_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <style nonce="__N__">body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:#fff;color:#17212b;font:16px/1.4 system-ui,sans-serif;text-align:center}
 a{display:block;margin-top:18px;padding:13px 22px;font-weight:600;color:#fff;background:#0F2E6E;border-radius:10px;text-decoration:none}p{color:#6b7785;font-size:14px}</style></head>
 <body><main><h1>✅ Вход подтверждён</h1><p>Возвращаемся в приложение…</p>
-<a id="a" href="__S__://login">Открыть приложение</a></main>
-<script nonce="__N__">setTimeout(()=>{location.href="__S__://login"},300)</script></body></html>"""
+<a id="a" href="__S__://login">Открыть приложение</a>
+<p id="h" hidden>Не открылось? Встроенный браузер Telegram иногда не пускает в приложение. Нажмите «⋮» → «Открыть в браузере» и
+повторите — либо просто переключитесь на приложение: вход уже подтверждён, оно само завершит вход.</p></main>
+<script nonce="__N__">(()=>{const a=document.getElementById("a"),
+// Android: intent:// с пакетом — Chrome запускает именно наше приложение; пользовательская схема без касания блокируется
+link=/Android/i.test(navigator.userAgent)?"intent://login#Intent;scheme=__S__;package=__P__;end":"__S__://login";
+a.href=link;
+setTimeout(()=>{location.href=link},300);                       // автопопытка (в Chrome без касания может не сработать)
+setTimeout(()=>{document.getElementById("h").hidden=false;a.textContent="Открыть приложение ещё раз"},2500)})();</script></body></html>"""
 
 SEC = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
        "X-Frame-Options": "DENY", "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Resource-Policy": "same-origin",
@@ -548,7 +557,7 @@ def setup(app, on_login=None, on_alert=None):
         n = secrets.token_urlsafe(16)
         csp = (f"default-src 'none'; script-src 'nonce-{n}'; style-src 'nonce-{n}'; base-uri 'none'; "
                "form-action 'none'; frame-ancestors 'none'")
-        return web.Response(text=BACK_PAGE.replace("__N__", n).replace("__S__", APK_SCHEME), content_type="text/html",
+        return web.Response(text=BACK_PAGE.replace("__N__", n).replace("__S__", APK_SCHEME).replace("__P__", APK_PACKAGE), content_type="text/html",
                             charset="utf-8", headers={**headers, "Content-Security-Policy": csp})
 
     app.router.add_get("/login", page)
