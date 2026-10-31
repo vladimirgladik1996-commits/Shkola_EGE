@@ -180,7 +180,7 @@ async def pipeline():
     assert [e["i"] for e in res["errors"]] == [1, 2]               # мимо-запись отсеяна, номера подряд
     assert res["errors"][1]["type"] == "Речь"                      # неизвестный тип → «Речь»
     assert res["criteria"][1]["got"] == 3                          # зажато до максимума эталонной таблицы (К2 = 3)
-    assert res["score"] == {"got": 4, "max": 22, "percent": 18, "level": "Нужно доработать"}   # К1 1 + К2 3 из 22 (эталон ФИПИ)
+    assert res["score"] == {"got": 14, "max": 22, "percent": 64, "level": "Удовлетворительно"}   # К1 1 + К2 3 + К7–К10 по ошибкам (2+3+3+2) из 22 (эталон ФИПИ)
     assert res["missing"] == [] and res["why"] == "", (res["missing"], res["why"])   # все блоки с данными — выдумывать нечего
     e1 = res["errors"][0]                                          # координаты — из разметки OCR
     assert e1["page"] == 0 and abs(e1["x"] - 47.5) < 0.3 and abs(e1["y"] - 7.5) < 0.3, e1
@@ -262,7 +262,7 @@ async def main():
         res = evs[-1]["result"]
         assert res["score"]["max"] == 22 and res["errors"][0]["found"] == "влеяния"
         assert {"text", "task", "errors", "criteria", "recommendations", "score"} <= set(res), sorted(res)
-        assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Нужно доработать"
+        assert set(res["score"]) == {"got", "max", "percent", "level"} and res["score"]["level"] == "Удовлетворительно"   # 14/22 = 64%: К1–К2 + К7–К10 по ошибкам
         assert res["missing"] == [] and res["why"] == "", (res.get("missing"), res.get("why"))
         assert {"i", "type", "found", "correct", "why", "src", "page", "x", "y"} <= set(res["errors"][0]), sorted(res["errors"][0])
         assert set(res["criteria"][0]) == {"name", "got", "max", "why", "tip"}

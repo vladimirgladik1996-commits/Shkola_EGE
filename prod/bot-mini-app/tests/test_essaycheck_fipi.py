@@ -103,7 +103,8 @@ ok("fipicache: мусор вместо критериев в промт не п�
 
 # ---------- 8. промт несёт эталонную таблицу и не несёт старую шкалу ----------
 m = essaycheck._msg("ege", "", LONG, essaycheck.CRITERIA["ege"])
-assert "22 балла" in m and "К10 Речевые нормы" in m and "Если К1=0" in m
+assert "22 балла" in m and "К6 Этические нормы" in m and "Если К1=0" in m
+assert "К7–К10 (грамотность) НЕ оценивай" in m and "К10 Речевые нормы" not in m   # грамотность считает код по ошибкам
 assert "Шкала ошибок" not in m and "итого 17" not in m
 m = essaycheck._msg("oge", "", LONG, essaycheck.CRITERIA["oge"])
 assert "8 баллов" in m and "СК4 Композиционная стройность" in m
