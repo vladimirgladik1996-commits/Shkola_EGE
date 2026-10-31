@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, billing, chatfiles, essaycheck, essayreport, kimi, matlib, whisper, yavision
+import assist, auth, billing, chatfiles, chatprompt, essaycheck, essayreport, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -1438,8 +1438,9 @@ async def tg_audio(m: Message):
 
 @r.message(StateFilter(None), F.text)
 async def ai_text(m: Message):
+    images, docs = assist.take_media(m.from_user.id, m.text)    # фото, присланное без подписи, едет с этой репликой
     async with thinking(m, kimi.enabled()):
-        res = await assist.handle_chat(m.from_user.id, m.text)
+        res = await assist.handle_chat(m.from_user.id, m.text, images=images, docs=docs)
     await say(m, res["reply"], res.get("buttons"))
 
 @r.message(StateFilter(None), F.voice | F.audio)
@@ -1451,7 +1452,8 @@ async def ai_voice(m: Message):
         data, mime = await tg_audio(m)
         src = m.voice or m.audio
         text = await whisper.transcribe(data, mime, prompt=stt_prompt(), dur=getattr(src, "duration", None))
-        res = await assist.handle_chat(m.from_user.id, text, voice=True) if text else None
+        images, docs = assist.take_media(m.from_user.id, text) if text else (None, None)
+        res = await assist.handle_chat(m.from_user.id, text, images=images, docs=docs, voice=True) if text else None
     if text == "":                                  # распознавание сработало, но речи в записи нет
         await say(m, whisper.NO_SPEECH_MSG)
         return
@@ -1465,6 +1467,7 @@ async def ai_photo(m: Message):
     images, docs = await tg_media(m)
     text = (m.caption or "").strip()
     if not text:
+        assist.stash_media(m.from_user.id, images or None, docs or None)   # следующая реплика придёт с этим фото
         await say(m, "Фото получил. Напишите, что с ним сделать — например: «разбери эту задачу».")
         return
     async with thinking(m, kimi.enabled()):
@@ -1547,6 +1550,8 @@ async def ai_cb(c: CallbackQuery):
             return
         if warn:
             await say(c.message, "Кими проверила файл: есть огрехи оформления — " + warn)
+        if res.get("info"):                      # сочинение: тема с фото, примечание модели и объём — под файлом
+            await say(c.message, res["info"])
         return
     if status is not None and reply and len(reply) <= 3800 and not buttons:
         try:
@@ -2579,7 +2584,12 @@ async def api_chat(request):
         отдельное сообщение в диалоге,
       {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
       {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"tg"} — ответ ушёл и в Telegram,
-      {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён."""
+      {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён.
+    Фото с заданием (баг-репорт 015): перед ответом отдельный шаг читает формулировку (chatprompt.read_task);
+    строка «📌 Задание, прочитанное с фото…» идёт первой в ответе и остаётся в истории — фото на следующих ходах
+    не отправляются, а тема сохраняется. Сочинение ЕГЭ/ОГЭ: пакет ФИПИ в промте, абзацы и красная строка — кодом,
+    объём считается по правилам ФИПИ (меньше минимума — одна попытка довести), «ПРИМЕЧАНИЕ» модели и объём
+    приходят под работой (для файлов — в сообщении чата, а не в документе)."""
     j = await request.json()
     if not isinstance(j, dict):
         raise ValueError
@@ -2642,13 +2652,21 @@ async def api_chat(request):
         await send({"t": "off"})
         await resp.write_eof()
         return resp
-    reply = ""
+    reply, mode, anchor, asked = "", None, "", None
     async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt,
                                             img_names=img_names or None):
         if kind in ("status", "think", "text"):
             if kind == "text":
                 reply += v
             await send({"t": kind, "v": v})
+        elif kind == "mode":                    # запрос про сочинение: ege | oge | free (см. chatprompt.essay_kind)
+            mode = v
+        elif kind == "task":                    # «📌 Задание, прочитанное с фото…» — видно сразу и остаётся в истории
+            anchor = v
+            if fmt == "text":
+                await send({"t": "text", "v": v + "\n\n"})
+        elif kind == "ask":                     # задание на фото не читается — вопрос вместо работы
+            asked = v
         elif kind == "err":
             log.warning("chat: tg_id=%s стрим оборвался (%s)", uid, v)
             await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
@@ -2656,12 +2674,17 @@ async def api_chat(request):
             return resp
         else:                                   # done
             reply = v
-    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s ok=True", uid, len(hist), deep, fmt, len(names))
-    ask = assist.chat_question(reply) if fmt != "text" else None
+    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s mode=%s ok=True", uid, len(hist), deep, fmt, len(names), mode)
+    ask = asked if asked is not None else (assist.chat_question(reply) if (fmt != "text" or mode) else None)
+    info = []                                   # строки под работой: примечание модели и объём по правилам ФИПИ
+    if mode and ask is None and fmt != "image":
+        reply, note, words = await assist.essay_finish(mode, fmt, reply, task, anchor, images)
+        info = [x for x in (("Примечание: " + note) if note else "", chatprompt.volume_line(mode, words)) if x]
+        task += ("\n\n" + anchor) if anchor else ""   # проверка готового файла видит и тему с фото
     if fmt == "text" or ask is not None:
         # готовый ответ (или уточняющий вопрос) приходит и в чат приложения, и в чат с бота;
         # доставка в Telegram стартует одновременно с отдачей ответа в чат
-        say = ask if ask is not None else reply
+        say = ask if ask is not None else "\n\n".join([x for x in (anchor, reply) if x] + info)
         tg = asyncio.create_task(tg_chat_answer(request.app.get("bot"), uid, say))
         await send({"t": "done", "reply": say, "enabled": True})
         if await tg:
@@ -2737,6 +2760,9 @@ async def api_chat(request):
     reply += " — карточка файла в этом чате, " + ("копия пришла в Telegram." if sent else "в Telegram отправить не получилось.")
     if fmt in ("pdf", "image"):
         reply += (" Кими проверила файл: есть огрехи оформления — " + warn) if warn else " Кими проверила файл: оформление чистое."
+    under = [x for x in [anchor] + info if x]    # тема с фото, примечание и объём — в чате, а не в документе
+    if under:
+        reply += "\n\n" + "\n".join(under)
     await send({"t": "done", "reply": reply, "enabled": True, "file": file})
     if sent:
         await send({"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом

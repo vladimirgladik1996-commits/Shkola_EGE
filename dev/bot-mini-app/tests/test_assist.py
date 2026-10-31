@@ -117,7 +117,9 @@ async def main():
 
         QUEUE.append("Короткий ответ.")
         r = await assist.handle_reply(104, "ai:fast")
-        assert r["reply"] == "Короткий ответ." and CALLS[-1][2]["model"] == "kimi-k2.6" and "fmt" not in r
+        # «напиши сочинение…» — режим сочинения (баг-репорт 015): текст получает абзац с красной строкой и подпись объёма
+        assert "Короткий ответ." in r["reply"] and "Объём: 2 слова." in r["reply"] \
+            and CALLS[-1][2]["model"] == "kimi-k2.6" and "fmt" not in r
         ok("«Быстрый ответ» → сразу текстом (kimi-k2.6), формат не спрашивается")
 
         jtask(kind="chat", action="none", params={}, question="")

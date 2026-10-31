@@ -141,7 +141,7 @@ async def main():
     # --- 7) handle_reply прокидывает колбэк в answer_chat, режим сохраняется ---
     calls = []
 
-    async def fake_ac(text, deep=False, images=None, docs=None, think=None, fmt="text"):
+    async def fake_ac(text, deep=False, images=None, docs=None, think=None, fmt="text", meta=None):
         calls.append({"deep": deep, "think": think, "fmt": fmt})
         return "ок"
 
