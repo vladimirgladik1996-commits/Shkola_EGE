@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>if(window.Android)document.documentElement.classList.add("apk")</script>
 <meta name="theme-color" content="#FBF7E9"><meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap">
@@ -152,7 +153,7 @@ select,input{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;f
 
 /* ===================== Бренд «Надежда» ===================== */
 html,body{overflow-x:clip}
-body{font-family:"Nunito",-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;padding:72px 10px 112px}
+body{font-family:"Nunito",-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;padding:calc(var(--hd,56px) + 16px) 10px 112px}
 h3,h2{font-weight:800}
 .pill,.seg button,.btn{font-weight:700}
 :focus-visible{outline:2.5px solid var(--yel);outline-offset:2px}
@@ -166,17 +167,17 @@ h3,h2{font-weight:800}
 .btn.pri,.pill.on,.seg button.on{box-shadow:0 6px 14px -8px var(--sh)}
 #fab{bottom:calc(22px + env(safe-area-inset-bottom,0px));right:16px;z-index:6;padding:14px 22px;background:var(--yel);color:var(--yon);font-weight:900;font-size:15.5px;box-shadow:0 10px 22px -8px rgba(15,46,110,.55),inset 0 -3px 0 rgba(0,0,0,.1);transition:transform .15s}
 #fab:active{transform:scale(.95)}
-#toast{background:#0E2250;color:#fff;top:calc(env(safe-area-inset-top,0px) + 66px);z-index:70;border:1px solid #ffffff30;box-shadow:0 8px 22px -8px #0008}
+#toast{background:#0E2250;color:#fff;top:calc(env(safe-area-inset-top,0px) + var(--hd,56px) + 10px);z-index:70;border:1px solid #ffffff30;box-shadow:0 8px 22px -8px #0008}
 
 /* --- верхняя панель --- */
-:root{--hdh:calc(56px + env(safe-area-inset-top,0px))}   /* высота фиксированного хедера: от неё отсчитываются липкие панели */
+:root{--hd:56px;--hdh:calc(var(--hd) + env(safe-area-inset-top,0px))}   /* высота фиксированного хедера: от неё отсчитываются липкие панели */
 #top{position:fixed;z-index:5;top:0;left:0;right:0;height:var(--hdh);padding:env(safe-area-inset-top,0px) 14px 0 68px;display:flex;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:box-shadow .25s}
 #top.scr{box-shadow:0 1px 0 var(--ln),0 10px 18px -14px var(--sh)}
 #ttl{display:inline-block;font-size:21px;font-weight:900;letter-spacing:-.01em;white-space:nowrap}
 #tmk{display:none}
 
 /* --- кнопка-гамбургер --- */
-#burger{position:fixed;z-index:60;left:10px;top:calc(env(safe-area-inset-top,0px) + 6px);width:44px;height:44px;border-radius:14px;background:var(--bbg);display:grid;place-content:center;box-shadow:0 6px 14px -8px var(--sh);transition:background .3s,transform .6s cubic-bezier(.34,1.56,.64,1),box-shadow .3s,opacity .4s .3s}
+#burger{position:fixed;z-index:60;left:10px;top:calc(env(safe-area-inset-top,0px) + (var(--hd,56px) - 44px)/2);width:44px;height:44px;border-radius:14px;background:var(--bbg);display:grid;place-content:center;box-shadow:0 6px 14px -8px var(--sh);transition:background .3s,transform .6s cubic-bezier(.34,1.56,.64,1),box-shadow .3s,opacity .4s .3s}
 #burger:active{transform:scale(.92)}
 #burger i{display:block;width:22px;height:3px;border-radius:3px;background:#fff;transition:transform .42s cubic-bezier(.5,1.6,.4,1),opacity .2s,width .3s}
 #burger i+i{margin-top:4.5px}
@@ -785,7 +786,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes plBk{0%{transform:translateY(0) scale(.7);opacity:0}15%{opacity:.55}100%{transform:translateY(-55vh) scale(1.2);opacity:0}}
 @keyframes plDots{0%,25%{opacity:.15}55%{opacity:1}100%{opacity:.15}}
 @media (prefers-reduced-motion:reduce){#pl .pl-rays,#pl .pl-doodle,#pl .pl-bk,#pl .pl-art,#pl .pl-l,#pl .pl-glow,#pl .pl-sp,#pl .pl-sweep,#pl #plf,#pl .pl-cap{animation-duration:14s}#pl .pl-i{animation-duration:70s!important}}
-.mt-bar{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:4;margin:0 -10px 6px;padding:2px 10px 8px;background:var(--bg)}
+.mt-bar{position:sticky;top:calc(var(--hd,56px) + env(safe-area-inset-top,0px));z-index:4;margin:0 -10px 6px;padding:2px 10px 8px;background:var(--bg)}
 .mt-back{min-height:52px;padding:6px 22px 6px 6px;gap:14px;font-size:17px;font-weight:800;box-shadow:0 0 0 1px var(--ln),0 8px 16px -10px rgba(14,34,80,.45)}
 .mt-back .mi{flex:0 0 44px;height:44px}
 .mt-back .mi svg{width:24px;height:24px;stroke-width:2.6}
@@ -1750,7 +1751,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 /* неделя: все 7 дней на экране без горизонтального скролла, шапка дней прилипает */
 .sc.wk{overflow:clip}@supports not (overflow:clip){.sc.wk{overflow:visible}}
 .wg:not(.bw){min-width:0}
-.wg:not(.bw) .wh{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:4;background:color-mix(in srgb,var(--acc) 5%,var(--card))}
+.wg:not(.bw) .wh{position:sticky;top:calc(var(--hd,56px) + env(safe-area-inset-top,0px));z-index:4;background:color-mix(in srgb,var(--acc) 5%,var(--card))}
 .wg:not(.bw) .wh b{cursor:pointer;gap:3px;padding:7px 0 9px;font-size:11.5px;overflow:visible;-webkit-tap-highlight-color:transparent}
 .wg:not(.bw) .wh em{display:grid;place-items:center;min-width:27px;height:27px;padding:0;border-radius:50%;background:none;box-shadow:none;font-size:14px;font-weight:800;color:var(--tx)}
 .wg:not(.bw) .wh b:nth-child(n+7){color:var(--red)}.wg:not(.bw) .wh b:nth-child(n+7) em{color:var(--red)}
@@ -1848,7 +1849,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .wg:not(.bw) .tl i.nt{right:4px;padding:2px 5px 2px 4px;border-radius:99px 3px 3px 99px;font-size:9px;font-weight:800;letter-spacing:0;color:#fff;background:linear-gradient(180deg,#EF5350,#D32F2F);box-shadow:0 4px 8px -3px #d32f2fb3,inset 0 1px 0 #ffffff40;z-index:4}
 
 /* лента дней в «Неделе» закрепляется ниже мини-полосы (56 + 46 = 102) */
-.wg:not(.bw) .wh{top:calc(56px + env(safe-area-inset-top,0px))}   /* лента дней — под верхней шапкой */
+.wg:not(.bw) .wh{top:calc(var(--hd,56px) + env(safe-area-inset-top,0px))}   /* лента дней — под верхней шапкой */
 /* названия дней в таблице недели — мельче */
 .wg:not(.bw) .wh b{gap:2px;padding:6px 0 7px;font-size:9px;font-weight:700;letter-spacing:.06em}
 .wg:not(.bw) .wh em{min-width:26px;height:26px;font-size:13.5px;font-weight:800;letter-spacing:-.01em}
@@ -1900,6 +1901,17 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 #pr.on{animation:prIn .42s cubic-bezier(.22,1,.36,1)}#pr.on.out{animation:prOut .23s cubic-bezier(.4,0,1,1) forwards}
 @media(prefers-reduced-motion:reduce){.sx-in *,.sx-in,.ch-ttl.sxt b,.ch-ttl.sxt small,#sch-print,#pr.on,.sx-body.sx-swr,.sx-body.sx-swl{animation:none!important}.sx-thumb,.sx-nline,.sx-nd,.wg:not(.bw) .tl i.nt{transition-duration:.01ms!important}}
 .sx-clk{margin-left:9px;font-size:15px;font-weight:800;letter-spacing:.01em;font-variant-numeric:tabular-nums;color:#FFD76A;-webkit-text-fill-color:#FFD76A}
+
+/* ===== APK-обёртка (WebView, не Telegram): «воздух» сверху и заполнение высоты =====
+   В Telegram над страницей есть собственная шапка Telegram (≈56 px), в APK её нет — шапка кабинета
+   прилипала к системной полосе. Класс html.apk ставит ранний скрипт в <head> (есть window.Android). */
+html.apk{--hd:64px}
+html.apk #ttl{padding-top:2px}
+/* «ИИ-проверка»: на высоких экранах (APK выше мини-аппа на ~56 px) кнопки уходят вниз, а картинка
+   центрируется в свободном месте — вместо пустой «ямы» под последней кнопкой */
+body.ec-nb #app:has(.ec-hero){display:flex;flex-direction:column;min-height:calc(100vh - var(--hd,56px) - 16px - 28px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+@supports (height:100dvh){body.ec-nb #app:has(.ec-hero){min-height:calc(100dvh - var(--hd,56px) - 16px - 28px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}}
+body.ec-nb #app:has(.ec-hero) .ec-hero{flex:1;justify-content:center}
 </style><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body>
 <div id="pl">
 <div class="pl-cover" aria-hidden="true"><div class="pl-rays"></div><div class="pl-doodle"></div>

@@ -1,6 +1,11 @@
 package ru.kabinet.tutor;
 
 import android.Manifest;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
@@ -20,17 +25,24 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.PathInterpolator;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.ValueCallback;
@@ -38,6 +50,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
@@ -66,11 +80,25 @@ public class MainActivity extends Activity {
     private MediaRecorder micRec;                   // нативная запись голоса (см. JsBridge.nativeRec)
     private File micFile;
     private long micT0;
+    // --- экран запуска: нативная «шторка» с иконкой поверх WebView, пока страница не нарисовала прелоадер ---
+    private static final int APP_BG = 0xFFFBF7EE;   // = splash_bg = середина градиента веб-прелоадера
+    private static final long SPLASH_MIN_MS = 900;  // иконка не мелькает: минимум столько на экране
+    private static final long SPLASH_MAX_MS = 25000; // страницы нет (сервер спит/нет сети) — всё равно открываем
+    private FrameLayout root;                       // корень: WebView + шторка
+    private FrameLayout splash;                     // шторка запуска (null — уже убрана или не нужна)
+    private ImageView splashIcon;
+    private ValueAnimator breathe;                  // мягкое «дыхание» иконки, пока ждём страницу
+    private boolean splashPending = true;           // шторка нужна только при самом первом открытии WebView
+    private boolean revealStarted;
+    private long splashT0;
     private boolean webPaused;                      // WebView приостановлен (onPause) — не гасить его повторно
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        splashT0 = SystemClock.uptimeMillis();
+        // окно запуска (иконка на кремовом фоне) мы заменяем сплошным фоном: под WebView иконка не должна просвечивать
+        getWindow().setBackgroundDrawable(new ColorDrawable(APP_BG));
         prefs = getSharedPreferences("app", MODE_PRIVATE);
         String url = prefs.getString("url", "");
         if (url.isEmpty()) showSetup(""); else showWeb(url);
@@ -112,7 +140,12 @@ public class MainActivity extends Activity {
 
     private void showWeb(final String url) {
         web = new WebView(this);
-        setContentView(web);
+        web.setBackgroundColor(APP_BG);        // пока страница не нарисована — кремовый, а не белый
+        root = new FrameLayout(this);
+        root.setBackgroundColor(APP_BG);
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        if (splashPending) { splashPending = false; attachSplash(); }
+        setContentView(root);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -129,6 +162,18 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new JsBridge(), "Android");   // «Поделиться PDF» + микрофон (см. JsBridge)
 
         web.setWebViewClient(new WebViewClient() {
+            /** Страница впервые показала содержимое (HTML-прелоадер уже нарисован) — можно плавно открывать. */
+            @Override
+            public void onPageCommitVisible(WebView v, String u) { revealApp(); }
+
+            @Override
+            public void onPageFinished(WebView v, String u) { revealApp(); }
+
+            @Override
+            public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+                if (r != null && r.isForMainFrame()) revealApp();   // ошибки сети показывает сама страница/WebView
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
@@ -302,6 +347,98 @@ public class MainActivity extends Activity {
         web.loadUrl(url);
         // Разрешения НЕ спрашиваем при открытии приложения — только при первом реальном
         // использовании камеры/микрофона (см. onPermissionRequest, askMic/askCamera).
+    }
+
+    // ================= Экран запуска =================
+    // Цепочка: системное окно запуска (иконка по центру на кремовом) → эта нативная шторка с той же иконкой
+    // в том же месте → мягкое растворение прямо в веб-прелоадер. Все три кадра совпадают, поэтому нет ни
+    // белой вспышки, ни «наезда» иконки на весь экран.
+
+    private void attachSplash() {
+        float d = getResources().getDisplayMetrics().density;
+        int id = getResources().getIdentifier("splash_art", "drawable", getPackageName());
+        if (id == 0) return;                                  // ресурса нет — просто без шторки
+        splash = new FrameLayout(this);
+        splash.setBackgroundColor(APP_BG);
+        splash.setClickable(true);                            // пока шторка есть, касания не уходят в страницу
+        splashIcon = new ImageView(this);
+        splashIcon.setImageResource(id);
+        splashIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int sz = (int) (160 * d);
+        splash.addView(splashIcon, new FrameLayout.LayoutParams(sz, sz, Gravity.CENTER));
+        root.addView(splash, new FrameLayout.LayoutParams(-1, -1));
+
+        // системное окно запуска центрирует иконку по ВСЕМУ экрану, а наш корень лежит между системными
+        // полосами — сдвигаем иконку на разницу, чтобы кадры совпали с точностью до пикселя
+        root.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) { alignSplashIcon(); }
+        });
+        root.post(new Runnable() { public void run() { alignSplashIcon(); } });
+
+        // спокойное «дыхание», пока ждём страницу (стартует с масштаба 1 — без скачка относительно окна запуска)
+        breathe = ValueAnimator.ofFloat(0f, 1f);
+        breathe.setDuration(1300);
+        breathe.setRepeatCount(ValueAnimator.INFINITE);
+        breathe.setRepeatMode(ValueAnimator.REVERSE);
+        breathe.setInterpolator(new AccelerateDecelerateInterpolator());
+        breathe.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            public void onAnimationUpdate(ValueAnimator a) {
+                float s = 1f + 0.035f * (Float) a.getAnimatedValue();
+                if (splashIcon != null) { splashIcon.setScaleX(s); splashIcon.setScaleY(s); }
+            }
+        });
+        breathe.start();
+
+        // страховка: если страница так и не отозвалась — шторку всё равно убираем
+        root.postDelayed(new Runnable() { public void run() { revealApp(); } }, SPLASH_MAX_MS);
+    }
+
+    private void alignSplashIcon() {
+        try {
+            if (splashIcon == null || root == null) return;
+            WindowInsets wi = root.getRootWindowInsets();
+            if (wi == null) return;
+            splashIcon.setTranslationY((wi.getSystemWindowInsetBottom() - wi.getSystemWindowInsetTop()) / 2f);
+        } catch (Exception ignored) {}
+    }
+
+    /** Убрать шторку: страница готова (или ждать больше нечего). Безопасно вызывать много раз. */
+    private void revealApp() {
+        if (splash == null || revealStarted) return;
+        revealStarted = true;
+        long wait = Math.max(0, SPLASH_MIN_MS - (SystemClock.uptimeMillis() - splashT0));
+        splash.postDelayed(new Runnable() { public void run() { playReveal(); } }, wait + 60);
+    }
+
+    private void playReveal() {
+        final FrameLayout sp = splash;
+        if (sp == null || splashIcon == null || root == null) return;
+        if (breathe != null) breathe.cancel();
+        float s0 = splashIcon.getScaleX();
+        PathInterpolator soft = new PathInterpolator(0.22f, 0f, 0.1f, 1f);     // мягкий выезд, без рывка
+        PathInterpolator fade = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
+
+        // иконка чуть вырастает и растворяется (не «наезжает» на весь экран: максимум +9%)
+        ObjectAnimator sx = ObjectAnimator.ofFloat(splashIcon, View.SCALE_X, s0, 1.09f);
+        ObjectAnimator sy = ObjectAnimator.ofFloat(splashIcon, View.SCALE_Y, s0, 1.09f);
+        sx.setDuration(620); sy.setDuration(620); sx.setInterpolator(soft); sy.setInterpolator(soft);
+        ObjectAnimator ia = ObjectAnimator.ofFloat(splashIcon, View.ALPHA, 1f, 0f);
+        ia.setDuration(420); ia.setInterpolator(fade);
+        // кремовый фон растворяется чуть дольше — под ним уже живой прелоадер
+        ObjectAnimator bg = ObjectAnimator.ofFloat(sp, View.ALPHA, 1f, 0f);
+        bg.setDuration(560); bg.setStartDelay(140); bg.setInterpolator(fade);
+
+        AnimatorSet set = new AnimatorSet();
+        set.playTogether(sx, sy, ia, bg);
+        set.addListener(new AnimatorListenerAdapter() {
+            public void onAnimationEnd(Animator a) {
+                try { if (root != null) root.removeView(sp); } catch (Exception ignored) {}
+                if (splash == sp) { splash = null; splashIcon = null; }
+                if (web != null) web.requestFocus();
+            }
+        });
+        // веб-слой на время перехода — на отдельный слой GPU, чтобы кроссфейд шёл ровно
+        set.start();
     }
 
     /**

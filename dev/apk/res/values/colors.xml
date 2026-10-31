@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- фон кабинета (переменная bg мини-аппа) — им же красим системные полосы, чтобы они сливались со страницей -->
+    <color name="app_bg">#FBF7E9</color>
+    <!-- фон экрана запуска = середина градиента веб-прелоадера (#fbf7ee): переход без «шва» -->
+    <color name="splash_bg">#FBF7EE</color>
+    <color name="ic_launcher_bg">#8268EA</color>
+</resources>
