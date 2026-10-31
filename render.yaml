@@ -86,9 +86,12 @@ services:
       - key: YANDEX_API_KEY
         sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
 
-      # --- сводка счетов (/balance): OpenRouter, Render и биллинг Яндекса ---
-      - key: OPENROUTER_API_KEY
-        sync: false # ключ https://openrouter.ai/settings/keys — кредиты в сводке /balance
+      # --- сводка счетов (/balance): OpenAI (ключ голоса Whisper), Render и биллинг Яндекса ---
+      # Баланс OpenAI в /balance берётся WHISPER_API_KEY — тем же ключом, что у распознавания
+      # голоса; только если он пуст — отдельным OPENAI_API_KEY из панели. Необязательный
+      # OPENAI_ADMIN_KEY — Admin-ключ организации
+      # (Platform → Organization → Admin keys, доступ costs.read): официальный расход
+      # с начала месяца. Сюда не прописываем: sync:false сделал бы их обязательными.
       - key: RENDER_API_KEY
         sync: false # ключ Render (Dashboard → Account Settings → API Keys) — лимиты сервисов в /balance
       - key: YANDEX_OAUTH_TOKEN
@@ -162,9 +165,11 @@ services:
       # «ИИ-проверка»: YANDEX_API_KEY — в панели (секрет, как KIMI_API_KEY); EC_LIVE=1 — фото уходят в API
       - key: YANDEX_API_KEY
         sync: false # ключ Yandex Cloud для Vision OCR (рукописный текст)
-      # сводка счетов (/balance): OpenRouter, Render и биллинг Яндекса
-      - key: OPENROUTER_API_KEY
-        sync: false # ключ https://openrouter.ai/settings/keys — кредиты в сводке /balance
+      # сводка счетов (/balance): OpenAI (ключ голоса Whisper), Render и биллинг Яндекса
+      # Баланс OpenAI в /balance берётся WHISPER_API_KEY (см. выше) или отдельным
+      # OPENAI_API_KEY из панели. Необязательный OPENAI_ADMIN_KEY — Admin-ключ организации
+      # (Platform → Organization → Admin keys, доступ costs.read): официальный расход
+      # с начала месяца. Сюда не прописываем: sync:false сделал бы их обязательными.
       - key: RENDER_API_KEY
         sync: false # ключ Render (Dashboard → Account Settings → API Keys) — лимиты сервисов в /balance
       - key: YANDEX_OAUTH_TOKEN

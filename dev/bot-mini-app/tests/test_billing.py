@@ -14,7 +14,7 @@ import asyncio, logging, os, re, sys
 from contextlib import asynccontextmanager
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for k in ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENROUTER_API_KEY", "RENDER_API_KEY"):
+for k in ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY"):
     os.environ.pop(k, None)                             # ветка «ключ не задан» должна срабатывать детерминированно
 logging.disable(logging.CRITICAL)                       # предупреждения об ошибках не засоряют вывод теста
 sys.path.insert(0, ROOT)
@@ -44,8 +44,9 @@ def make_app():
     app = web.Application()
     app.router.add_get("/users/me/balance", route("kimi"))
     app.router.add_get("/billing/v1/billingAccounts", route("yandex"))
-    app.router.add_get("/api/v1/credits", route("or_credits"))
-    app.router.add_get("/api/v1/auth/key", route("or_key"))
+    app.router.add_get("/v1/dashboard/billing/credit_grants", route("oa_credit"))
+    app.router.add_get("/v1/dashboard/billing/usage", route("oa_usage"))
+    app.router.add_get("/v1/organization/costs", route("oa_costs"))
     app.router.add_get("/v1/services", route("services"))
     for p in ("cpu-limit", "memory-limit", "disk-usage", "disk-capacity", "bandwidth"):
         app.router.add_get(f"/v1/metrics/{p}", route(p))
@@ -61,8 +62,11 @@ def defaults():
             {"id": "dn2u7t5", "name": "Мой счёт", "currency": "RUB", "balance": "1234.5", "active": True},
             {"id": "dn8xxx", "name": "", "currency": "RUB", "balance": "0", "active": False},
         ]}},
-        or_credits={"json": {"data": {"total_credits": 100.0, "total_usage": 23.5}}},
-        or_key={"json": {"data": {"label": "main", "usage": 23.5, "limit": None, "is_free_tier": False}}},
+        oa_credit={"json": {"object": "credit_grants", "total_granted": 18.0, "total_used": 10.0,
+                           "total_available": 8.0}},
+        oa_usage={"json": {"object": "usage", "total_usage": 15}},   # legacy отдаёт ЦЕНТЫ: 15 = $0,15
+        oa_costs={"json": {"data": [{"object": "bucket", "results": [
+            {"amount": {"value": 0.15, "currency": "USD"}}, {"amount": {"value": 0.05, "currency": "USD"}}]}]}},
         services={"json": [
             {"cursor": "c1", "service": {"id": "srv-abc", "name": "tutor-bot", "type": "web_service",
                                           "serviceDetails": {"plan": "starter", "numInstances": 1}}},
@@ -85,18 +89,21 @@ def defaults():
 @asynccontextmanager
 async def serve():
     """Фейковый сервер провайдеров; адреса billing.py и kimi.BASE переключаются на него."""
-    saved = (billing.YANDEX_URL, billing.OR_CREDITS, billing.OR_KEY, billing.RENDER_URL, kimi.BASE)
+    saved = (billing.YANDEX_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
+             billing.RENDER_URL, kimi.BASE)
     async with TestClient(TestServer(make_app())) as c:
         root = str(c.make_url("")).rstrip("/")
         billing.YANDEX_URL = root + "/billing/v1/billingAccounts"
-        billing.OR_CREDITS = root + "/api/v1/credits"
-        billing.OR_KEY = root + "/api/v1/auth/key"
+        billing.OA_CREDIT = root + "/v1/dashboard/billing/credit_grants"
+        billing.OA_USAGE = root + "/v1/dashboard/billing/usage"
+        billing.OA_COSTS = root + "/v1/organization/costs"
         billing.RENDER_URL = root + "/v1"
         kimi.BASE = root
         try:
             yield root
         finally:
-            billing.YANDEX_URL, billing.OR_CREDITS, billing.OR_KEY, billing.RENDER_URL, kimi.BASE = saved
+            (billing.YANDEX_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
+             billing.RENDER_URL, kimi.BASE) = saved
 
 
 def env(**kw):
@@ -115,7 +122,8 @@ def test_full_report():
     """Все провайдеры ответили: 4 секции, разделители «______», деньги и поля на месте."""
     async def run():
         defaults()
-        saved_env = env(YANDEX_BILLING_API_KEY="YKEY", OPENROUTER_API_KEY="OKEY", RENDER_API_KEY="RKEY")
+        saved_env = env(YANDEX_BILLING_API_KEY="YKEY-111122223333", WHISPER_API_KEY="OKEY-9876543210",
+            OPENAI_API_KEY="AKEY2-000011112222", OPENAI_ADMIN_KEY="AKEY-1234567890", RENDER_API_KEY="RKEY-555566667777")
         old_kimi, kimi.API_KEY = kimi.API_KEY, "KKEY"
         try:
             async with serve():
@@ -134,7 +142,7 @@ def test_full_report():
     parts = text.split("\n" + billing.SEP + "\n")
     assert len(parts) == 4 and text.count(billing.SEP) == 3
     assert [p.splitlines()[0] for p in parts] == [
-        "💳 Кими (Moonshot), CNY:", "☁️ Яндекс Cloud, RUB:", "🌐 OpenRouter, USD:", "🖥 Render, USD:"]
+        "💳 Кими (Moonshot), CNY:", "☁️ Яндекс Cloud, RUB:", "🧠 OpenAI, USD:", "🖥 Render, USD:"]
 
     # Кими: те же поля, что и в старом /balance
     assert "• Доступно: 12,50" in parts[0]
@@ -145,11 +153,10 @@ def test_full_report():
     assert "• Мой счёт (dn2u7t5): 1 234,50 · активен" in parts[1]
     assert "• dn8xxx (dn8xxx): 0,00 · заблокирован" in parts[1]
 
-    # OpenRouter: кредиты → остаток, лимит ключа (null → «без лимита»), бесплатный тариф
-    assert "• Кредиты: 100,00 · использовано: 23,50" in parts[2]
-    assert "• Остаток: 76,50" in parts[2]
-    assert "• Лимит ключа: без лимита · использовано: 23,50" in parts[2]
-    assert "• Бесплатный тариф: нет" in parts[2]
+    # OpenAI: какой ключ подключён (хвост), кредиты, расход с начала месяца (Costs API, Admin-ключ)
+    assert "• Ключ: WHISPER_API_KEY …3210" in parts[2]   # приоритет у ключа голоса: OPENAI_API_KEY задан, но не перекрывает
+    assert "• Кредиты: доступно 8,00 · использовано 10,00 из 18,00" in parts[2]
+    assert "• Расход с начала месяца: 0,20" in parts[2]
 
     # Render: сервис с планом, лимиты (последняя точка таймсерии в любом формате значений), диск «из»
     assert "• tutor-bot (srv-abc): план starter" in parts[3]
@@ -166,9 +173,10 @@ def test_full_report():
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", query.get("endTime", ""))
 
     # ключи уходят заголовками, но значения не попадают в текст отчёта
-    assert any(c[2].get("Authorization") == "Bearer RKEY" for c in CALLS if c[0] == "/v1/services")
-    assert any(c[2].get("Authorization") == "Api-Key YKEY" for c in CALLS if "billingAccounts" in c[0])
-    for secret in ("YKEY", "OKEY", "RKEY", "KKEY"):
+    assert any(c[2].get("Authorization") == "Bearer RKEY-555566667777" for c in CALLS if c[0] == "/v1/services")
+    assert any(c[2].get("Authorization") == "Api-Key YKEY-111122223333" for c in CALLS if "billingAccounts" in c[0])
+    for secret in ("YKEY-111122223333", "OKEY-9876543210", "AKEY-1234567890", "AKEY2-000011112222",
+                   "RKEY-555566667777", "KKEY-444455556666"):
         assert secret not in text
     ok("отчёт: 4 секции, разделители «______», деньги и поля как в старом /balance, ключи не утекают")
 
@@ -179,7 +187,7 @@ def test_no_keys():
         defaults()
         # ключи вычищены ещё при импорте модуля — здесь только сохраняем и возвращаем как было
         saved_env = {k: os.environ.pop(k, None) for k in
-                     ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENROUTER_API_KEY", "RENDER_API_KEY")}
+                     ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY")}
         old_kimi, kimi.API_KEY = kimi.API_KEY, ""
         try:
             async with serve():
@@ -196,7 +204,7 @@ def test_no_keys():
     assert len(parts) == 4
     assert "• ключ не задан (KIMI_API_KEY)" in parts[0]
     assert "• ключ не задан (YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)" in parts[1]
-    assert "• ключ не задан (OPENROUTER_API_KEY)" in parts[2]
+    assert "• ключ не задан (WHISPER_API_KEY / OPENAI_API_KEY)" in parts[2]
     assert "• ключ не задан (RENDER_API_KEY)" in parts[3]
     ok("без ключей: все секции про «ключ не задан», наружу ничего не уходит")
 
@@ -204,7 +212,8 @@ def test_no_keys():
 def test_errors():
     """Ветка «ошибка запроса»: 403 → подсказка про billing.viewer, 500/мусор → «не получилось»."""
     async def run(out):
-        saved_env = env(YANDEX_BILLING_API_KEY="YKEY", OPENROUTER_API_KEY="OKEY", RENDER_API_KEY="RKEY")
+        saved_env = env(YANDEX_BILLING_API_KEY="YKEY-111122223333", WHISPER_API_KEY="OKEY-9876543210",
+            OPENAI_ADMIN_KEY="AKEY-1234567890", RENDER_API_KEY="RKEY-555566667777")
         old_kimi, kimi.API_KEY = kimi.API_KEY, "KKEY"
         try:
             async with serve():
@@ -216,8 +225,8 @@ def test_errors():
     out = []
     defaults()
     MODE["yandex"] = {"code": 403, "json": {}}                      # ключ есть, прав на биллинг нет
-    MODE["or_credits"] = {"code": 500, "json": {}}
-    MODE["or_key"] = {"code": 500, "json": {}}
+    MODE["oa_credit"] = {"code": 500, "json": {}}
+    MODE["oa_costs"] = {"code": 500, "json": {}}
     MODE["services"] = {"code": 500, "json": {}}
     asyncio.run(run(out))
     text = out[0]
@@ -226,7 +235,7 @@ def test_errors():
     assert "• Доступно: 12,50" in parts[0]                          # Кими жив, хотя соседи упали
     assert "• нет доступа: ключу нужна роль billing.viewer" in parts[1]
     assert "• Кредиты: не получилось (см. лог)" in parts[2]
-    assert "• Лимит ключа: не получилось (см. лог)" in parts[2]
+    assert "• Расход: не получилось (см. лог)" in parts[2]
     assert "• сервисы: не получилось (см. лог)" in parts[3]
     ok("403 → подсказка про billing.viewer; 500 → «не получилось»; живые секции целы")
 
@@ -248,7 +257,7 @@ def test_errors():
 def test_metrics_errors():
     """Упавшая метрика Render — «не получилось» только в своей строке; одна метрика не тянет остальные."""
     async def run():
-        saved_env = env(RENDER_API_KEY="RKEY", OPENROUTER_API_KEY="OKEY")
+        saved_env = env(RENDER_API_KEY="RKEY-555566667777", WHISPER_API_KEY="OKEY-9876543210")
         old_kimi, kimi.API_KEY = kimi.API_KEY, ""
         try:
             async with serve():
@@ -260,16 +269,16 @@ def test_metrics_errors():
     defaults()
     for p in ("cpu-limit", "memory-limit", "disk-usage", "disk-capacity", "bandwidth"):
         MODE[p] = {"code": 500, "json": {}}
-    MODE["or_key"] = {"code": 500, "json": {}}                      # половина OpenRouter тоже падает
+    MODE["oa_usage"] = {"code": 500, "json": {}}                     # половина секции OpenAI тоже падает
     text = asyncio.run(run())
     render = text.split("\n" + billing.SEP + "\n")[3]
     assert "• tutor-bot (srv-abc): план starter" in render           # список сервисов получен
     for label in ("CPU-лимит", "Память", "Диск", "Трафик с начала месяца"):
         assert f"  · {label}: не получилось" in render
     assert "• Даты списания: публичный API Render не отдаёт" in render
-    openrouter = text.split("\n" + billing.SEP + "\n")[2]
-    assert "• Кредиты: 100,00 · использовано: 23,50" in openrouter  # первая половина секции жива
-    assert "• Лимит ключа: не получилось (см. лог)" in openrouter
+    openai = text.split("\n" + billing.SEP + "\n")[2]
+    assert "• Кредиты: доступно 8,00 · использовано 10,00 из 18,00" in openai  # первая половина секции жива
+    assert "• Расход: не получилось (см. лог)" in openai
     ok("упавшая метрика → «не получилось» в своей строке, остальные секции и строки целы")
 
 

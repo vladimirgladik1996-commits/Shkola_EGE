@@ -1,10 +1,11 @@
 """Сводный отчёт по счетам всех провайдеров — /balance: одно сообщение, четыре секции.
 
-Зачем: деньги лежат в четырёх местах (Kimi, Яндекс Cloud, OpenRouter, Render) —
+Зачем: деньги лежат в четырёх местах (Kimi, Яндекс Cloud, OpenAI, Render) —
 сводка в одном сообщении показывает всё сразу, без похода в четыре кабинета.
 
 Ключи — из окружения (см. render.yaml). Сами значения ключей в логи и ответы
-не попадают ни при каких условиях.
+не попадают ни при каких условиях (единственное исключение — хвост из 4 символов
+в секции OpenAI: по нему видно, какой именно ключ подключён).
 
 Секция каждого провайдера живёт своей жизнью: пустой ключ или упавший запрос
 одного не ломает остальные — в секции просто появляется «не получилось».
@@ -15,7 +16,12 @@
                              ТОЛЬКО его, обычный Api-Key отвергает с 401
   YANDEX_BILLING_API_KEY   — запасной вариант: Api-Key с ролью billing.viewer
                              (если пусто, берётся YANDEX_API_KEY — но биллинг его, скорее всего, не примет)
-  OPENROUTER_API_KEY       — ключ https://openrouter.ai/settings/keys
+  WHISPER_API_KEY          — ключ распознавания голоса (см. whisper.py) — ОН ЖЕ показывает баланс
+                             OpenAI в /balance: кредиты и расход (обычный ключ, НЕ Admin)
+  OPENAI_API_KEY           — запасной обычный ключ OpenAI: берётся, только если WHISPER_API_KEY пуст
+                             (например, голос на Groq, а баланс OpenAI хочется видеть отдельно)
+  OPENAI_ADMIN_KEY         — Admin-ключ организации (Platform → Settings → Organization → Admin keys,
+                             доступ costs.read): официальный Costs API — расход с начала месяца
   RENDER_API_KEY           — ключ Render: Dashboard → Account Settings → API Keys
 
 Дата списания денег у Render публичным API не отдаётся — так и написано в секции.
@@ -34,8 +40,9 @@ SEP = "______"          # разделитель секций в одном со
 
 # Адреса API вынесены в константы: тесты подменяют их фейковым сервером (см. tests/test_billing.py)
 YANDEX_URL = "https://billing.api.cloud.yandex.net/billing/v1/billingAccounts"
-OR_CREDITS = "https://openrouter.ai/api/v1/credits"
-OR_KEY = "https://openrouter.ai/api/v1/auth/key"
+OA_CREDIT = "https://api.openai.com/v1/dashboard/billing/credit_grants"   # кредиты (legacy, обычным ключом)
+OA_USAGE = "https://api.openai.com/v1/dashboard/billing/usage"   # расход периода (legacy, обычным ключом)
+OA_COSTS = "https://api.openai.com/v1/organization/costs"   # расход по дням (официальный, Admin-ключом)
 RENDER_URL = "https://api.render.com/v1"
 
 
@@ -141,39 +148,66 @@ async def _yandex(s):
     return "\n".join(lines)
 
 
-async def _openrouter(s):
-    """Секция OpenRouter: кредиты аккаунта и лимит отдельного ключа (USD)."""
-    key = _key("OPENROUTER_API_KEY")
-    lines = ["🌐 OpenRouter, USD:"]
+async def _openai(s):
+    """Секция OpenAI: кредиты и расходы аккаунта, чей ключ стоит у распознавания голоса.
+
+    Собирается из двух источников, потому что публичного API баланса у OpenAI нет:
+      • legacy dashboard/billing/… — кредиты и расход обычным ключом (sk-…); работают
+        не для всех ключей (проектные/новые OpenAI может не пускать) — тогда «не получилось»;
+      • официальный Costs API (/v1/organization/costs) — расход с начала месяца,
+        но ТОЛЬКО Admin-ключом организации (OPENAI_ADMIN_KEY, доступ costs.read).
+    Падение одной ветки — своя строка «не получилось», остальной отчёт жив."""
+    src, key = "WHISPER_API_KEY", _key("WHISPER_API_KEY")   # ключ голоса — он же баланс проекта
     if not key:
-        lines.append("• ключ не задан (OPENROUTER_API_KEY)")
+        src, key = "OPENAI_API_KEY", _key("OPENAI_API_KEY")
+    admin = _key("OPENAI_ADMIN_KEY")
+    lines = ["🧠 OpenAI, USD:"]
+    if not key and not admin:
+        lines.append("• ключ не задан (WHISPER_API_KEY / OPENAI_API_KEY)")
         return "\n".join(lines)
-    h = {"Authorization": "Bearer " + key}
-    try:
-        async with s.get(OR_CREDITS, headers=h) as r:
-            if r.status != 200:
-                raise RuntimeError(f"credits HTTP {r.status}")
-            d = (await r.json(content_type=None) or {}).get("data") or {}
-        total, used = d.get("total_credits"), d.get("total_usage")
-        rest = float(total) - float(used)                # остаток считаем сами: API отдаёт только пару
-        lines.append(f"• Кредиты: {_money(total)} · использовано: {_money(used)}")
-        lines.append(f"• Остаток: {_money(rest)}")
-    except Exception as e:
-        log.warning("billing: OpenRouter (кредиты) не ответил: %r", e)
-        lines.append("• Кредиты: не получилось (см. лог)")
-    try:
-        async with s.get(OR_KEY, headers=h) as r:
-            if r.status != 200:
-                raise RuntimeError(f"auth/key HTTP {r.status}")
-            d = (await r.json(content_type=None) or {}).get("data") or {}
-        lim = d.get("limit")
-        lim_txt = "без лимита" if lim is None else _money(lim)   # limit=null — ключ без потолка
-        free = "да" if d.get("is_free_tier") else "нет"
-        lines.append(f"• Лимит ключа: {lim_txt} · использовано: {_money(d.get('usage'))}")
-        lines.append(f"• Бесплатный тариф: {free}")
-    except Exception as e:
-        log.warning("billing: OpenRouter (ключ) не ответил: %r", e)
-        lines.append("• Лимит ключа: не получилось (см. лог)")
+    if key:
+        # хвост ключа — чтобы сразу видно, какой аккаунт подключён (сами значения в ответ не уходят)
+        lines.append(f"• Ключ: {src} …{key[-4:]}")
+        try:
+            async with s.get(OA_CREDIT, headers={"Authorization": "Bearer " + key}) as r:
+                if r.status != 200:
+                    raise RuntimeError(f"credit_grants HTTP {r.status}")
+                d = await r.json(content_type=None) or {}
+            lines.append(f"• Кредиты: доступно {_money(d.get('total_available'))} · "
+                         f"использовано {_money(d.get('total_used'))} из {_money(d.get('total_granted'))}")
+        except Exception as e:
+            log.warning("billing: OpenAI (кредиты) не ответил: %r", e)
+            lines.append("• Кредиты: не получилось (см. лог)")
+    else:
+        lines.append("• Кредиты: не получилось (нужен обычный ключ: WHISPER_API_KEY / OPENAI_API_KEY)")
+    month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    now = datetime.now(timezone.utc)
+    if admin:
+        try:   # официальный путь: сумма дневных корзин Costs API с начала месяца
+            async with s.get(OA_COSTS, headers={"Authorization": "Bearer " + admin},
+                             params={"start_time": int(month.timestamp()), "end_time": int(now.timestamp()),
+                                     "bucket_width": "1d"}) as r:
+                if r.status != 200:
+                    raise RuntimeError(f"costs HTTP {r.status}")
+                j = await r.json(content_type=None) or {}
+            spent = sum(float((res.get("amount") or {}).get("value") or 0)
+                        for b in (j.get("data") or []) for res in (b.get("results") or []))
+            lines.append(f"• Расход с начала месяца: {_money(spent)}")
+        except Exception as e:
+            log.warning("billing: OpenAI (расход) не ответил: %r", e)
+            lines.append("• Расход: не получилось (см. лог)")
+    elif key:
+        try:   # запасной путь: legacy-эндпоинт отдаёт расход в ЦЕНТАХ
+            async with s.get(OA_USAGE, headers={"Authorization": "Bearer " + key}) as r:
+                if r.status != 200:
+                    raise RuntimeError(f"usage HTTP {r.status}")
+                used = (await r.json(content_type=None) or {}).get("total_usage")
+            lines.append(f"• Расход за период: {_money(float(used) / 100)}")
+        except Exception as e:
+            log.warning("billing: OpenAI (расход) не ответил: %r", e)
+            lines.append("• Расход: не получилось (см. лог)")
+    else:
+        lines.append("• Расход: не получилось (нужен OPENAI_ADMIN_KEY)")
     return "\n".join(lines)
 
 
@@ -251,6 +285,7 @@ async def _render(s):
         rid = svc.get("id")
         lines.append(f"• {svc.get('name') or '?'} ({rid}): {_plan(svc)}")
         lines += await _limits(s, h, rid)
+    lines.append("• «план» — тариф ИНСТАНСА сервиса (free = 0.1 CPU/512 МБ и сон), не статус аккаунта")
     lines.append("• Даты списания: публичный API Render не отдаёт")
     return "\n".join(lines)
 
@@ -261,8 +296,8 @@ async def report():
     Секции разделяются строкой «______». Ошибка одной секции не ломает остальные —
     заголовок и «не получилось» у падшей, остальные как есть."""
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as s:
-        secs = await asyncio.gather(_kimi(), _yandex(s), _openrouter(s), _render(s), return_exceptions=True)
-    titles = ["💳 Кими (Moonshot), CNY:", "☁️ Яндекс Cloud:", "🌐 OpenRouter, USD:", "🖥 Render, USD:"]
+        secs = await asyncio.gather(_kimi(), _yandex(s), _openai(s), _render(s), return_exceptions=True)
+    titles = ["💳 Кими (Moonshot), CNY:", "☁️ Яндекс Cloud:", "🧠 OpenAI, USD:", "🖥 Render, USD:"]
     out = []
     for title, sec in zip(titles, secs):
         if isinstance(sec, BaseException):               # страховка: сбой внутри секции — не всего отчёта

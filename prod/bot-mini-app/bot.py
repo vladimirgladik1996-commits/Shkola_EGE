@@ -919,7 +919,7 @@ async def logout(m: Message, state: FSMContext):
 
 @r.message(Command("balance"))
 async def cmd_balance(m: Message, state: FSMContext):
-    """Сводка по всем счетам — /balance: Кими, Яндекс Cloud, OpenRouter и Render одним сообщением."""
+    """Сводка по всем счетам — /balance: Кими, Яндекс Cloud, OpenAI и Render одним сообщением."""
     await state.clear()
     await m.answer(await billing.report())
 
