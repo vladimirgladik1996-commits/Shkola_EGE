@@ -86,8 +86,12 @@ async def main():
         fid = url.split("?")[0].rsplit("/", 1)[1]
         r = await c.get(url)
         assert r.status == 200 and await r.read() == b"PDFDATA"
-        assert r.headers["Content-Type"] == "application/pdf" and "attachment" in r.headers["Content-Disposition"]
-        ok("файл чата скачивается прямо из чата по подписной ссылке (без заголовков входа)")
+        # баг-репорт 013: PDF без ?dl=1 отдаётся inline (просмотр в браузере/WebView),
+        # attachment — только по ?dl=1 (скачивание); иначе «браузер молча скачал вместо открытия»
+        assert r.headers["Content-Type"] == "application/pdf" and "inline" in r.headers["Content-Disposition"]
+        r = await c.get(url + ("&" if "?" in url else "?") + "dl=1")
+        assert r.status == 200 and "attachment" in r.headers["Content-Disposition"]
+        ok("файл чата открывается по подписной ссылке (inline), скачивается по ?dl=1 (без заголовков входа)")
         assert (await c.get("/api/chat_file/" + fid)).status == 403            # без подписи — нельзя
         assert (await c.get("/api/chat_file/%s?tok=" % fid + bot.chat_file_token(7, fid))).status == 403
         assert (await c.get("/api/chat_file/NoSuchFile1?tok=" + bot.chat_file_token(42, "NoSuchFile1"))).status == 404
@@ -95,7 +99,9 @@ async def main():
 
         # /api/chat: модель отвечает, формат docx → в событии done есть file.url для кликабельного чипа
         async def fake_chat_stream(history, deep=False, images=None, docs=None, fmt="text", img_names=None, mat=""):
-            assert "МАТЕРИАЛЫ ИЗ РАЗДЕЛА" in mat or "ничего не нашлось" in mat   # материалы проверяются всегда
+            # коммит 3870b4d: /api/chat обрабатывается БЕЗ поиска по материалам (mat не передаётся);
+            # материалы раздела «Материалы» живут в своём потоке с виджетом (проверяется выше)
+            assert mat == "", mat
             yield "text", "Эссе"
             yield "done", "# Эссе по варианту 4\n\nПереписанный текст."
 
@@ -122,7 +128,7 @@ async def main():
         # --- 3. виджет Вишенки: открыть материал и уточнить каталог ---
         r = await c.post("/api/voice", json={"ctx": {"tab": "mt"}, "text": "открой вариант 7 ЕГЭ"}, headers=H)
         d = await r.json()
-        assert d["stage"] == "open" and d["open"] == {"cat": "ege-essays-2027", "n": 7}, d
+        assert d["stage"] == "open" and d["open"] == {"cat": "ege-essays-2027", "n": 7, "part": "p-text"}, d
         ok("виджет открывает страницу варианта на экране (open → мини-апп переходит в «Материалы»)")
 
         r = await c.post("/api/voice", json={"ctx": {"tab": "mt"}, "text": "найди эссе ОГЭ к варианту 4"}, headers=H)
@@ -147,7 +153,7 @@ html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
 assert "chFileTap" in html and "A.openFile" in html and "A.shareFile" in html
 assert 'x.u?`<a class="aif"' in html
 ok("фронт: файл в чате — кликабельный: тап = скачать и открыть (APK: openFile, Telegram: downloadFile)")
-assert "voiceOpen(" in html and "r.open" in html and "matOpen(ci,o.n)" in html
+assert "voiceOpen(" in html and "r.open" in html and "await matOpen(ci,n,sec)" in html
 assert "c.mat={cat:matCur.cat" in html and 'matCur=typeof part=="number"' in html
 ok("фронт: Вишенка открывает найденный вариант и видит, какой материал сейчас на экране")
 assert "file={n:ev.file.name" in html and "ev.file.url" in html

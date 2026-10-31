@@ -76,7 +76,7 @@ async def main():
         text = "".join(v for k, v in out if k == "text")
         assert text == "1. Вопрос один\n2. Вопрос два\nОтветы: 1) а 2) б", out
         assert not [k for k, _ in out if k == "err"], out
-        assert [k for k, _ in out].count("think") == 1, out   # мышление продолжения не показывается
+        assert [k for k, _ in out].count("think") == 2, out   # баг-репорт 016: мышление стримится и при продолжении
         ok("стрим, обрезанный по max_tokens, дособран продолжением — ответ целиком")
 
         # --- 2) продолжение закрепляет обрезанный текст и продолжает с места обрыва ---
