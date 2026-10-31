@@ -12,10 +12,16 @@
 
 Переменные окружения:
   KIMI_API_KEY             — см. kimi.py (секция Кими переиспользует kimi.balance())
-  YANDEX_OAUTH_TOKEN       — OAuth-токен Яндекса (yandex.ru/oauth): Billing API понимает
-                             ТОЛЬКО его, обычный Api-Key отвергает с 401
-  YANDEX_BILLING_API_KEY   — запасной вариант: Api-Key с ролью billing.viewer
-                             (если пусто, берётся YANDEX_API_KEY — но биллинг его, скорее всего, не примет)
+  YANDEX_SA_KEY            — JSON авторизованного ключа сервисного аккаунта (содержимое
+                             key.json целиком): подписывается JWT (PS256) и обменивается
+                             на IAM-токен — так Billing API работает по документации
+                             (Authorization: Bearer). Сервисному аккаунту нужна роль
+                             billing.accounts.viewer (billing.viewer) на платёжном аккаунте
+  YANDEX_SA_KEY_FILE       — то же самое, но путь к файлу с JSON-ключом (если так удобнее)
+  YANDEX_OAUTH_TOKEN       — запасной способ: OAuth-токен Яндекса (yandex.ru/oauth) —
+                             тоже принимается (Authorization: OAuth)
+  YANDEX_BILLING_API_KEY   — последний резерв: Api-Key (если пусто, берётся YANDEX_API_KEY) —
+                             Billing API его отвергает с 401, оставлен для диагностики
   WHISPER_API_KEY          — ключ распознавания голоса (см. whisper.py) — ОН ЖЕ показывает баланс
                              OpenAI в /balance: кредиты и расход (обычный ключ, НЕ Admin)
   OPENAI_API_KEY           — запасной обычный ключ OpenAI: берётся, только если WHISPER_API_KEY пуст
@@ -26,7 +32,7 @@
 
 Дата списания денег у Render публичным API не отдаётся — так и написано в секции.
 """
-import asyncio, logging, os
+import asyncio, json, logging, os, re, time
 from datetime import datetime, timezone
 
 import aiohttp
@@ -40,6 +46,7 @@ SEP = "______"          # разделитель секций в одном со
 
 # Адреса API вынесены в константы: тесты подменяют их фейковым сервером (см. tests/test_billing.py)
 YANDEX_URL = "https://billing.api.cloud.yandex.net/billing/v1/billingAccounts"
+IAM_URL = "https://iam.api.cloud.yandex.net/iam/v1/tokens"   # обмен JWT сервисного аккаунта на IAM-токен
 OA_CREDIT = "https://api.openai.com/v1/dashboard/billing/credit_grants"   # кредиты (legacy, обычным ключом)
 OA_USAGE = "https://api.openai.com/v1/dashboard/billing/usage"   # расход периода (legacy, обычным ключом)
 OA_COSTS = "https://api.openai.com/v1/organization/costs"   # расход по дням (официальный, Admin-ключом)
@@ -53,6 +60,75 @@ def _key(*names):
         if v:
             return v
     return ""
+
+
+_iam_cache = {"token": "", "until": 0.0}   # IAM-токен действует часами — кэшируем на полчаса
+
+
+def _sa_key():
+    """JSON авторизованного ключа сервисного аккаунта (YANDEX_SA_KEY или YANDEX_SA_KEY_FILE).
+
+    None — ключа нет или он не читается: у секции есть запасные способы авторизации."""
+    raw = os.getenv("YANDEX_SA_KEY", "").strip()
+    if not raw:
+        path = os.getenv("YANDEX_SA_KEY_FILE", "").strip()
+        if path:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    raw = f.read()
+            except OSError as e:
+                log.warning("billing: YANDEX_SA_KEY_FILE не прочитался: %r", e)
+    if not raw:
+        return None
+    try:
+        key = json.loads(raw)
+    except ValueError as e:
+        log.warning("billing: YANDEX_SA_KEY — не JSON: %r", e)
+        return None
+    if not isinstance(key, dict) or not key.get("private_key") or not key.get("service_account_id"):
+        log.warning("billing: в YANDEX_SA_KEY нет private_key/service_account_id")
+        return None
+    return key
+
+
+async def _iam(s):
+    """IAM-токен для Billing API: JWT (PS256, ключом сервисного аккаунта) → Bearer.
+
+    Как в документации Яндекса (iam/operations/iam-token/create-for-sa): alg=PS256 + kid,
+    iss — сервисный аккаунт, aud — адрес токен-сервиса, exp−iat ≤ 3600 с.
+    Токен кэшируется на полчаса: каждый /balance не запрашивает новый."""
+    key = _sa_key()
+    if not key:
+        return ""
+    now = time.time()
+    if _iam_cache["token"] and now < _iam_cache["until"]:
+        return _iam_cache["token"]
+    try:
+        import jwt  # PyJWT + cryptography (PS256) — в requirements.txt
+        pem = "\n".join(l for l in str(key["private_key"]).splitlines()
+                        if "PLEASE DO NOT REMOVE" not in l)   # служебная строка Яндекса рядом с PEM
+        block = re.search(r"-----BEGIN [A-Z ]+-----.*?-----END [A-Z ]+-----", pem, re.S)
+        assertion = jwt.encode(
+            {"iss": key["service_account_id"], "aud": IAM_URL,
+             "iat": int(now), "exp": int(now) + 3600},
+            block.group(0) if block else pem, algorithm="PS256",
+            headers={"typ": "JWT", "kid": str(key.get("id", ""))})
+    except Exception as e:
+        log.warning("billing: JWT из YANDEX_SA_KEY не подписался: %r", e)
+        return ""
+    try:
+        async with s.post(IAM_URL, json={"jwt": assertion}) as r:
+            if r.status != 200:
+                log.warning("billing: IAM-токен не выдался (HTTP %s)", r.status)
+                return ""
+            j = await r.json(content_type=None)
+    except Exception as e:
+        log.warning("billing: IAM-токен не выдался: %r", e)
+        return ""
+    token = j.get("iamToken") if isinstance(j, dict) else ""
+    if token:
+        _iam_cache.update(token=token, until=now + 1800)
+    return token or ""
 
 
 def _money(x):
@@ -111,21 +187,27 @@ async def _kimi():
 async def _yandex(s):
     """Секция Яндекс Cloud: баланс, валюта и статус каждого счёта.
 
-    Billing API принимает только OAuth-токены: на Api-Key отвечает 401
-    «invalid authorization metadata» даже с ролью billing.viewer — проверено."""
-    oauth = _key("YANDEX_OAUTH_TOKEN")
-    api_key = _key("YANDEX_BILLING_API_KEY", "YANDEX_API_KEY")
-    if not oauth and not api_key:
-        return "☁️ Яндекс Cloud:\n• ключ не задан (YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)"
-    auth = "OAuth " + oauth if oauth else "Api-Key " + api_key
+    Авторизация по документации — IAM-токен (Bearer) из JSON-ключа сервисного аккаунта
+    (YANDEX_SA_KEY); OAuth-токен тоже принимается, Api-Key отвергает с 401 — проверено."""
+    token = await _iam(s)
+    if token:
+        auth = "Bearer " + token
+    else:
+        oauth = _key("YANDEX_OAUTH_TOKEN")
+        api_key = _key("YANDEX_BILLING_API_KEY", "YANDEX_API_KEY")
+        if not oauth and not api_key:
+            return ("☁️ Яндекс Cloud:\n• ключ не задан (YANDEX_SA_KEY / "
+                    "YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)")
+        auth = "OAuth " + oauth if oauth else "Api-Key " + api_key
     try:
         async with s.get(YANDEX_URL, headers={"Authorization": auth}) as r:
             if r.status == 401:
-                return ("☁️ Яндекс Cloud:\n• нет доступа: Billing API требует OAuth-токен — "
-                        "задайте YANDEX_OAUTH_TOKEN (yandex.ru/oauth)")
+                return ("☁️ Яндекс Cloud:\n• нет доступа: ключ не принят — задайте "
+                        "YANDEX_SA_KEY (JSON-ключ сервисного аккаунта) или YANDEX_OAUTH_TOKEN")
             if r.status == 403:
-                # чаще всего ключ есть, но у него нет прав на биллинг
-                return "☁️ Яндекс Cloud:\n• нет доступа: ключу нужна роль billing.viewer"
+                # чаще всего ключ есть, но у сервисного аккаунта нет прав на биллинг
+                return ("☁️ Яндекс Cloud:\n• нет доступа: ключу нужна роль "
+                        "billing.accounts.viewer (billing.viewer)")
             if r.status != 200:
                 log.warning("billing: Яндекс HTTP %s", r.status)
                 return f"☁️ Яндекс Cloud:\n• счета: не получилось (HTTP {r.status})"

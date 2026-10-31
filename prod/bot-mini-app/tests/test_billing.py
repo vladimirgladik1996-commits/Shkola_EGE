@@ -10,11 +10,11 @@
 Запуск: python3 tests/test_billing.py  (как остальные тесты репозитория)
      или python3 -m pytest tests/test_billing.py.
 """
-import asyncio, logging, os, re, sys
+import asyncio, json, logging, os, re, sys
 from contextlib import asynccontextmanager
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for k in ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY"):
+for k in ("YANDEX_SA_KEY", "YANDEX_SA_KEY_FILE", "YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY"):
     os.environ.pop(k, None)                             # ветка «ключ не задан» должна срабатывать детерминированно
 logging.disable(logging.CRITICAL)                       # предупреждения об ошибках не засоряют вывод теста
 sys.path.insert(0, ROOT)
@@ -26,10 +26,16 @@ def ok(c): print("  ✓", c)
 
 MODE = {}                                               # ответы фейкового сервера по путям
 CALLS = []                                              # (путь, query, заголовки) каждого запроса
+BODIES = {}                                             # тела POST-запросов по путям (JWT для IAM-токена)
 
 
 def route(name):
     async def h(request):
+        if request.method == "POST":
+            try:
+                BODIES[request.path] = await request.json()
+            except Exception:
+                BODIES[request.path] = {}
         CALLS.append((request.path, dict(request.query), dict(request.headers)))
         m = MODE[name]
         if "raw" in m:                                  # мусор вместо JSON — проверка ветки «не получилось»
@@ -44,6 +50,7 @@ def make_app():
     app = web.Application()
     app.router.add_get("/users/me/balance", route("kimi"))
     app.router.add_get("/billing/v1/billingAccounts", route("yandex"))
+    app.router.add_post("/iam/v1/tokens", route("iam"))
     app.router.add_get("/v1/dashboard/billing/credit_grants", route("oa_credit"))
     app.router.add_get("/v1/dashboard/billing/usage", route("oa_usage"))
     app.router.add_get("/v1/organization/costs", route("oa_costs"))
@@ -89,11 +96,13 @@ def defaults():
 @asynccontextmanager
 async def serve():
     """Фейковый сервер провайдеров; адреса billing.py и kimi.BASE переключаются на него."""
-    saved = (billing.YANDEX_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
+    saved = (billing.YANDEX_URL, billing.IAM_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
              billing.RENDER_URL, kimi.BASE)
     async with TestClient(TestServer(make_app())) as c:
         root = str(c.make_url("")).rstrip("/")
         billing.YANDEX_URL = root + "/billing/v1/billingAccounts"
+        billing.IAM_URL = root + "/iam/v1/tokens"
+        billing._iam_cache.update(token="", until=0.0)   # IAM-токены не переходят между тестами
         billing.OA_CREDIT = root + "/v1/dashboard/billing/credit_grants"
         billing.OA_USAGE = root + "/v1/dashboard/billing/usage"
         billing.OA_COSTS = root + "/v1/organization/costs"
@@ -102,7 +111,7 @@ async def serve():
         try:
             yield root
         finally:
-            (billing.YANDEX_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
+            (billing.YANDEX_URL, billing.IAM_URL, billing.OA_CREDIT, billing.OA_USAGE, billing.OA_COSTS,
              billing.RENDER_URL, kimi.BASE) = saved
 
 
@@ -187,7 +196,7 @@ def test_no_keys():
         defaults()
         # ключи вычищены ещё при импорте модуля — здесь только сохраняем и возвращаем как было
         saved_env = {k: os.environ.pop(k, None) for k in
-                     ("YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY")}
+                     ("YANDEX_SA_KEY", "YANDEX_SA_KEY_FILE", "YANDEX_OAUTH_TOKEN", "YANDEX_BILLING_API_KEY", "YANDEX_API_KEY", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "WHISPER_API_KEY", "RENDER_API_KEY")}
         old_kimi, kimi.API_KEY = kimi.API_KEY, ""
         try:
             async with serve():
@@ -203,7 +212,7 @@ def test_no_keys():
     parts = text.split("\n" + billing.SEP + "\n")
     assert len(parts) == 4
     assert "• ключ не задан (KIMI_API_KEY)" in parts[0]
-    assert "• ключ не задан (YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)" in parts[1]
+    assert "• ключ не задан (YANDEX_SA_KEY / YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)" in parts[1]
     assert "• ключ не задан (WHISPER_API_KEY / OPENAI_API_KEY)" in parts[2]
     assert "• ключ не задан (RENDER_API_KEY)" in parts[3]
     ok("без ключей: все секции про «ключ не задан», наружу ничего не уходит")
@@ -233,7 +242,7 @@ def test_errors():
     parts = text.split("\n" + billing.SEP + "\n")
     assert len(parts) == 4                                          # упавшие секции не ломают формат отчёта
     assert "• Доступно: 12,50" in parts[0]                          # Кими жив, хотя соседи упали
-    assert "• нет доступа: ключу нужна роль billing.viewer" in parts[1]
+    assert "• нет доступа: ключу нужна роль billing.accounts.viewer" in parts[1]
     assert "• Кредиты: не получилось (см. лог)" in parts[2]
     assert "• Расход: не получилось (см. лог)" in parts[2]
     assert "• сервисы: не получилось (см. лог)" in parts[3]
@@ -250,8 +259,90 @@ def test_errors():
     defaults()
     MODE["yandex"] = {"code": 401, "json": {}}
     asyncio.run(run(out))
-    assert "• нет доступа: Billing API требует OAuth-токен" in out[-1].split("\n" + billing.SEP + "\n")[1]
-    ok("401 → подсказка про YANDEX_OAUTH_TOKEN (Billing API не берёт Api-Key)")
+    assert "• нет доступа: ключ не принят" in out[-1].split("\n" + billing.SEP + "\n")[1]
+    ok("401 → подсказка про YANDEX_SA_KEY / YANDEX_OAUTH_TOKEN (Billing API не берёт Api-Key)")
+
+
+def make_sa():
+    """Тестовый JSON-ключ сервисного аккаунта: свежая RSA-пара, формат как у key.json Яндекса
+    (включая служебную строку PLEASE DO NOT REMOVE рядом с приватным ключом)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = priv.private_bytes(serialization.Encoding.PEM,
+                             serialization.PrivateFormat.PKCS8,
+                             serialization.NoEncryption()).decode()
+    sa = {"id": "ajektest0001", "service_account_id": "ajebtest0001",
+          "private_key": "PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <ajektest0001>\n" + pem}
+    return sa, priv
+
+
+def test_sa_iam():
+    """YANDEX_SA_KEY: *** (PS256) обменивается на IAM-токен,
+    в Billing API уходит Bearer; токен кэшируется; приватный ключ не утекает в отчёт."""
+    sa, priv = make_sa()
+
+    async def run():
+        defaults()
+        MODE["iam"] = {"json": {"iamToken": "t1.test-iam", "expiresAt": "2036-01-01T00:00:00Z"}}
+        saved_env = env(YANDEX_SA_KEY=json.dumps(sa))
+        try:
+            async with serve():
+                CALLS.clear()
+                BODIES.clear()
+                first = await billing.report()
+                second = await billing.report()          # второй раз — IAM-токен из кэша, без обмена
+        finally:
+            unenv(saved_env)
+        return first, second
+
+    first, second = asyncio.run(run())
+    parts = first.split("\n" + billing.SEP + "\n")
+    assert "• Мой счёт (dn2u7t5): 1 234,50 · активен" in parts[1]   # баланс на месте
+
+    # в Billing API ушёл Bearer с выданным IAM-токеном
+    calls_y = [c for c in CALLS if "billingAccounts" in c[0]]
+    assert calls_y and all(c[2].get("Authorization") == "Bearer t1.test-iam" for c in calls_y)
+
+    # JWT по документации: PS256, kid ключа, iss — сервисный аккаунт, aud — токен-сервис,
+    # exp−iat ≤ 3600, подпись — нашим приватным ключом (проверка публичным)
+    import jwt as pyjwt
+    assertion = BODIES["/iam/v1/tokens"]["jwt"]
+    assert pyjwt.get_unverified_header(assertion) == {"typ": "JWT", "alg": "PS256", "kid": "ajektest0001"}
+    claims = pyjwt.decode(assertion, priv.public_key(), algorithms=["PS256"],
+                          options={"verify_aud": False})
+    assert claims["iss"] == "ajebtest0001" and claims["aud"].endswith("/iam/v1/tokens")
+    assert 0 < claims["exp"] - claims["iat"] <= 3600
+
+    # обмен один на два отчёта — токен кэшируется
+    assert sum(1 for c in CALLS if c[0].endswith("/iam/v1/tokens")) == 1
+    assert "• Мой счёт" in second.split("\n" + billing.SEP + "\n")[1]
+
+    # приватный ключ и токен не утекают в текст отчёта
+    assert "PRIVATE KEY" not in first and "t1.test-iam" not in first
+    ok("YANDEX_SA_KEY: *** PS256 → IAM-токен → Bearer в Billing API, кэш работает, ключ не утекает")
+
+
+def test_sa_iam_fallback():
+    """IAM-токен не выдался (500) — секция не падает и авторизуется запасным OAuth-токеном."""
+    sa, _ = make_sa()
+
+    async def run():
+        defaults()
+        MODE["iam"] = {"code": 500, "json": {}}
+        saved_env = env(YANDEX_SA_KEY=json.dumps(sa), YANDEX_OAUTH_TOKEN="OTOK-777")
+        try:
+            async with serve():
+                CALLS.clear()
+                return await billing.report()
+        finally:
+            unenv(saved_env)
+
+    text = asyncio.run(run())
+    parts = text.split("\n" + billing.SEP + "\n")
+    assert "• Мой счёт (dn2u7t5): 1 234,50 · активен" in parts[1]   # баланс цел
+    assert any(c[2].get("Authorization") == "OAuth OTOK-777" for c in CALLS if "billingAccounts" in c[0])
+    ok("IAM-сервис упал → запасной OAuth-токен, баланс на месте")
 
 
 def test_metrics_errors():
@@ -283,6 +374,6 @@ def test_metrics_errors():
 
 
 if __name__ == "__main__":
-    for t in (test_full_report, test_no_keys, test_errors, test_metrics_errors):
+    for t in (test_full_report, test_no_keys, test_errors, test_metrics_errors, test_sa_iam, test_sa_iam_fallback):
         t()
     print("OK")
