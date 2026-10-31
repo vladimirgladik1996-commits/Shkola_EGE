@@ -62,7 +62,9 @@ assert 'tab=="mt"?mat()' in front and "function matCatOpen" in front and "functi
 assert 'class="mt-chip mt-v"' in front and "Вариант ${v.n}" in front and ".mt-grid{" in front and "/api/materials/\"+m.id" in front and "/api/materials/\"+key" in front
 ok("во фронте: чипсины каталогов → сетка чипсин всех вариантов (с поиском) → открытие варианта")
 assert 'data-theme="\'+matTheme()' in front and "function matTheme" in front and 'e.data.matNav==="toc"' in front and "#mv.pg .mvb{display:none}" in front
-assert 'class="mt-chip mt-back" type="button" onclick="matBack()"' in front and ".mt-back{min-height:52px" in front and "position:sticky;top:calc(56px" in front, "в оглавлении нужна крупная кнопка «Материалы»"
+assert 'class="mt-chip mt-back" type="button" onclick="matBack()"' in front and ".mt-back{min-height:52px" in front \
+    and ("position:sticky;top:calc(56px" in front or "position:sticky;top:calc(var(--hd,56px)" in front), \
+    "в оглавлении нужна крупная кнопка «Материалы»"
 assert 'class="mvc" type="button" onclick="matClose()" aria-label="Оглавление">Оглав.</button>' in front and '"В. "+part' in front and "‹ Варианты" not in front
 ok("оглавление: крупная приклеенная кнопка «Материалы»; полоса загрузки варианта — те же крошки «Оглав. › В. N»")
 front_nb = re.sub(r"data:[a-z/+-]+;base64,[A-Za-z0-9+/=]+", "", front)   # для проверок «такого в коде нет»: символы base64 внутри встроенных картинок не в счёт

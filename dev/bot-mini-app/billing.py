@@ -188,7 +188,8 @@ async def _yandex(s):
     """Секция Яндекс Cloud: баланс, валюта и статус каждого счёта.
 
     Авторизация по документации — IAM-токен (Bearer) из JSON-ключа сервисного аккаунта
-    (YANDEX_SA_KEY); OAuth-токен тоже принимается, Api-Key отвергает с 401 — проверено."""
+    (YANDEX_SA_KEY); токен из YANDEX_OAUTH_TOKEN принимается в обоих видах: IAM-токен (формат
+    y0__/t1.) уходит как Bearer, OAuth-токен (y0_Ag…) — как OAuth; Api-Key отвергается с 401 — проверено."""
     token = await _iam(s)
     if token:
         auth = "Bearer " + token
@@ -198,7 +199,10 @@ async def _yandex(s):
         if not oauth and not api_key:
             return ("☁️ Яндекс Cloud:\n• ключ не задан (YANDEX_SA_KEY / "
                     "YANDEX_OAUTH_TOKEN / YANDEX_API_KEY)")
-        auth = "OAuth " + oauth if oauth else "Api-Key " + api_key
+        if oauth and (oauth.startswith("y0__") or oauth.startswith("t1.")):
+            auth = "Bearer " + oauth   # это IAM-токен, а не OAuth: схема Bearer — иначе Яндекс отвечает 401
+        else:
+            auth = "OAuth " + oauth if oauth else "Api-Key " + api_key
     try:
         async with s.get(YANDEX_URL, headers={"Authorization": auth}) as r:
             if r.status == 401:
