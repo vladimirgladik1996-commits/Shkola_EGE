@@ -212,17 +212,7 @@ async def _yandex(s):
 
 
 async def report():
-    """Сводка по счетам одним сообщением; секции собираются параллельно.
-
-    Секции разделяются строкой «______». Ошибка одной секции не ломает остальные —
-    заголовок и «не получилось» у падшей, остальные как есть."""
+    """Баланс Кими одним сообщением (секция Яндекс Cloud из /balance убрана по запросу)."""
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as s:
-        secs = await asyncio.gather(_kimi(), _yandex(s), return_exceptions=True)
-    titles = ["💳 Кими (Moonshot), CNY:", "☁️ Яндекс Cloud:"]
-    out = []
-    for title, sec in zip(titles, secs):
-        if isinstance(sec, BaseException):               # страховка: сбой внутри секции — не всего отчёта
-            log.warning("billing: секция «%s» упала: %r", title, sec)
-            sec = f"{title}\n• не получилось (см. лог)"
-        out.append(sec)
-    return ("\n" + SEP + "\n").join(out)
+        sec = await _kimi()
+    return sec
