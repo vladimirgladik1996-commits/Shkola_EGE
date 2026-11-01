@@ -4481,10 +4481,10 @@ function chMenu(id){const ms=[...document.querySelectorAll(".aic-menu")],t=id?ms
   const r=row.getBoundingClientRect(),b=btn.getBoundingClientRect(),w=t.offsetWidth,cx=b.left-r.left+b.width/2,l=Math.max(0,Math.min(cx-34,r.width-w));
   t.style.left=l+"px";t.style.bottom=(r.height-(b.top-r.top)+13)+"px";      // меню сидит над своей кнопкой, остриё хвостика касается иконки
   t.style.setProperty("--ax",(cx-l).toFixed(2)+"px");btn.setAttribute("aria-expanded","true")}
-function chMode(d){chDeep=!!d;if(!d){chFmt=0;chFmtUi()}chModeUi();chMenu()}   /* «Быстрый ответ» всегда текстом — как в боте */
+function chMode(d){chDeep=!!d;chModeUi();chMenu()}   /* режим и формат — независимые выборы: мощность модели выбирает только пользователь */
 function chModeUi(){const b=$("#aic-md");if(b){b.innerHTML=chDeep?CH_IC.spark:CH_IC.bolt;b.classList.toggle("deep",chDeep);b.setAttribute("aria-label",chDeep?"Режим: долгий ответ":"Режим: быстрый ответ")}
   document.querySelectorAll("#aic-m button").forEach((x,i)=>{x.classList.toggle("on",!!i==chDeep);x.setAttribute("aria-checked",String(!!i==chDeep))})}
-function chFmtSet(k){chFmt=k;if(k){chDeep=true;chModeUi()}chFmtUi();chMenu()}   /* файл (Word/PDF/картинка) — тяжёлая работа: сам включает «Долгий ответ» с мышлением */
+function chFmtSet(k){chFmt=k;chFmtUi();chMenu()}   /* формат ответа НЕ переключает режим: «Долгий ответ» включается только самим пользователем */
 function chFmtUi(){const b=$("#aic-fb");if(b){b.innerHTML=CH_FM[chFmt].i;b.classList.toggle("fmt",!!chFmt);b.setAttribute("aria-label","Формат ответа: "+CH_FM[chFmt].n)}
   document.querySelectorAll("#aic-f button").forEach((x,i)=>{x.classList.toggle("on",i==chFmt);x.setAttribute("aria-checked",String(i==chFmt))})}
 document.addEventListener("click",e=>{if(!e.target.closest(".aic-menu,.aic-ib"))chMenu()});

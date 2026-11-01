@@ -87,11 +87,13 @@ async def main():
         assert "".join(v for k, v in out if k == "text") == "Вопрос 1. Ответы: 1) а", out
         ok("продолжение обрезанного ответа: мышление тоже стримится")
 
-    # --- 3) файловый формат (PDF/Word/картинка) — всегда долгий конвейер с мышлением ---
-    assert 'deep = bool(deep) or fmt != "text"' in open(
-        os.path.join(ROOT, "assist.py"), encoding="utf-8").read(), \
-        "assist.chat_stream должен включать deep для файловых форматов (мышление + сильная модель)"
-    ok("assist.chat_stream: файловый формат включает долгий режим (мышление не выключено)")
+    # --- 3) файловый формат (PDF/Word/картинка) НЕ переключает мощность модели ---
+    # Требование владельца: режим «Быстрый/Долгий» выбирает ТОЛЬКО пользователь;
+    # формат ответа не имеет права сам включать долгий конвейер (мышление + сильная модель).
+    src = open(os.path.join(ROOT, "assist.py"), encoding="utf-8").read()
+    assert 'deep = bool(deep)' in src and 'or fmt != "text"' not in src, \
+        "assist.chat_stream: формат ответа не должен включать deep — мощность модели выбирает только пользователь"
+    ok("assist.chat_stream: формат ответа не включает долгий режим (мощность модели — выбор пользователя)")
 
     SEEN = []
     async def fake_stream(messages, model=None, deep=False, json_mode=False, images=None,
@@ -104,24 +106,28 @@ async def main():
         async def collect(**kw):
             return [pair async for pair in assist.chat_stream([{"role": "user", "content": "напиши тест"}], **kw)]
         await collect(deep=False, fmt="pdf")
-        assert SEEN[-1]["deep"] is True and SEEN[-1]["thinking"] is True, SEEN[-1]
+        assert SEEN[-1]["deep"] is False and SEEN[-1]["thinking"] is False, SEEN[-1]
         await collect(deep=False, fmt="docx")
-        assert SEEN[-1]["deep"] is True and SEEN[-1]["thinking"] is True, SEEN[-1]
+        assert SEEN[-1]["deep"] is False and SEEN[-1]["thinking"] is False, SEEN[-1]
         await collect(deep=False, fmt="image")
+        assert SEEN[-1]["deep"] is False and SEEN[-1]["thinking"] is False, SEEN[-1]
+        await collect(deep=True, fmt="pdf")
         assert SEEN[-1]["deep"] is True and SEEN[-1]["thinking"] is True, SEEN[-1]
         await collect(deep=False, fmt="text")
         assert SEEN[-1]["deep"] is False and SEEN[-1]["thinking"] is False, SEEN[-1]
     finally:
         kimi.ask_stream = real
-    ok("быстрый режим + PDF/Word/картинка: модель зовётся с deep и мышлением; текст — как просили")
+    ok("быстрый режим + PDF/Word/картинка: модель остаётся быстрой; «Долгий» включается только пользователем")
 
-    # --- 4) интерфейс: файловый формат сам переключает «Долгий ответ», «Быстрый» сбрасывает формат ---
+    # --- 4) интерфейс: формат и режим — независимые выборы пользователя ---
     html = open(os.path.join(ROOT, "docs", "index.html"), encoding="utf-8").read()
-    assert re.search(r"function chFmtSet\(k\)\{chFmt=k;if\(k\)\{chDeep=true;.*?chMenu\(\)\}", html), \
-        "chFmtSet: выбор файла (Word/PDF/картинка) должен включать «Долгий ответ»"
-    assert re.search(r"function chMode\(d\)\{chDeep=!!d;if\(!d\)\{chFmt=0;.*?chMenu\(\)\}", html), \
-        "chMode: «Быстрый ответ» должен сбрасывать формат на «Текст»"
-    ok("мини-апп: файл включает «Долгий ответ», «Быстрый ответ» всегда текстом — как в боте")
+    fmt_fn = re.search(r"function chFmtSet\(k\)\{[^}]*\}", html).group(0)
+    mode_fn = re.search(r"function chMode\(d\)\{[^}]*\}", html).group(0)
+    assert "chDeep=true" not in fmt_fn, \
+        "chFmtSet: выбор формата НЕ должен включать «Долгий ответ» — режим выбирает только пользователь"
+    assert "chFmt=0" not in mode_fn, \
+        "chMode: переключение режима НЕ должно сбрасывать формат — это выбор пользователя"
+    ok("мини-апп: формат и режим независимы; формат не включает «Долгий ответ» и не сбрасывается режимом")
 
     print("test_think_stream: OK")
 
