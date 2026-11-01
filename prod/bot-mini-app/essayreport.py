@@ -924,10 +924,11 @@ def docx_native(r, kind="ege", student="", now=None):
                          borders=_bd("top", "single", 12, NAVY) + _bd("bottom", "single", 6, LINE)))
         if "errors" not in miss:
             body.append(_spacer(130))
-            tw = CW // 3
+            tw = CW // len(TYPES)
             tile = lambda t, k: _tc(_p(_run(str(c[t]), b=True, sz=44, color=NAVY), jc="center") + _p(_run(t.lower(), sz=17, color=MUTED), jc="center"),
-                                    tw if k < 2 else CW - 2 * tw, mar=(40, 0), borders=(_bd("left", "single", 6, LINE) if k else ""))
-            body.append(_tbl([_tr([tile(t, k) for k, t in enumerate(TYPES)])], [tw, tw, CW - 2 * tw]))
+                                    tw if k < len(TYPES) - 1 else CW - tw * (len(TYPES) - 1), mar=(40, 0), borders=(_bd("left", "single", 6, LINE) if k else ""))
+            body.append(_tbl([_tr([tile(t, k) for k, t in enumerate(TYPES)])],
+                             [tw] * (len(TYPES) - 1) + [CW - tw * (len(TYPES) - 1)]))
         body.append(_spacer(190))
         if crits:                                           # итоги — только из данных разбора — только из данных разбора
             sm = summary(r)
