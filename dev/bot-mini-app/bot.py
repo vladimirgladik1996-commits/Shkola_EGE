@@ -3031,6 +3031,7 @@ async def api_essay_check_run(request):
         job = EC_JOBS[cid] = {"events": [], "final": False, "task": None, "ts": now}
 
         async def pump():
+            p0 = time.monotonic()
             try:
                 async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
                     if ev_kind == "status":
@@ -3038,10 +3039,12 @@ async def api_essay_check_run(request):
                     elif ev_kind == "think":      # стрим мышления Кими — от лица Вишенки на прелоадере
                         _ec_job_add(job, {"t": "think", "v": v})
                     elif ev_kind == "err":
-                        log.warning("essay check: tg_id=%s сбой этапа (%s)", uid, v)
+                        log.warning("essay check: tg_id=%s сбой этапа (%s) через %.1f с", uid, v, time.monotonic() - p0)
                         _ec_job_end(job, {"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
                         return
                     else:                          # done
+                        log.info("essay check: tg_id=%s готово за %.1f с (%s)", uid, time.monotonic() - p0,
+                                 "часть данных" if (v or {}).get("why") else "полный разбор")
                         _ec_job_end(job, {"t": "done", "result": v})
                         ec_report_start(request.app.get("bot"), uid, v, kind)   # PDF + Word с разбором — в чат с ботом, фоном
                         return

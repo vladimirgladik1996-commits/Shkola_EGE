@@ -39,7 +39,7 @@
 Просьба «не падать» выполнена буквально: любая ошибка (нет ключа, сеть, таймаут,
 неожиданный формат ответа) — это None из ask() и запись в лог, а не исключение наверх.
 """
-import json, logging, os, re
+import json, logging, os, re, time
 
 import aiohttp
 
@@ -229,6 +229,7 @@ async def ask(messages, model=None, deep=False, json_mode=False, images=None, ma
     if max_tokens is None:
         budget = _clamp_to_known(m, budget)
     run, acc, cont = list(messages), [], 0    # run — диалог с закреплёнными продолжениями
+    t0 = time.monotonic()
     attempt, drops = 0, 0
     while True:
         body = build_payload(run, model=m, deep=deep, json_mode=json_mode, images=images,
@@ -270,6 +271,8 @@ async def ask(messages, model=None, deep=False, json_mode=False, images=None, ma
             if fr == "length":
                 log.warning("kimi: ответ обрезан и продолжения исчерпаны — отдаю как есть (%s символов)",
                             sum(len(x) for x in acc))
+            log.info("kimi: ask model=%s max_tokens=%s dt=%.1fs finish=%s cont=%d tokens %s", m,
+                     body.get("max_tokens"), time.monotonic() - t0, fr, cont, _usage_str(j.get("usage")))
             return "".join(acc).strip()
         if acc:                           # продолжение не дало текста — отдаём, что уже собрали
             log.warning("kimi: продолжение пустое (finish=%s) — отдаю %s символов как есть",
@@ -285,8 +288,72 @@ async def ask(messages, model=None, deep=False, json_mode=False, images=None, ma
         return None
 
 
+def _usage_pick(u):
+    """usage одного ответа → (вход, выход, мышление, из кэша); недостающее — None."""
+    if not isinstance(u, dict):
+        return None, None, None, None
+    det = u.get("completion_tokens_details") if isinstance(u.get("completion_tokens_details"), dict) else {}
+    pdet = u.get("prompt_tokens_details") if isinstance(u.get("prompt_tokens_details"), dict) else {}
+    cached = u.get("cached_tokens")
+    return (u.get("prompt_tokens"), u.get("completion_tokens"), det.get("reasoning_tokens"),
+            cached if cached is not None else pdet.get("cached_tokens"))
+
+
+def _usage_str(u):
+    a, b, c, d = _usage_pick(u)
+    return "in=%s out=%s reasoning=%s cached=%s" % tuple("-" if v is None else v for v in (a, b, c, d))
+
+
+def _usage_add(stat, u):
+    """Сумма usage по всем заходам одного стрима (повторы и продолжения тоже стоят токенов)."""
+    tot = stat.setdefault("tok", [None, None, None, None])
+    for i, v in enumerate(_usage_pick(u)):
+        if isinstance(v, (int, float)):
+            tot[i] = (tot[i] or 0) + int(v)
+
+
+def _stream_line(st, err=None, tag=""):
+    """Одна строка лога на стрим: время до первого токена, длительность, токены, заходы."""
+    f = lambda v: "-" if v is None else "%.1fs" % v
+    tok = st.get("tok") or [None] * 4
+    t = tuple("-" if v is None else v for v in tok)
+    return ("kimi: stream%s model=%s thinking=%s max_tokens=%s dt=%.1fs first_think=%s first_text=%s calls=%d "
+            "cont=%s finish=%s tokens in=%s out=%s reasoning=%s cached=%s%s") % (
+        "[%s]" % tag if tag else "", st.get("model"), st.get("thinking"), st.get("max_tokens"),
+        time.monotonic() - st["t0"], f(st.get("tth")), f(st.get("ttfb")), st.get("calls", 0),
+        st.get("cont", 0), st.get("finish"), t[0], t[1], t[2], t[3], (" err=%s" % err) if err else "")
+
+
 async def ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
-                     max_tokens=None, _attempt=0):
+                     max_tokens=None, _attempt=0, tag=""):
+    """Стриминг ответа модели (подробности — в _ask_stream). Каждый стрим пишет в лог ОДНУ строку:
+    время до первого токена мышления и ответа, длительность, токены (вход/выход/мышление/из кэша —
+    суммой по всем заходам), число заходов и продолжений. Текст запросов и ответов в лог не попадает.
+    tag — метка этапа для лога (например «ec-errors»)."""
+    st = {"t0": time.monotonic(), "calls": 0, "cont": 0}
+    err = None
+    gen = _ask_stream(messages, model=model, deep=deep, json_mode=json_mode, images=images,
+                      thinking=thinking, max_tokens=max_tokens, _attempt=_attempt, _stat=st)
+    try:
+        async for ev, v in gen:
+            now = time.monotonic() - st["t0"]
+            if ev == "think" and st.get("tth") is None:
+                st["tth"] = now
+            elif ev == "text" and st.get("ttfb") is None:
+                st["ttfb"] = now
+            elif ev == "err":
+                err = v
+            yield ev, v
+    finally:
+        try:
+            await gen.aclose()                  # потребитель ушёл раньше конца — внутренний стрим закрываем сразу
+        except Exception:
+            pass
+        log.info(_stream_line(st, err, tag))
+
+
+async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
+                      max_tokens=None, _attempt=0, _stat=None):
     """Стриминг ответа модели: async-генератор пар (тип, дельта).
 
     Типы: «think» — кусочек размышления (reasoning_content), «text» — кусочек ответа,
@@ -317,6 +384,8 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
         return
     m = resolve_model(model, deep)
     reasoning = bool(thinking) or m.startswith("kimi-k3")
+    if _stat is not None:
+        _stat["model"], _stat["thinking"] = m, reasoning
     budget = budget_for(deep, reasoning, max_tokens)
     if max_tokens is None:
         budget = _clamp_to_known(m, budget)
@@ -327,6 +396,9 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
                              thinking=thinking, max_tokens=budget)
         body["stream"] = True
         body["stream_options"] = {"include_usage": True}    # usage в конце стрима — видно, сгорел ли бюджет
+        if _stat is not None:
+            _stat["calls"] += 1
+            _stat["max_tokens"] = body.get("max_tokens")
         finish, usage, got_text, broke, done = None, None, False, False, False
         buf = []                            # текст этого захода — для закрепления в продолжении
         try:
@@ -374,6 +446,9 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
         except Exception as e:                    # сеть, таймаут, кривой SSE — всё мимо бота
             log.warning("kimi: стрим не прошёл: %r", e)
             broke = True
+        if _stat is not None:
+            _stat["finish"], _stat["cont"] = finish, cont
+            _usage_add(_stat, usage)
         cut = broke or finish == "length" or (got_text and not done and finish is None)
         if got_text:
             acc += buf

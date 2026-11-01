@@ -109,24 +109,31 @@ async def _fetch(url):
 async def criteria(kind, fallback=""):
     """Текст критериев для промта: свежий кэш → обновление с fipi.ru → старый кэш → fallback."""
     kind = kind if kind in URLS else "ege"
+    t0 = time.monotonic()
+
+    def done(src, text):                         # одна строка лога на вызов: откуда критерии и сколько ждали
+        log.info("fipicache: критерии %s источник=%s dt=%.1fs (%d симв.)", kind, src, time.monotonic() - t0,
+                 len(text or ""))
+        return text
+
     cur = _load(kind)
     if cur and _like(cur["text"]) and time.time() - cur["ts"] < TTL:
-        return cur["text"]
+        return done("кэш", cur["text"])
     if not kimi.enabled():                       # без ключа обновить нечем — что есть, то и берём
         t = (cur or {}).get("text") or ""
-        return t if _like(t) else fallback
+        return done("кэш-без-ключа", t) if _like(t) else done("запасной", fallback)
     lock = _locks.setdefault(kind, asyncio.Lock())
     async with lock:                             # параллельные проверки не дёргают fetch вдвойне
         cur = _load(kind)
         if cur and _like(cur["text"]) and time.time() - cur["ts"] < TTL:
-            return cur["text"]
+            return done("кэш-после-ожидания", cur["text"])
         raw = await _fetch(URLS[kind])
         text = _clean(raw)
         if len(text) > 200 and _like(text):       # мусор/пустая/не-критерии — не затираем кэш
             text = text[:MAX_CRITERIA_TEXT]
             _save(kind, text)
             log.info("fipicache: критерии %s обновлены (%d символов)", kind, len(text))
-            return text
+            return done("fipi.ru", text)
         log.warning("fipicache: fetch %s не дал критериев — работаю со старой версией", kind)
         t = (cur or {}).get("text") or ""
-        return t if _like(t) else fallback
+        return done("старый-кэш", t) if _like(t) else done("запасной", fallback)

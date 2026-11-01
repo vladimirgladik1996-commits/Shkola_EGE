@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import random
+import time
 
 import aiohttp
 
@@ -130,6 +131,7 @@ async def _recognize_one(session, sem, img_b64):
     body = {"mimeType": "JPEG", "languageCodes": ["ru"], "model": "handwritten",
             "content": img_b64}
     last = "net"
+    t0 = time.monotonic()
     for attempt in range(RETRIES + 1):
         try:
             async with sem:
@@ -148,6 +150,8 @@ async def _recognize_one(session, sem, img_b64):
                     res = parse(j)
                     if not res["text"] and not res["words"]:
                         log.warning("yavision: распознано пусто (фото без текста?)")
+                    log.info("yavision: фото распознано dt=%.1fs попыток=%d слов=%d", time.monotonic() - t0,
+                             attempt + 1, len(res.get("words") or []))
                     return res
         except VisionError:
             raise
@@ -156,6 +160,8 @@ async def _recognize_one(session, sem, img_b64):
             last = "net"
             if attempt < RETRIES:
                 await asyncio.sleep(min(8.0, 1.5 * 2 ** attempt) + random.uniform(0, 0.5))
+    log.warning("yavision: фото не распознано dt=%.1fs попыток=%d причина=%s", time.monotonic() - t0,
+                RETRIES + 1, last)
     raise VisionError(last)
 
 
@@ -172,6 +178,7 @@ async def recognize_many(images):
     if not enabled():
         raise VisionError("net")
     sem = asyncio.Semaphore(MAX_PARALLEL)
+    t0 = time.monotonic()
 
     async def safe(session, img):
         try:
@@ -184,6 +191,9 @@ async def recognize_many(images):
 
     async with aiohttp.ClientSession() as session:
         out = await asyncio.gather(*[safe(session, img) for img in images])
+    bad = sum(1 for res, _ in out if res is None)
+    log.info("yavision: фото=%d распознано=%d сбой=%d dt=%.1fs параллельно<=%d", len(images), len(out) - bad, bad,
+             time.monotonic() - t0, MAX_PARALLEL)
     if all(res is None for res, _ in out):
         raise VisionError(next((code for _, code in out if code), "net"))
     return [res if res is not None else {"text": "", "words": [], "failed": True}

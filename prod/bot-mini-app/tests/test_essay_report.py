@@ -53,14 +53,50 @@ try:
 except ImportError:
     ok("PDF: pypdfium2 нет — проверка страниц пропущена")
 
-# 3. Word: валидный docx; пометки ошибок в тексте, список ошибок, критерии
+# 3. Word — редактируемый документ, собранный кодом: таблицы, абзацы, колонтитулы, ни одной страницы-картинки
+from xml.dom import minidom
+from xml.sax.saxutils import escape as xesc
 z = zipfile.ZipFile(io.BytesIO(dx))
 assert z.testzip() is None
+for n_ in z.namelist():
+    if n_.endswith((".xml", ".rels")):
+        minidom.parseString(z.read(n_))                    # весь XML корректен
 x = z.read("word/document.xml").decode()
-for s in ("Прогнозный балл", "влияния", "Критерии ФИПИ", "Рекомендации", "[1]", "[4]", "Анна К."):
+for s in ("Прогнозный балл", "влияния", "Критерии ФИПИ", "Рекомендации", "Анна К.", xesc(R["errors"][0]["why"], {'"': "&quot;"}), R["criteria"][0]["name"]):
     assert s in x, s
-assert "<w:tbl>" not in x, "таблицы chatfiles в Word пустые (ячейки без w:tc) — отчёт обходится списком"
-ok("Word: балл, текст с пометками [N], список ошибок, критерии и рекомендации — без таблиц chatfiles")
+assert x.count("<w:tbl>") >= 8 and "<w:tblHeader/>" in x, "настоящие таблицы Word, шапка таблицы ошибок повторяется на страницах"
+assert 'w:val="Heading1"' in x and x.count('w:val="Heading2"') == 5, "заголовки — стилями (навигация Word)"
+assert "<w:drawing>" not in x and not any(n_.startswith("word/media") for n_ in z.namelist()), "в Word нет ни одной картинки — только текст и таблицы"
+for n_ in ("word/styles.xml", "word/settings.xml", "docProps/app.xml", "docProps/core.xml", "word/header1.xml", "word/footer1.xml"):
+    assert n_ in z.namelist(), n_
+ft = z.read("word/footer2.xml").decode()
+assert "PAGE" in ft and "NUMPAGES" in ft and "<w:titlePg/>" in x, "«Стр. N из M» полями Word, первая страница со своей шапкой"
+ids = re.findall(r'<wp:docPr id="(\d+)"', x)
+assert len(ids) == len(set(ids))
+try:
+    import docx as pydocx
+    dd = pydocx.Document(io.BytesIO(dx))               # строгий разбор пакета
+    assert len(dd.tables) >= 6 and sum(p_.style.name == "Heading 2" for p_ in dd.paragraphs) == 5 and dd.paragraphs[0].style.name == "Heading 1"
+except ImportError:
+    pass
+for e_ in R["errors"]:
+    assert xesc(e_["found"]) in x and xesc(e_["correct"]) in x, e_      # текст ошибок — обычный текст, а не картинка
+ok("Word: настоящие таблицы, стили заголовков, колонтитулы с полями Стр. N из M, XML корректен, текст редактируется")
+
+# 3b. запасной текстовый Word (docx_report) по-прежнему собирается — на него уходит build, если native упадёт
+fx = zipfile.ZipFile(io.BytesIO(er.docx_report(R, "ege", "Анна К.", NOW))).read("word/document.xml").decode()
+for s in ("Прогнозный балл", "[1]", "[4]", "Анна К."):
+    assert s in fx, s
+assert "<w:tbl>" not in fx
+ok("запасной Word (docx_report): прежний текстовый, без таблиц chatfiles")
+real = er.docx_native
+er.docx_native = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+try:
+    fb_ = er.build(R, "ege", "Анна К.", NOW)
+finally:
+    er.docx_native = real
+assert set(fb_) == {"pdf", "docx"} and "[1]" in zipfile.ZipFile(io.BytesIO(fb_["docx"][0])).read("word/document.xml").decode()
+ok("native упал → уходит запасной текстовый Word")
 
 # 4. пометки в тексте: ё=е, знаки между словами, без пересечений; выдумка не помечается
 sp = er.mark_spans(TEXT, R["errors"])
@@ -112,7 +148,11 @@ ok("assets/essay-logo.jpg (аватар Вишенки из макета A4) н�
 # 10. HTML-движок: разметка макета, правило критериев как у фронта, раскладка по страницам, Word = страницы A4
 assert er._crit_state({"got": 1, "max": 2}) == ("w", "частично"), "1 из 2 — «частично», как в макете и на фронте"
 assert er._crit_state({"got": 1, "max": 3}) == ("r", "основная потеря") and er._crit_state({"got": 3, "max": 3}) == ("", "полный балл")
-assert er._pct(4) == 70 and er._pct(2) == 35 and er._pct(1) == 18 and er._pct(9) == 100, "ширины полос как на фронте (4/2/1 → 70/35/18)"
+assert [er._pct(n, 4) for n in (4, 2, 1)] == [70, 35, 18], "как в макете: 4/2/1 → 70/35/18"
+for cnts_ in ((8, 7, 6), (12, 9, 3), (6, 6, 6), (5, 3, 0)):
+    ws_ = [er._pct(n, max(cnts_)) for n in cnts_]
+    assert max(ws_) == 100 or max(cnts_) <= 5, ws_
+    assert [w for _, w in sorted(zip(cnts_, ws_))] == sorted(ws_) and len(set(ws_)) == len(set(cnts_)), (cnts_, ws_)   # разные числа — разные полосы
 h = er.html_report(R, "ege", "Анна К.", NOW)
 assert h.startswith("<!DOCTYPE html>") and "window.REPORT=" in h and "</script><script>" in h
 blocks = er._blocks(R, "ege", "Анна К.", NOW)
@@ -145,21 +185,20 @@ if chromium:
         assert f"Стр. {k + 1} из 3" in t and "Школа ЕГЭ · ИИ-проверка" in t, k
     assert "Разбор ошибок" in d[1].get_textpage().get_text_range() and "Критерии ФИПИ" in d[2].get_textpage().get_text_range()
     z = zipfile.ZipFile(io.BytesIO(o["docx"][0]))
-    assert z.testzip() is None
-    x = z.read("word/document.xml").decode()
-    assert x.count("<wp:inline") == 3 and sum(n.startswith("word/media/page") for n in z.namelist()) == 3
-    assert 'cx="' in x and "влияния" in x, "текст страниц — в альт-тексте картинок"
-    assert "Приложение: текст работы" in x and x[x.index("Приложение"):].count("<w:t") > 5, \
-        "текст работы после страниц — настоящим текстом Word (задача 4а)"
-    ok("HTML-движок: PDF A4 из макета, 3 страницы «Стр. N из 3»; Word — 3 страницы-картинки с альт-текстом")
+    assert z.testzip() is None and "<w:tbl>" in z.read("word/document.xml").decode(), "Word из build — редактируемый"
+    pg_ = er.docx_pages(er.pdf_pages_png(o["pdf"][0]), ["текст страницы"] * 3, "t")          # режим ESSAY_DOCX=pages
+    px = zipfile.ZipFile(io.BytesIO(pg_)).read("word/document.xml").decode()
+    assert px.count("<wp:inline") == 3 and "<w:tbl>" not in px
+    ok("HTML-движок: PDF A4 из макета, 3 страницы «Стр. N из 3»; Word — редактируемый; режим pages — 3 страницы-картинки")
 
     big = dict(R, errors=[dict(R["errors"][0], i=k + 1, found="влеяния", why="очень длинное правило " * 20) for k in range(60)])
     ob = er.build(big, "ege", "Имя " * 10)
     db = pdfium.PdfDocument(ob["pdf"][0])
     n = len(db)
     assert n > 3 and f"Стр. {n} из {n}" in db[n - 1].get_textpage().get_text_range(), n
-    assert zipfile.ZipFile(io.BytesIO(ob["docx"][0])).read("word/document.xml").decode().count("<wp:inline") == n
-    ok(f"60 ошибок: таблица переносится ({n} стр.), на каждой шапка и «Стр. N из {n}»; страниц в Word столько же")
+    bx = zipfile.ZipFile(io.BytesIO(ob["docx"][0])).read("word/document.xml").decode()
+    assert bx.count("<w:tr>") > 60 and "<w:tblHeader/>" in bx
+    ok(f"60 ошибок: таблица переносится ({n} стр.), на каждой шапка и «Стр. N из {n}»; в Word 60 строк таблицы с повторяющейся шапкой")
 
     # Chromium не запустился → запасной путь: оба файла всё равно уходят
     orig = er.render_pdf
@@ -168,8 +207,8 @@ if chromium:
         fb = er.build(R, "ege", "Анна К.", NOW)
     finally:
         er.render_pdf = orig
-    assert set(fb) == {"pdf", "docx"} and fb["pdf"][0][:5] == b"%PDF-" and b"<w:tbl>" not in zipfile.ZipFile(io.BytesIO(fb["docx"][0])).read("word/document.xml")
-    ok("Chromium упал → PDF (reportlab) и текстовый Word всё равно собираются")
+    assert set(fb) == {"pdf", "docx"} and fb["pdf"][0][:5] == b"%PDF-" and b"<w:tbl>" in zipfile.ZipFile(io.BytesIO(fb["docx"][0])).read("word/document.xml")
+    ok("Chromium упал → PDF (reportlab) и редактируемый Word всё равно собираются")
 # 11. кнопки «Переслать PDF/Word» на превью: сервер (нормализация, общий кэш) и экран (общая пересылка чата)
 try:
     import aiohttp  # noqa: F401
@@ -229,4 +268,75 @@ for s_ in ("essayreport.complete(files)", "for attempt in (1, 2)", "отчёт �
 assert bot_src.count("EC_REPORTS.pop(key, None)") == 2, \
     "и упавшая, и неполная сборка вычищаются из кэша (отравленный кэш — причина «PDF не доходит»)"
 ok("bot.py: упавшая/неполная сборка не кэшируется; доставка с повтором и диагностикой в лог")
+
+# 13. новый дизайн: итоги из данных разбора; Word — текст, а не картинка; текст работы с пометками попадает в PDF и Word целиком
+sm = er.summary(R)
+assert sm["strong"] == [c["name"] for c in R["criteria"] if c["got"] >= c["max"]]
+assert sm["lost"] == sorted(((c["name"], c["max"] - c["got"]) for c in R["criteria"] if c["got"] < c["max"]), key=lambda x: -x[1])
+assert [c[0] for c in sm["chips"]] == [er._short(c["name"]) for c in R["criteria"]] and er._short("К2 Комментарий") == "К2" and er._short("Орфография") == "Орфография"
+assert er.summary(dict(R, criteria=[], recommendations=[])) == {"chips": [], "strong": [], "lost": [], "next": []}, "без данных — пустые итоги, ничего не домысливается"
+hj = "".join(b["h"] for b in er._blocks(R, "ege", "Анна К.", NOW))
+for s_ in ('class="chips"', 'class="sum"', "Сильные стороны", "Где теряются баллы", "С чего начать", 'class="st"', 'class="tiles"'):
+    assert s_ in hj, s_
+assert "class=\"sum\"" not in "".join(b["h"] for b in er._blocks(dict(R, missing=["criteria"], criteria=[]), "ege", "", NOW)), "нет критериев — нет итогов"
+ok("итоги (карта баллов, сильные стороны, потери, что делать) строятся только из данных разбора")
+
+segs = [(s_, i) for para in er._paras(R["text"], R["errors"]) for s_, i in para]
+glue = lambda t: re.sub(r"\s+", "", t)
+assert glue("".join(s_ for s_, _ in segs)) == glue(R["text"]), "разбор текста по пометкам ничего не теряет"
+wx = zipfile.ZipFile(io.BytesIO(er.docx_native(R, "ege", "Анна К.", NOW)))
+wdoc = wx.read("word/document.xml").decode()
+wtext = "".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", wdoc))
+for s_, _ in segs:
+    assert glue(xesc(s_)) in glue(wtext), s_
+for s_ in ("Сильные стороны", "Где теряются баллы", "С чего начать", R["criteria"][0]["name"], R["recommendations"][0]["title"]):
+    assert xesc(s_) in wdoc, s_
+assert len(wtext) > 2 * len(R["text"]), "Word — текст: помимо самой работы разбор, таблицы, критерии"
+assert "<w:drawing>" not in wdoc, "в теле Word нет картинок"
+assert not any(n_.startswith("word/media") for n_ in wx.namelist()), "в пакете Word нет картинок"
+nested = re.findall(r"<w:tc>(?:(?!</w:tc>).)*?<w:tbl>", wdoc, re.S)
+assert not nested, "в Word нет вложенных таблиц (мобильные просмотрщики рисуют их плохо)"
+fills = set(re.findall(r'w:fill="([0-9A-Fa-f]{6})"', wdoc))
+assert fills <= {"8794C0", "EEF0F6"}, f"Word лёгкий: заливки только у тонких полос статистики (светлая заливка и дорожка): {fills}"
+ok("Word лёгкий и плоский: без вложенных таблиц, без картинок, заливки только у тонких полос")
+ok(f"Word: текст работы с пометками — настоящий текст ({len(wtext)} знаков), ни одной картинки")
+if chromium:
+    er.ENGINE = "html"
+    pdf_ = er.build(R, "ege", "Анна К.", NOW)["pdf"][0]
+    dd_ = pdfium.PdfDocument(pdf_)
+    ptext = glue("".join(dd_[k].get_textpage().get_text_range() for k in range(len(dd_))))
+    for s_, _ in segs:
+        assert glue(s_) in ptext, s_
+    for s_ in ("Сильные стороны", "Гдетеряютсябаллы", "Счегоначать", glue(R["criteria"][0]["name"])):
+        assert glue(s_).lower() in ptext.lower(), s_          # заголовки карточек набраны капсом (text-transform) — регистр не важен
+    ok("PDF: текст работы с пометками и итоги — текстовый слой (выделяется и ищется), не картинка")
+
+# 14. строгий порядок элементов OOXML во всех частях Word (мобильные просмотрщики строже Word) и согласованность сеток таблиц
+ORD_ = {"pPr": ["pStyle", "keepNext", "keepLines", "pageBreakBefore", "widowControl", "numPr", "pBdr", "shd", "tabs", "spacing", "ind", "jc", "outlineLvl", "rPr"],
+        "rPr": ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "color", "spacing", "sz", "szCs", "highlight", "u", "bdr", "shd", "vertAlign", "lang"],
+        "tcPr": ["tcW", "gridSpan", "vMerge", "tcBorders", "shd", "noWrap", "tcMar", "vAlign"],
+        "tblPr": ["tblStyle", "tblW", "jc", "tblCellSpacing", "tblInd", "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook"],
+        "pBdr": ["top", "left", "bottom", "right"], "tcBorders": ["top", "left", "bottom", "right"], "tblBorders": ["top", "left", "bottom", "right", "insideH", "insideV"]}
+big_ = dict(R, errors=[dict(R["errors"][k % len(R["errors"])], i=k + 1) for k in range(40)])
+for r_, k_, st_ in ((R, "ege", "Анна К."), (big_, "ege", "Имя"), (dict(R, missing=["errors", "recommendations"], errors=[], recommendations=[]), "oge", ""),
+                    (dict(R, missing=["text", "criteria"], text="", criteria=[]), "ege", "")):
+    zz = zipfile.ZipFile(io.BytesIO(er.docx_native(r_, k_, st_, NOW)))
+    for part in ("word/document.xml", "word/header1.xml", "word/header2.xml", "word/footer1.xml", "word/footer2.xml", "word/styles.xml"):
+        dom = minidom.parseString(zz.read(part))
+        for el in dom.getElementsByTagName("*"):
+            if el.prefix == "w" and el.localName in ORD_:
+                kids = [c.localName for c in el.childNodes if c.nodeType == 1]
+                assert all(k in ORD_[el.localName] for k in kids), (part, el.localName, kids)
+                idx = [ORD_[el.localName].index(k) for k in kids]
+                assert idx == sorted(idx), (part, el.localName, kids)
+        for tbl in dom.getElementsByTagName("w:tbl"):
+            ng = len(tbl.getElementsByTagName("w:gridCol"))
+            for tr in [c for c in tbl.childNodes if c.nodeType == 1 and c.localName == "tr"]:
+                n_ = 0
+                for tc in [c for c in tr.childNodes if c.nodeType == 1 and c.localName == "tc"]:
+                    gs = [g for g in tc.getElementsByTagName("w:gridSpan") if g.parentNode.parentNode is tc]
+                    n_ += int(gs[0].getAttribute("w:val")) if gs else 1
+                    assert [c for c in tc.childNodes if c.nodeType == 1][-1].localName == "p", "ячейка заканчивается абзацем"
+                assert n_ == ng, (part, "строка не совпала с сеткой", n_, ng)
+ok("Word: порядок элементов OOXML и сетки таблиц корректны во всех частях и на четырёх наборах данных")
 print("OK")

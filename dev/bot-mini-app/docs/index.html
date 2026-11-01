@@ -1394,8 +1394,9 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-lb{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#FFD766}
 .ec-lv{display:inline-block;margin:6px 0;background:linear-gradient(180deg,#FFD766,#F0AC1A);color:#0E2250;border-radius:99px;padding:3px 12px;font-weight:900;font-size:13px}
 .ec-who{display:flex;gap:8px;align-items:center;font-weight:800;font-size:13px}
-.ec-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
-.ec-tiles>div{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:8px;text-align:center;font-size:11px;font-weight:800}
+.ec-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px}
+.ec-tiles>div{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:8px 1px;text-align:center;font-size:9px;font-weight:800;letter-spacing:-.2px;overflow-wrap:normal}
+@media(max-width:340px){.ec-tiles{grid-template-columns:repeat(2,1fr);gap:8px}.ec-tiles>div{font-size:11px;padding:8px}}
 .ec-tiles b{display:block;font:900 20px "Nunito",system-ui,sans-serif;color:#FFD766}
 /* блок «Ученик» — как .blk в макете: чипсы учеников + «Сохранить за учеником» */
 .ec-stu{display:flex;gap:6px;flex-wrap:wrap}
@@ -3727,8 +3728,8 @@ function ecDeskHtml(){const r=ecRes||ecNrm(null);
 function ecStats(r){
   const cnt={};EC_TYPES.forEach(t=>cnt[t]=0);r.errors.forEach(e=>{cnt[e.type]=(cnt[e.type]||0)+1});
   if(!r.errors.length)return `<div class="ec-note">Ошибок не найдено</div>`;
-  const mx=Math.max.apply(null,EC_TYPES.map(t=>cnt[t]).concat([1]));
-  return EC_TYPES.map(t=>`<div class="ec-st"><span>${t}</span><i style="width:${Math.min(100,Math.round(cnt[t]*17.5))}%"></i><em>${cnt[t]}</em></div>`).join("")}   /* ширины полос — как в макете (4/2/1 → 70/35/18%) */
+  const mx=Math.max.apply(null,EC_TYPES.map(t=>cnt[t]).concat([1])),k=Math.min(17.5,100/mx);   /* шаг 17,5% на ошибку (макет: 4/2/1 → 70/35/18%); при 6+ ошибках шкала сжимается — иначе все полосы упирались в 100% */
+  return EC_TYPES.map(t=>`<div class="ec-st"><span>${t}</span><i style="width:${Math.min(100,Math.round(cnt[t]*k))}%"></i><em>${cnt[t]}</em></div>`).join("")}
 function ecErrorsView(r){   /* текст работы живёт над панелями (как в мокете) — здесь только статистика */
   return `<div class="ec-blk"><h3>Статистика ошибок</h3>${(r.missing||[]).indexOf("errors")>=0?"":ecStats(r)}</div>`}   /* блок без данных — пустой: ничего не додумываем */
 function ecResNote(){   /* честный статус вместо додуманных выводов: данных нет → блоки пустые + «Повторить» */
@@ -3878,7 +3879,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")ecErrClose()});
    обоснование критерия → «Как вернуть балл» + «Спросить у Вишенки» (вопрос в чат) --- */
 const EC_FTAG={"Орфография":"Орф","Пунктуация":"Пункт","Грамматика":"Грамм","Речь":"Речь"};   /* короткие бейджи категорий */
 function ecCritOf(r,type){   /* строка критерия ФИПИ по категории ошибки (Орф/Пункт/Грамм/Речь) */
-  const s=type=="Орфография"?"орф":type=="Пунктуация"?"пункт":type=="Грамматика"?"граммат":"реч";
+  const s=type=="Орфография"?"орф":type=="Пунктуация"?"пункт":type=="Грамматика"?"грамм":"реч";
   return (r.criteria||[]).filter(c=>String(c.name||"").toLowerCase().indexOf(s)>=0)[0]}
 function ecRelabel(){   /* бейджи ошибок: номера ⇄ категории при переключении вкладок (relabel в мокете) */
   const r=ecRes||ecNrm(null),d=$("#ec-desk");if(!d)return;

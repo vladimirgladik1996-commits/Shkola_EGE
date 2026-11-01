@@ -9,15 +9,16 @@ essaycheck._result(); пустые блоки (missing) показываются
 отдельным тестом (tests/test_essay_report.py).
 
 ДВИЖКИ (ESSAY_REPORT_ENGINE, по умолчанию html):
-  html      — отчёт верстается тем же HTML/CSS, что макет (assets/essay-report.css — стили макета дословно,
-              assets/essay-report.js — раскладка по страницам A4), PDF печатает Chromium (playwright): это
-              точная копия макета. Word — те же страницы A4 картинками на всю страницу: другого способа
-              получить в Word «ровно как в HTML» нет (текст страниц — в альт-тексте картинок; сам текст работы
-              после страниц идёт НАСТОЯЩИМ текстом приложением — см. _docx_appendix).
+  html      — отчёт верстается тем же HTML/CSS, что макет (assets/essay-report.css — стили макета и дополнения,
+              assets/essay-report.js — раскладка по страницам A4), PDF печатает Chromium (playwright).
+              Word (ESSAY_DOCX, по умолчанию native) — РЕДАКТИРУЕМЫЙ документ, собранный кодом: таблицы, абзацы,
+              колонтитулы «Стр. N из M», тот же порядок и цвета, что в PDF (docx_native). ESSAY_DOCX=pages —
+              страницы PDF картинками на всю страницу (ровно как PDF, но не правится; текст работы после страниц
+              идёт настоящим текстом — _docx_appendix).
   reportlab — прежний запасной путь (PDF рисуется вручную, Word — текстовый). Включается сам, если Chromium
               не запустился: отчёт не должен ронять проверку.
 """
-import base64, html as html_lib, io, json, logging, os, pathlib, re, tempfile, threading, zipfile
+import base64, html as html_lib, io, json, logging, os, pathlib, re, tempfile, threading, time, zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape
 
@@ -30,7 +31,7 @@ LOGO = os.path.join(HERE, "assets", "essay-logo.jpg")      # аватар Виш
 BRAND = "Школа ЕГЭ · ИИ-проверка"
 WORK = {"ege": ("Разбор сочинения ЕГЭ", "Русский язык · сочинение по прочитанному тексту"),
         "oge": ("Разбор эссе ОГЭ", "Русский язык · эссе для ОГЭ")}
-TYPES = ("Орфография", "Пунктуация", "Речь")
+TYPES = ("Орфография", "Пунктуация", "Грамматика", "Речь")
 MISSING = {"text": "Текст работы не распознан.", "errors": "Ошибки не найдены или не подтверждены текстом.",
            "criteria": "Разбор по критериям ФИПИ получить не удалось.",
            "recommendations": "Рекомендации не сформированы."}
@@ -307,9 +308,9 @@ def pdf_report(r, kind="ege", student="", now=None):
                                                      textColor=tx)) for t in TYPES],
                       [Paragraph(t.lower() if t != "Речь" else "речь", S("tl", fontName=BD, fontSize=8,
                                                                          alignment=1)) for t in TYPES]],
-                    [(W - 24) / 3] * 3,
-                    [("BOX", (0, 0), (0, -1), 1.2, tx), ("BOX", (1, 0), (1, -1), 1.2, tx), ("BOX", (2, 0), (2, -1), 1.2, tx),
-                     ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]) \
+                    [(W - 24) / len(TYPES)] * len(TYPES),
+                    [("BOX", (i, 0), (i, -1), 1.2, tx) for i in range(len(TYPES))]
+                    + [("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]) \
             if "errors" not in miss else ""
         hero = box([[gauge(got, mx), mid, info], [tiles, "", ""]], [84, W - 84 - 135, 135],
                    [("BOX", (0, 0), (-1, -1), 2, tx), ("ROUNDEDCORNERS", [10, 10, 10, 10]),
@@ -467,7 +468,23 @@ NUNITO = os.path.join(ASSETS, "fonts", "Nunito.ttf")       # шрифт маке
 SHORT = {"ege": "сочинение ЕГЭ", "oge": "эссе ОГЭ"}
 SUB1 = "Разбор подготовила Вишенка"
 THEAD = "<thead><tr><th>№</th><th>Фрагмент и исправление</th><th>Правило и источник</th></tr></thead>"
-CSS_CLS = {"Пунктуация": " pu", "Речь": " re"}              # орфография — без класса, как в макете
+CSS_CLS = {"Пунктуация": " pu", "Грамматика": " gr", "Речь": " re"}              # орфография — без класса, как в макете
+def _short(name):
+    """«К2 Комментарий» → «К2» (для плашек-«карты баллов»); без номера — название целиком."""
+    m = re.match(r"\s*(К\s?\d+)", name or "")
+    return m.group(1).replace(" ", "") if m else (name or "")
+
+
+def summary(r):
+    """Итоги проверки только из данных разбора (ничего не домысливается): карта баллов по критериям,
+    критерии с полным баллом, критерии с потерями (по убыванию потерянных баллов), первые рекомендации."""
+    crits, recs = r.get("criteria") or [], r.get("recommendations") or []
+    return {"chips": [(_short(c["name"]), c["got"], c["max"], _crit_state(c)[0]) for c in crits],
+            "strong": [c["name"] for c in crits if c["max"] and c["got"] >= c["max"]],
+            "lost": sorted(((c["name"], c["max"] - c["got"]) for c in crits if c["got"] < c["max"]), key=lambda x: -x[1]),
+            "next": [(x["title"], x.get("badge") or "") for x in recs[:3]]}
+
+
 GAUGE_L = 276.46                                           # длина окружности шкалы (2π·44): 12 из 17 → 195, как в макете
 GAUGE_C = 277                                              # второй член dasharray — как в макете
 _RENDER_LOCK = threading.Lock()                            # один Chromium за раз: на 512 МБ параллельные запуски не нужны
@@ -502,8 +519,12 @@ def _fonts_head():
             '<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">'), css
 
 
-def _pct(n):
-    return min(100, int(n * 17.5 + 0.5))                   # ширины полос статистики — как ecStats фронта (4/2/1 → 70/35/18)
+def _pct(n, mx=0):
+    """Ширина полосы статистики, %. Шаг 17,5% на ошибку — как в макете (4/2/1 → 70/35/18); но когда ошибок много
+    (самая длинная полоса дошла бы до края), шкала сжимается так, чтобы самая большая была 100%, а остальные —
+    пропорционально меньше. Без этого при 6+ ошибках все полосы упирались в 100% и выглядели одинаково."""
+    k = min(17.5, 100 / mx) if mx else 17.5
+    return min(100, int(n * k + 0.5))
 
 
 def _blocks(r, kind, student, now):
@@ -530,24 +551,35 @@ def _blocks(r, kind, student, now):
     else:
         got, mx, pot, c = sc.get("got", 0), sc.get("max", 0), potential(r), _counts(r)
         fill = max(0, min(1, got / mx)) * GAUGE_L if mx else 0
-        arc = (f'<circle cx="52" cy="52" r="44" fill="none" stroke="#0E2250" stroke-width="9" stroke-linecap="round" '
+        arc = (f'<circle cx="52" cy="52" r="44" fill="none" stroke="#E3BC55" stroke-width="9" stroke-linecap="round" '
                f'stroke-dasharray="{fill:.0f} {GAUGE_C}"/>') if fill >= 1 else ""
         who = (f'<div class="who"><span class="av">{_e(student.strip()[:1].upper())}</span>{_e(student)}</div>'
                if student.strip() else "")
         info = (f"Критериев: {len(crits)}<br>Ошибок найдено: {len(errs)}"
                 + (f"<br>Потенциал: +{pot} {_plural(pot)}" if pot else ""))
-        tiles = ('<div class="tiles">' + "".join(f"<div><b>{c[t]}</b>{t.lower()}</div>" for t in TYPES) + "</div>"
+        tiles = ('<div class="tiles">' + "".join(f'<div><b>{c[t]}</b>{t.lower()}</div>' for t in TYPES) + "</div>"
                  if "errors" not in miss else "")
         add('<div class="hero"><div class="r1"><div class="gauge">'
-            '<svg width="98" height="98" viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#C9CEDD" '
+            '<svg width="98" height="98" viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#FFFFFF" stroke-opacity=".18" '
             f'stroke-width="9"/>{arc}</svg><div><b>{got}</b><small>из {mx}</small></div></div>'
             f'<div><div class="lb">Прогнозный балл</div><span class="lv">{_e(sc.get("level", ""))} · {_e(sc.get("percent", 0))}%</span>'
             f'{who}</div><div class="info">{info}</div></div>{tiles}</div>')
+        if crits:
+            sm = summary(r)
+            add('<div class="chips">' + "".join(f'<span class="chip{(" " + st) if st else ""}"><b>{_e(n)}</b> {g}/{m}</span>'
+                                              for n, g, m, st in sm["chips"]) + "</div>")
+            more = f'<li class="no">и ещё {len(sm["strong"]) - 5}</li>' if len(sm["strong"]) > 5 else ""
+            li_s = "".join(f"<li>{_e(n)}</li>" for n in sm["strong"][:5]) + more or '<li class="no">Полный балл пока ни по одному критерию</li>'
+            li_l = "".join(f'<li>{_e(n)}<span class="loss">−{d}</span></li>' for n, d in sm["lost"][:5]) or '<li class="no">Баллы не потеряны</li>'
+            li_n = "".join(f'<li><b>{_e(t)}</b>' + (f" <em>{_e(b)}</em>" if b else "") + "</li>" for t, b in sm["next"]) or '<li class="no">Рекомендации не сформированы</li>'
+            add(f'<div class="sum"><div class="g"><h3>Сильные стороны</h3><ul>{li_s}</ul></div>'
+                f'<div class="l"><h3>Где теряются баллы</h3><ul>{li_l}</ul></div>'
+                f'<div class="n"><h3>С чего начать</h3><ul>{li_n}</ul></div></div>')
     if "errors" not in miss:
         c = _counts(r)
         add("<h2>Статистика ошибок</h2>", k=1)
         for t in TYPES:
-            add(f'<div class="st"><span>{t}</span><div class="bar"><i style="width:{_pct(c[t])}%"></i></div><em>{c[t]}</em></div>')
+            add(f'<div class="st"><span>{t}</span><div class="bar"><i style="width:{_pct(c[t], max(c.values()))}%"></i></div><em>{c[t]}</em></div>')
     add("<h2>Текст работы с пометками</h2>", k=1)
     if "text" in miss:
         add(empty(MISSING["text"]))
@@ -558,9 +590,10 @@ def _blocks(r, kind, student, now):
             x = "".join((f'<span class="e{CSS_CLS.get(etype.get(i), "")}">{_e(s)}<sup>{_e(i)}</sup></span>' if i else _e(s))
                         for s, i in para)
             add(f"<p>{x}</p>", w="essay", k=1 if j == len(paras) - 1 else 0)
-        add('<div class="legend"><span><i style="border-top:2px solid #000"></i>Орфография</span>'
-            '<span><i style="border-top:2px dashed #000"></i>Пунктуация</span>'
-            '<span><i style="border-top:3px double #000"></i>Речь</span>'
+        add(f'<div class="legend"><span><i style="border-top:2px solid #0E2250"></i>Орфография</span>'
+            f'<span><i style="border-top:2px dashed #0E2250"></i>Пунктуация</span>'
+            f'<span><i style="border-top:2px dotted #0E2250"></i>Грамматика</span>'
+            f'<span><i style="border-top:3px double #0E2250"></i>Речь</span>'
             '<span style="margin-left:auto">Текст распознан с фото, ошибки ученика сохранены</span></div>')
 
     # --- страница 2: таблица ошибок ---
@@ -732,33 +765,375 @@ def docx_pages(pngs, texts, title, r=None):
     return out.getvalue()
 
 
+# ---------- Word: настоящий редактируемый документ, собранный кодом (таблицы, стили, колонтитулы) ----------
+# Не картинка макета: весь текст — обычные абзацы и таблицы Word, правится как любой документ. Повторяет макет по
+# смыслу и порядку (шапка, балл, плитки, статистика, текст с пометками, таблица ошибок, критерии, рекомендации),
+# а не пиксель в пиксель: Word не умеет скругления, CSS и шрифт Nunito. Строгий порядок элементов OOXML —
+# чтобы документ открывался не только в Word, но и в мобильных просмотрщиках.
+DOCX_MODE = os.getenv("ESSAY_DOCX", "native").strip().lower()   # native — редактируемый; pages — страницы-картинки
+WFONT = "Calibri"
+NAVY, GREYBG, LNC, HINTC, INKC = "0E2250", "EDEDED", "8C93AA", "3F4A6E", "111111"
+PG_W, PG_H, PG_M = 11906, 16838, 1134                      # A4 и поля 2 см, twips
+MUTED, LINE, TRACK, BARC = "5F6880", "D5D8E3", "EEF0F6", "8794C0"   # приглушённый текст, волосяные линии, дорожка и светлая заливка полос
+CW = PG_W - 2 * PG_M                                       # ширина текста страницы
+_NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+       'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+       'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+       'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"')
+_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+_UL = {"": ("single", "single"), "Пунктуация": ("dash", "dashed"), "Речь": ("double", "double")}   # подчёркивание / рамка плашки
+
+
+def _t(s):
+    return escape(str(s), {'"': "&quot;"})
+
+
+def _run(text, b=False, i=False, strike=False, color=None, sz=None, u=None, shd=None, sup=False, caps=False, bdr=None, sp=None, uc=None):
+    """Фрагмент текста; порядок свойств — как в схеме OOXML (rPr)."""
+    pr = ("<w:b/><w:bCs/>" if b else "") + ("<w:i/><w:iCs/>" if i else "") + ("<w:caps/>" if caps else "") + \
+         ("<w:strike/>" if strike else "") + (f'<w:color w:val="{color}"/>' if color else "") + \
+         (f'<w:spacing w:val="{sp}"/>' if sp else "") + (f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>' if sz else "") + \
+         (f'<w:u w:val="{u}" w:color="{uc or "000000"}"/>' if u else "") + \
+         (f'<w:bdr w:val="{bdr[0]}" w:sz="{bdr[1]}" w:space="0" w:color="{bdr[2]}"/>' if bdr else "") + \
+         (f'<w:shd w:val="clear" w:color="auto" w:fill="{shd}"/>' if shd else "") + ('<w:vertAlign w:val="superscript"/>' if sup else "")
+    return f'<w:r>{"<w:rPr>" + pr + "</w:rPr>" if pr else ""}<w:t xml:space="preserve">{_t(text)}</w:t></w:r>'
+
+
+def _tab():
+    return "<w:r><w:tab/></w:r>"
+
+
+def _p(runs="", jc=None, before=0, after=0, line=None, exact=None, keep=False, brk=False, style=None, pbdr=None, tabs=None, ind=None, shd=None, hang=None):
+    """Абзац; порядок свойств — как в схеме (pPr)."""
+    pr = (f'<w:pStyle w:val="{style}"/>' if style else "") + ("<w:keepNext/>" if keep else "") + \
+         ("<w:pageBreakBefore/>" if brk else "") + (f"<w:pBdr>{pbdr}</w:pBdr>" if pbdr else "") + \
+         (f'<w:shd w:val="clear" w:color="auto" w:fill="{shd}"/>' if shd else "") + \
+         (f"<w:tabs>{''.join(f'<w:tab w:val=\"{v}\" w:pos=\"{pos}\"/>' for v, pos in tabs)}</w:tabs>" if tabs else "") + \
+         f'<w:spacing w:before="{before}" w:after="{after}"' + \
+         (f' w:line="{exact}" w:lineRule="exact"' if exact else f' w:line="{line}" w:lineRule="auto"' if line else "") + "/>" + \
+         (f'<w:ind w:left="{ind}" w:hanging="{hang}"/>' if hang else f'<w:ind w:left="{ind}"/>' if ind else "") + (f'<w:jc w:val="{jc}"/>' if jc else "")
+    return f"<w:p><w:pPr>{pr}</w:pPr>{runs}</w:p>"
+
+
+def _bd(side, val="single", sz=8, color=LNC, space=0):
+    return f'<w:{side} w:val="{val}" w:sz="{sz}" w:space="{space}" w:color="{color}"/>'
+
+
+def _tc(inner, w, shd=None, borders="", span=None, va=None, mar=None):
+    """Ячейка (tcPr в порядке схемы). В конце ячейки всегда абзац — иначе Word считает файл повреждённым."""
+    pr = f'<w:tcW w:w="{w}" w:type="dxa"/>' + (f'<w:gridSpan w:val="{span}"/>' if span else "") + \
+         (f"<w:tcBorders>{borders}</w:tcBorders>" if borders else "") + \
+         (f'<w:shd w:val="clear" w:color="auto" w:fill="{shd}"/>' if shd else "") + \
+         (f'<w:tcMar><w:top w:w="{mar[0]}" w:type="dxa"/><w:left w:w="{mar[1]}" w:type="dxa"/><w:bottom w:w="{mar[0]}" w:type="dxa"/>'
+          f'<w:right w:w="{mar[1]}" w:type="dxa"/></w:tcMar>' if mar else "") + (f'<w:vAlign w:val="{va}"/>' if va else "")
+    if not inner.rstrip().endswith("</w:p>"):
+        inner += _p()
+    return f"<w:tc><w:tcPr>{pr}</w:tcPr>{inner}</w:tc>"
+
+
+def _tr(cells, split=False, head=False, h=None):
+    pr = ("<w:cantSplit/>" if not split else "") + (f'<w:trHeight w:val="{h}" w:hRule="exact"/>' if h else "") + ("<w:tblHeader/>" if head else "")
+    return f'<w:tr>{"<w:trPr>" + pr + "</w:trPr>" if pr else ""}{"".join(cells)}</w:tr>'
+
+
+def _tbl(rows, widths, borders="", spacing=None, mar=None, jc=None):
+    """Таблица фиксированной ширины (tblPr в порядке схемы)."""
+    pr = f'<w:tblW w:w="{sum(widths)}" w:type="dxa"/>' + (f'<w:jc w:val="{jc}"/>' if jc else "") + \
+         (f'<w:tblCellSpacing w:w="{spacing}" w:type="dxa"/>' if spacing else "") + \
+         (f"<w:tblBorders>{borders}</w:tblBorders>" if borders else "") + '<w:tblLayout w:type="fixed"/>' + \
+         (f'<w:tblCellMar><w:top w:w="{mar[0]}" w:type="dxa"/><w:left w:w="{mar[1]}" w:type="dxa"/><w:bottom w:w="{mar[0]}" w:type="dxa"/>'
+          f'<w:right w:w="{mar[1]}" w:type="dxa"/></w:tblCellMar>' if mar else "") + '<w:tblLook w:val="0000"/>'
+    grid = "".join(f'<w:gridCol w:w="{w}"/>' for w in widths)
+    return f'<w:tbl><w:tblPr>{pr}</w:tblPr><w:tblGrid>{grid}</w:tblGrid>{"".join(rows)}</w:tbl>'
+
+
+def _box(side_all=True, val="single", sz=12, color=LNC):
+    return "".join(_bd(s, val, sz, color) for s in ("top", "left", "bottom", "right"))
+
+
+def _spacer(h=100):
+    """Абзац-разделитель: две таблицы подряд Word склеивает в одну."""
+    return _p(exact=h)
+
+
+def _hdr_ftr(student, kind, now, first):
+    """Колонтитулы: слева бренд и подпись, справа дата и номер; в подвале «Стр. N из M» полями Word. Только текст и тонкие линии."""
+    sub = SUB1 if first else (f"{student} · {SHORT[kind]}" if student else SHORT[kind])
+    wm = 3000
+    brand = _tc(_p(_run(BRAND, b=True, sz=21, color=NAVY)) + _p(_run(sub, sz=16, color=MUTED)), CW - wm, va="bottom", mar=(40, 0))
+    meta = _tc(_p(_run(_date(now), sz=16, color=MUTED), jc="right") + _p(_run("Отчёт № " + _number(now), sz=16, color=MUTED), jc="right"),
+               wm, va="bottom", mar=(40, 0))
+    hdr = _tbl([_tr([brand, meta])], [CW - wm, wm], borders=_bd("bottom", "single", 8, NAVY, 4))
+    head = _XML + f"<w:hdr {_NS}>{hdr}{_p(exact=60)}</w:hdr>"
+    fld = lambda ins, v: (f'<w:fldSimple w:instr=" {ins} "><w:r><w:rPr><w:color w:val="{MUTED}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t>{v}</w:t></w:r></w:fldSimple>')
+    foot = _XML + (f"<w:ftr {_NS}>" + _p(_run(BRAND, sz=16, color=MUTED) + _tab() + _run("Стр. ", sz=16, color=MUTED) + fld("PAGE", "1") +
+                                         _run(" из ", sz=16, color=MUTED) + fld("NUMPAGES", "1"),
+                                         pbdr=_bd("top", "single", 6, LINE, 4), tabs=[("right", CW)], before=60) + "</w:ftr>")
+    return head, foot
+
+
+def _h2(text, tag="", brk=False):
+    """Заголовок раздела: тёмно-синий, снизу тонкая линия; справа приглушённая подпись-счётчик."""
+    runs = _run(text, b=True, sz=25, color=NAVY)
+    if tag:
+        runs += _tab() + _run(tag, sz=17, color=MUTED)
+    return _p(runs, style="Heading2", keep=True, brk=brk, before=240, after=100, tabs=[("right", CW)], pbdr=_bd("bottom", "single", 6, LINE, 4))
+
+
+def _empty_box(text):
+    return _tbl([_tr([_tc(_p(_run(text, sz=20, color=MUTED), jc="center"), CW, mar=(120, 120))])], [CW],
+                borders=_box(val="dashed", sz=6, color=LNC)) + _spacer(80)
+
+
+def _stat_tbl(label, n, pct):
+    """Статистика: подпись и число над тонкой полосой. Плоская таблица, без вложенных (мобильные просмотрщики их не любят)."""
+    f = round(CW * max(0, min(100, pct)) / 100)
+    cols = [w for w in (f, CW - f) if w]
+    bar = ([_tc(_p(exact=20), f, shd=BARC)] if f else []) + ([_tc(_p(exact=20), CW - f, shd=TRACK)] if CW - f else [])
+    head = _tc(_p(_run(label, sz=20, color=INKC) + _tab() + _run(str(n), b=True, sz=20, color=NAVY), tabs=[("right", CW)]),
+               CW, span=len(cols) if len(cols) > 1 else None, mar=(20, 0))
+    return _tbl([_tr([head]), _tr(bar, h=22)], cols)
+
+
+def docx_native(r, kind="ege", student="", now=None):
+    """Разбор → редактируемый Word (.docx): настоящий текст, таблицы, стили и колонтитулы «Стр. N из M». Ни одной картинки.
+    Лёгкая вёрстка «как набранный отчёт»: белый лист, тонкие линии, акцент — тёмно-синий; различие типов ошибок и состояний
+    критериев — стилями линий (сплошная / пунктир / двойная), поэтому читается и в чёрно-белой печати и почти не расходует тонер."""
+    now, kind, student = now or datetime.now(), _kind(kind), (student or "").strip()
+    sc, miss = r.get("score") or {}, r.get("missing") or []
+    errs, crits, recs = r.get("errors") or [], r.get("criteria") or [], r.get("recommendations") or []
+    body = []
+
+    # --- заголовок и балл ---
+    body.append(_p(_run(_title(kind), b=True, sz=44, color=NAVY), style="Heading1", keep=True, after=40))
+    body.append(_p(_run(WORK[kind][1], sz=20, color=MUTED), after=160))
+    if "criteria" in miss:
+        body.append(_empty_box(MISSING["criteria"]))
+    else:
+        got, mx, pot, c = sc.get("got", 0), sc.get("max", 0), potential(r), _counts(r)
+        rw = 2900
+        left = (_p(_run("Прогнозный балл", b=True, sz=16, color=MUTED, caps=True, sp=24)) +
+                _p(_run(str(got), b=True, sz=72, color=NAVY) + _run(f"  из {mx}", sz=28, color=MUTED) + _run("        ") +
+                   _run(f"{sc.get('level', '')} · {sc.get('percent', 0)}%", b=True, sz=28, color=NAVY), line=240, before=40) +
+                (_p(_run(student, b=True, sz=21, color=INKC), before=40) if student else ""))
+        right = (_p(_run(f"Критериев: {len(crits)}", sz=18, color=MUTED), jc="right", line=300) +
+                 _p(_run(f"Ошибок найдено: {len(errs)}", sz=18, color=MUTED), jc="right", line=300) +
+                 (_p(_run(f"Потенциал: +{pot} {_plural(pot)}", b=True, sz=18, color=NAVY), jc="right", line=300) if pot else ""))
+        body.append(_tbl([_tr([_tc(left, CW - rw, mar=(120, 0)), _tc(right, rw, va="bottom", mar=(120, 0))])], [CW - rw, rw],
+                         borders=_bd("top", "single", 12, NAVY) + _bd("bottom", "single", 6, LINE)))
+        if "errors" not in miss:
+            body.append(_spacer(130))
+            tw = CW // 3
+            tile = lambda t, k: _tc(_p(_run(str(c[t]), b=True, sz=44, color=NAVY), jc="center") + _p(_run(t.lower(), sz=17, color=MUTED), jc="center"),
+                                    tw if k < 2 else CW - 2 * tw, mar=(40, 0), borders=(_bd("left", "single", 6, LINE) if k else ""))
+            body.append(_tbl([_tr([tile(t, k) for k, t in enumerate(TYPES)])], [tw, tw, CW - 2 * tw]))
+        body.append(_spacer(190))
+        if crits:                                           # итоги — только из данных разбора — только из данных разбора
+            sm = summary(r)
+            gap = 300
+            cw3 = (CW - 2 * gap) // 3
+            HG = 190                                                      # висячий отступ: перенос строки встаёт под текст, а не под тире
+            item = lambda runs, **kw: _p(_run("–", sz=19, color=LNC) + _tab() + runs, ind=HG, hang=HG, line=265, before=40, **kw)
+            more = [item(_run(f"и ещё {len(sm['strong']) - 5}", sz=19, color=MUTED))] if len(sm["strong"]) > 5 else []
+            c_s = "".join(item(_run(n_, sz=19, color=INKC)) for n_ in sm["strong"][:5]) + "".join(more) or _p(_run("Полный балл пока ни по одному критерию", sz=19, color=MUTED))
+            c_l = "".join(item(_run(n_, sz=19, color=INKC) + _tab() + _run(f"−{d_}", b=True, sz=19, color=NAVY), tabs=[("left", HG), ("right", cw3)]) for n_, d_ in sm["lost"][:5]) \
+                or _p(_run("Баллы не потеряны", sz=19, color=MUTED))
+            c_n = "".join(item(_run(t_, b=True, sz=19, color=INKC)) + (_p(_run(b_, sz=16, color=MUTED), ind=HG, before=0) if b_ else "") for t_, b_ in sm["next"]) \
+                or _p(_run("Рекомендации не сформированы", sz=19, color=MUTED))
+            head = lambda t_: _p(_run(t_, b=True, sz=16, color=NAVY, caps=True, sp=20), after=60)
+            card = lambda inner, w: _tc(inner, w, mar=(80, 0), borders=_bd("top", "single", 12, NAVY))
+            body.append(_tbl([_tr([card(head("Сильные стороны") + c_s, cw3), _tc(_p(), gap), card(head("Где теряются баллы") + c_l, cw3), _tc(_p(), gap),
+                                   card(head("С чего начать") + c_n, CW - 2 * cw3 - 2 * gap)])], [cw3, gap, cw3, gap, CW - 2 * cw3 - 2 * gap]))
+    if "errors" not in miss:
+        c = _counts(r)
+        body.append(_h2("Статистика ошибок"))
+        for t in TYPES:
+            body.append(_stat_tbl(t, c[t], _pct(c[t], max(c.values()))))
+            body.append(_spacer(60))
+
+    # --- текст работы с пометками ---
+    body.append(_h2("Текст работы с пометками"))
+    if "text" in miss:
+        body.append(_empty_box(MISSING["text"]))
+    else:
+        ps = []
+        for para in _paras(r.get("text"), r.get("errors")):
+            rr = ""
+            etype = {e["i"]: e["type"] for e in errs}
+            for s_, i in para:
+                if i:
+                    rr += _run(s_, sz=21, u=_UL.get(etype.get(i), _UL[""])[0], uc=NAVY) + _run(str(i), b=True, sz=14, color=NAVY, sup=True)
+                else:
+                    rr += _run(s_, sz=21)
+            ps.append(_p(rr, line=320, after=70))
+        body.append(_p(_run("Орфография", sz=16, color=MUTED, u="single", uc=NAVY) + _run("     ") + _run("Пунктуация", sz=16, color=MUTED, u="dash", uc=NAVY) +
+                       _run("     ") + _run("Речь", sz=16, color=MUTED, u="double", uc=NAVY) + _tab() +
+                       _run("Текст распознан с фото, ошибки ученика сохранены", sz=16, color=MUTED), after=70, tabs=[("right", CW)], keep=True))
+        body.append(_tbl([_tr([_tc("".join(ps), CW, mar=(130, 220))], split=True)], [CW], borders=_box(sz=6, color=LINE)))
+
+    # --- разбор ошибок ---
+    body.append(_h2("Разбор ошибок", f"{len(errs)} подтверждены текстом" if errs else ""))
+    if not errs:
+        body.append(_empty_box(MISSING["errors"] if "errors" in miss else "Ошибок не найдено."))
+    else:
+        w1, w3 = 520, 3000
+        w2 = CW - w1 - w3
+        th = lambda t, w, m: _tc(_p(_run(t, b=True, sz=15, color=MUTED, caps=True, sp=16)), w, borders=_bd("bottom", "single", 8, NAVY), mar=(50, m))
+        rows = [_tr([th("№", w1, 0), th("Фрагмент и исправление", w2, 100), th("Правило и источник", w3, 100)], head=True)]
+        line_ = _bd("bottom", "single", 4, LINE)
+        for e in errs:
+            ul = _UL.get(e["type"], _UL[""])[0]
+            fix = _run(e["found"], sz=22, color=MUTED, strike=True) + _run("   →   ", sz=22, color=LNC) + _run(e["correct"] or "—", b=True, sz=22, color=NAVY)
+            why = _p(_run(e["why"], sz=19, color=INKC), line=270) + (_p(_run(e["src"], sz=16, color=MUTED), before=30) if e.get("src") else "")
+            rows.append(_tr([
+                _tc(_p(_run(str(e["i"]), b=True, sz=22, color=NAVY)), w1, borders=line_, mar=(90, 0)),
+                _tc(_p(_run(e["type"], sz=16, color=MUTED, u=ul, uc=NAVY), after=40) + _p(fix), w2, borders=line_, mar=(90, 100)),
+                _tc(why, w3, borders=line_, mar=(90, 100))]))
+        body.append(_tbl(rows, [w1, w2, w3]))
+
+    # --- критерии и рекомендации ---
+    body.append(_h2("Критерии ФИПИ с обоснованием", f"{sc.get('got', 0)} из {sc.get('max', 0)}" if crits else ""))
+    if not crits:
+        body.append(_empty_box(MISSING["criteria"]))
+    for c in crits:
+        cls, lab = _crit_state(c)
+        pc = int(c["got"] * 100 / c["max"] + 0.5) if c["max"] else 0
+        state = _run("   ") + _run(lab, sz=16, b=(cls == "r"), color=NAVY if cls == "r" else MUTED)
+        title = _p(_run(c["name"], b=True, sz=21, color=INKC) + _tab() + _run(f"{c['got']} / {c['max']}", b=True, sz=21, color=NAVY) + state,
+                   tabs=[("right", CW)], keep=True)
+        text = ""
+        if c.get("why"):
+            text += _p(_run("Почему: ", b=True, sz=19, color=INKC) + _run(c["why"], sz=19, color=INKC), line=270)
+        if c.get("tip"):
+            text += _p(_run("Совет: ", b=True, sz=19, color=MUTED) + _run(c["tip"], sz=19, color=MUTED), line=270, before=30)
+        body.append(_tbl([_tr([_tc(title, CW, mar=(90, 0))]),
+                          _tr([_tc(text or _p(exact=20), CW, mar=(30, 0), borders=_bd("bottom", "single", 4, LINE))])], [CW]))
+        body.append(_spacer(60))
+    if recs:
+        pot = potential(r)
+        body.append(_h2("Рекомендации", f"потенциал +{pot} {_plural(pot)}" if pot else ""))
+        nw = 520
+        rows = []
+        for n, x in enumerate(recs, 1):
+            txt = _p(_run(x["title"], b=True, sz=21, color=INKC) + (_tab() + _run(x["badge"], sz=16, color=NAVY) if x.get("badge") else ""),
+                     tabs=[("right", CW - nw)], keep=True)
+            if x.get("text"):
+                txt += _p(_run(x["text"], sz=19, color=MUTED), line=270, before=30)
+            rows.append(_tr([_tc(_p(_run(str(n), b=True, sz=28, color=NAVY)), nw, borders=_bd("bottom", "single", 4, LINE), mar=(80, 0)),
+                             _tc(txt, CW - nw, borders=_bd("bottom", "single", 4, LINE), mar=(80, 0))]))
+        body.append(_tbl(rows, [nw, CW - nw]))
+    body.append(_p(_run(NOTE, i=True, sz=16, color=MUTED), line=260, before=240, pbdr=_bd("top", "single", 4, LINE, 6)))
+
+    hdr1, ftr1 = _hdr_ftr(student, kind, now, True)
+    hdr2, ftr2 = _hdr_ftr(student, kind, now, False)
+    sect = ('<w:sectPr><w:headerReference w:type="default" r:id="rId3"/><w:headerReference w:type="first" r:id="rId4"/>'
+            '<w:footerReference w:type="default" r:id="rId5"/><w:footerReference w:type="first" r:id="rId6"/>'
+            f'<w:pgSz w:w="{PG_W}" w:h="{PG_H}"/><w:pgMar w:top="1400" w:right="{PG_M}" w:bottom="1100" w:left="{PG_M}" w:header="560" w:footer="520" w:gutter="0"/>'
+            '<w:cols w:space="708"/><w:titlePg/></w:sectPr>')
+    doc = _XML + f'<w:document {_NS}><w:body>{"".join(body)}{sect}</w:body></w:document>'
+    return _pack(doc, hdr1, hdr2, ftr1, ftr2, _title(kind), now)
+
+
+_STYLES = (_XML + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr>'
+           f'<w:rFonts w:ascii="{WFONT}" w:hAnsi="{WFONT}" w:eastAsia="{WFONT}" w:cs="{WFONT}"/><w:sz w:val="20"/><w:szCs w:val="20"/>'
+           '<w:lang w:val="ru-RU" w:eastAsia="ru-RU" w:bidi="ar-SA"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr>'
+           '<w:spacing w:after="0" w:line="252" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+           '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+           '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/></w:style>'
+           '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:uiPriority w:val="99"/><w:semiHidden/>'
+           '<w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>'
+           '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>'
+           '<w:style w:type="numbering" w:default="1" w:styleId="NoList"><w:name w:val="No List"/><w:uiPriority w:val="99"/><w:semiHidden/></w:style>'
+           '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>'
+           '<w:pPr><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:bCs/></w:rPr></w:style>'
+           '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>'
+           '<w:pPr><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:bCs/></w:rPr></w:style></w:styles>')
+_SETTINGS = (_XML + '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:zoom w:percent="100"/>'
+             '<w:defaultTabStop w:val="720"/><w:characterSpacingControl w:val="doNotCompress"/>'
+             '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>'
+             '<w:themeFontLang w:val="ru-RU"/></w:settings>')
+
+
+def _pack(doc, hdr1, hdr2, ftr1, ftr2, title, now):
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    ct = (_XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+          '<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>'
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+          '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'
+          + "".join(f'<Override PartName="/word/header{n}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+                    f'<Override PartName="/word/footer{n}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' for n in (1, 2)) +
+          '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+          '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>')
+    root = (_XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            f'<Relationship Id="rId1" Type="{R}officeDocument" Target="word/document.xml"/>'
+            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+            f'<Relationship Id="rId3" Type="{R}extended-properties" Target="docProps/app.xml"/></Relationships>')
+    drels = (_XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+             f'<Relationship Id="rId1" Type="{R}styles" Target="styles.xml"/><Relationship Id="rId2" Type="{R}settings" Target="settings.xml"/>'
+             f'<Relationship Id="rId3" Type="{R}header" Target="header2.xml"/><Relationship Id="rId4" Type="{R}header" Target="header1.xml"/>'
+             f'<Relationship Id="rId5" Type="{R}footer" Target="footer2.xml"/><Relationship Id="rId6" Type="{R}footer" Target="footer1.xml"/>'
+             + "</Relationships>")
+    core = (_XML + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" '
+            'xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            f'<dc:title>{escape(title)}</dc:title><dc:creator>{escape(BRAND)}</dc:creator>'
+            f'<dcterms:created xsi:type="dcterms:W3CDTF">{iso}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">{iso}</dcterms:modified></cp:coreProperties>')
+    app = (_XML + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Shkola EGE</Application>'
+           '<DocSecurity>0</DocSecurity></Properties>')
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", ct)
+        z.writestr("_rels/.rels", root)
+        z.writestr("word/document.xml", doc)
+        z.writestr("word/_rels/document.xml.rels", drels)
+        z.writestr("word/styles.xml", _STYLES)
+        z.writestr("word/settings.xml", _SETTINGS)
+        for n, (h, f) in enumerate(((hdr1, ftr1), (hdr2, ftr2)), 1):
+            z.writestr(f"word/header{n}.xml", h)
+            z.writestr(f"word/footer{n}.xml", f)
+        z.writestr("docProps/core.xml", core)
+        z.writestr("docProps/app.xml", app)
+    return out.getvalue()
+
+
 def build(r, kind="ege", student="", now=None):
     """Разбор → {"pdf": (байты, имя), "docx": (байты, имя)}. Формат, который не собрался, пропускается
     (в лог — причина): отчёт не должен ронять проверку, а один формат — лишать второго.
-    Движок html: PDF печатает Chromium из макета, Word — те же страницы картинками. Chromium не запустился —
-    запасной путь reportlab (PDF) и текстовый Word, отчёт всё равно уходит."""
+    PDF: движок html — Chromium печатает макет (точная копия); не запустился — запасной reportlab.
+    Word: редактируемый документ, собранный кодом (docx_native — таблицы, абзацы, колонтитулы), не картинка;
+    ESSAY_DOCX=pages — страницы макета картинками (точная копия, но не правится); сбой — прежний текстовый Word."""
     now = now or datetime.now()
-    stem, out = file_name(kind, student, now), {}
+    stem, out, texts = file_name(kind, student, now), {}, []
+    t0 = time.monotonic()
     if ENGINE == "html":
         try:
             pdf, texts = render_pdf(html_report(r, kind, student, now))
             out["pdf"] = (pdf, f"{stem}.pdf")
-            try:
-                out["docx"] = (docx_pages(pdf_pages_png(pdf), texts, _title(kind), r), f"{stem}.docx")
-            except Exception as e:
-                log.exception("essayreport: Word из страниц PDF не собрался: %r", e)
         except Exception as e:
             log.warning("essayreport: HTML-движок (Chromium) не сработал, запасной путь reportlab: %r", e)
-    for ext, fn in (("pdf", pdf_report), ("docx", docx_report)):
-        if ext in out:
-            continue
+    if "pdf" not in out:
         try:
-            out[ext] = (fn(r, kind, student, now), f"{stem}.{ext}")
+            out["pdf"] = (pdf_report(r, kind, student, now), f"{stem}.pdf")
         except Exception as e:
-            log.exception("essayreport: %s не собрался: %r", ext, e)
+            log.exception("essayreport: pdf не собрался: %r", e)
+    try:
+        if DOCX_MODE == "pages" and "pdf" in out and texts:
+            data = docx_pages(pdf_pages_png(out["pdf"][0]), texts, _title(kind), r)
+        else:
+            data = docx_native(r, kind, student, now)
+        out["docx"] = (data, f"{stem}.docx")
+    except Exception as e:
+        log.exception("essayreport: Word не собрался штатно, запасной текстовый: %r", e)
+        try:
+            out["docx"] = (docx_report(r, kind, student, now), f"{stem}.docx")
+        except Exception as e2:
+            log.exception("essayreport: docx не собрался: %r", e2)
     # диагностика доставки: что собралось и каким движком — без неё «PDF не доходит» не отлаживается
     if out:
-        log.info("essayreport: отчёт собран (движок %s): %s", ENGINE,
+        log.info("essayreport: отчёт собран за %.1fs (движок %s): %s", time.monotonic() - t0, ENGINE,
                  ", ".join(f"{ext} {len(data) // 1024} КБ" for ext, (data, _) in sorted(out.items())))
     lost = [ext for ext in ("pdf", "docx") if ext not in out]
     if lost:
