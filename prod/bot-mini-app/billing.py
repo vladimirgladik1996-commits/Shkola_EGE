@@ -22,6 +22,9 @@
                              тоже принимается (Authorization: OAuth)
   YANDEX_BILLING_API_KEY   — последний резерв: Api-Key (если пусто, берётся YANDEX_API_KEY) —
                              Billing API его отвергает с 401, оставлен для диагностики
+  YANDEX_BILLING_ID        — id платёжного аккаунта (dn2…): с ним баланс берётся точечно методом
+                             BillingAccount.Get (billing/v1/billingAccounts/{id}); без него — список всех
+                             счетов методом BillingAccount.List
 """
 import asyncio, json, logging, os, re, time
 
@@ -171,15 +174,18 @@ async def _yandex(s):
             auth = "Bearer " + oauth   # это IAM-токен, а не OAuth: схема Bearer — иначе Яндекс отвечает 401
         else:
             auth = "OAuth " + oauth if oauth else "Api-Key " + api_key
+    bid = _key("YANDEX_BILLING_ID")   # id платёжного аккаунта → точечный BillingAccount.Get
     try:
-        async with s.get(YANDEX_URL, headers={"Authorization": auth}) as r:
+        async with s.get(YANDEX_URL + ("/" + bid if bid else ""), headers={"Authorization": auth}) as r:
             if r.status == 401:
                 return ("☁️ Яндекс Cloud:\n• нет доступа: ключ не принят — задайте "
-                        "YANDEX_SA_KEY (JSON-ключ сервисного аккаунта) или YANDEX_OAUTH_TOKEN")
+                        "YANDEX_SA_KEY (JSON-ключ сервисного аккаунта)")
             if r.status == 403:
                 # чаще всего ключ есть, но у сервисного аккаунта нет прав на биллинг
                 return ("☁️ Яндекс Cloud:\n• нет доступа: ключу нужна роль "
                         "billing.accounts.viewer (billing.viewer)")
+            if r.status == 404 and bid:
+                return f"☁️ Яндекс Cloud:\n• счёт {bid} не найден (проверьте YANDEX_BILLING_ID)"
             if r.status != 200:
                 log.warning("billing: Яндекс HTTP %s", r.status)
                 return f"☁️ Яндекс Cloud:\n• счета: не получилось (HTTP {r.status})"
@@ -187,7 +193,10 @@ async def _yandex(s):
     except Exception as e:
         log.warning("billing: Яндекс не ответил: %r", e)
         return "☁️ Яндекс Cloud:\n• счета: не получилось (см. лог)"
-    accounts = j.get("billingAccounts") if isinstance(j, dict) else None
+    if bid:                              # BillingAccount.Get: ответ — сам счёт, а не список
+        accounts = [j] if isinstance(j, dict) and j.get("id") else None
+    else:
+        accounts = j.get("billingAccounts") if isinstance(j, dict) else None
     if not accounts:
         return "☁️ Яндекс Cloud:\n• счета не найдены"
     curr = str(accounts[0].get("currency") or "—")       # валюта в заголовке — по первому счёту

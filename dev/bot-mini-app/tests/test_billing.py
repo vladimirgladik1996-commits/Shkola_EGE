@@ -51,6 +51,7 @@ def make_app():
     app = web.Application()
     app.router.add_get("/users/me/balance", route("kimi"))
     app.router.add_get("/billing/v1/billingAccounts", route("yandex"))
+    app.router.add_get("/billing/v1/billingAccounts/{bid}", route("yandex_get"))
     app.router.add_post("/iam/v1/tokens", route("iam"))
     return app
 
@@ -64,6 +65,8 @@ def defaults():
             {"id": "dn2u7t5", "name": "Мой счёт", "currency": "RUB", "balance": "1234.5", "active": True},
             {"id": "dn8xxx", "name": "", "currency": "RUB", "balance": "0", "active": False},
         ]}},
+        yandex_get={"json": {"id": "dn2u7t5", "name": "Мой счёт", "currency": "RUB",
+                             "balance": "1234.5", "active": True}},
     )
 
 
@@ -210,6 +213,41 @@ def test_errors():
     ok("401 → подсказка про YANDEX_SA_KEY / YANDEX_OAUTH_TOKEN (Billing API не берёт Api-Key)")
 
 
+def test_billing_get():
+    """YANDEX_BILLING_ID задан → баланс берётся точечно методом BillingAccount.Get
+    (billing/v1/billingAccounts/{id}), а не списком; ответ — сам счёт."""
+    async def run():
+        defaults()
+        saved_env = env(YANDEX_BILLING_API_KEY="***", YANDEX_BILLING_ID="dn2u7t5")
+        try:
+            async with serve():
+                CALLS.clear()
+                return await billing.report()
+        finally:
+            unenv(saved_env)
+
+    text = asyncio.run(run())
+    part = text.split("\n" + billing.SEP + "\n")[1]
+    assert "• Мой счёт (dn2u7t5): 1 234,50 · активен" in part, part
+    assert [c[0] for c in CALLS if "billingAccounts" in c[0]] == ["/billing/v1/billingAccounts/dn2u7t5"]
+    ok("YANDEX_BILLING_ID: баланс через BillingAccount.Get по своему id, ровно один запрос")
+
+    # неверный id → честная подсказка про YANDEX_BILLING_ID, а не пустой экран
+    async def run404():
+        defaults()
+        MODE["yandex_get"] = {"code": 404, "json": {}}
+        saved_env = env(YANDEX_BILLING_API_KEY="***", YANDEX_BILLING_ID="dn0nope")
+        try:
+            async with serve():
+                return await billing.report()
+        finally:
+            unenv(saved_env)
+
+    part = asyncio.run(run404()).split("\n" + billing.SEP + "\n")[1]
+    assert "• счёт dn0nope не найден (проверьте YANDEX_BILLING_ID)" in part, part
+    ok("BillingAccount.Get: неверный id → подсказка про YANDEX_BILLING_ID")
+
+
 def make_sa():
     """Тестовый JSON-ключ сервисного аккаунта: свежая RSA-пара, формат как у key.json Яндекса
     (включая служебную строку PLEASE DO NOT REMOVE рядом с приватным ключом)."""
@@ -293,6 +331,6 @@ def test_sa_iam_fallback():
 
 
 if __name__ == "__main__":
-    for t in (test_full_report, test_no_keys, test_errors, test_sa_iam, test_sa_iam_fallback):
+    for t in (test_full_report, test_no_keys, test_errors, test_billing_get, test_sa_iam, test_sa_iam_fallback):
         t()
     print("OK")
