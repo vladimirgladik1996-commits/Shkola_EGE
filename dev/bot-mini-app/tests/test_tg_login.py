@@ -144,10 +144,10 @@ for side, scheme in (("dev", "kabinet-dev"), ("prod", "kabinet")):
     assert "localStorage.tgLogin&&document.visibilityState" in html, f"{side}: wake не должен перезагружать страницу во время входа"
     assert 'auth.BASE.startswith("https://")' in bot, side
     assert "localStorage.sesName=j.name" in html and "localStorage.sesPhoto=j.photo" in html, side
-    assert '$("#drawer .mn-foot").hidden' in html and "Скачать АПК" in html, side
+    assert '$("#drawer .mn-foot").hidden' in html and "Скачать мобильное приложение" in html, side
     assert "def tg_profile(" in bot and "get_user_profile_photos" in bot and "name, photo)" in bot, side
     assert "alter table auth_tg add column photo" in a and "_tg_profile" in a, side
-    ok(f"{side}: панель АПК — имя/аватар из Telegram при входе, «Скачать АПК» в приложении скрыт")
+    ok(f"{side}: панель АПК — имя/аватар из Telegram при входе, «Скачать мобильное приложение» в приложении скрыт")
     assert "tgl:y:" not in bot and "auth.logout(c.from_user.id)" in bot, side   # вход без вопросов + кнопка отзыва
     ok(f"{side}: манифест ({scheme}://login, singleTask), MainActivity, страница и бот связаны")
 print("OK")

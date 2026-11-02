@@ -194,7 +194,7 @@ body:has(#sheet.on) #burger,body:has(#pr.on) #burger{z-index:6}
 #scrim.on{opacity:1;visibility:visible;transition-delay:0s}
 #drawer{position:fixed;z-index:50;top:0;bottom:0;left:0;width:min(84vw,330px);display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;background:var(--bg);border-radius:0 28px 28px 0;box-shadow:12px 0 40px -10px rgba(5,14,40,.5);transform:translateX(calc(-100% - 56px));visibility:hidden;will-change:transform;transition:transform .55s cubic-bezier(.5,.02,.2,1),visibility 0s .55s}
 #drawer.on{transform:none;visibility:visible;transition:transform .95s cubic-bezier(.33,.08,.12,1),visibility 0s}
-/* параллакс: список и кнопка «Скачать АПК» чуть отстают от панели и мягко «догоняют» её */
+/* параллакс: список и кнопка «Скачать мобильное приложение» чуть отстают от панели и мягко «догоняют» её */
 #nv,.mn-foot{transform:translateX(-30px);opacity:0;transition:transform .45s cubic-bezier(.5,0,.75,0),opacity .3s ease}
 #drawer.on #nv,#drawer.on .mn-foot{transform:none;opacity:1;transition:transform 1.1s cubic-bezier(.33,.08,.12,1) .12s,opacity .6s ease .14s}
 .mn-head{position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 22px) 14px 26px 18px;color:#fff;border-radius:0 0 32px 0;background:radial-gradient(120% 95% at 100% 0,rgba(255,201,60,.34),transparent 56%),radial-gradient(90% 85% at 0 100%,rgba(88,140,255,.38),transparent 62%),linear-gradient(155deg,#1E52BC 0%,#123A8C 46%,#0A1F52 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 18px 32px -22px rgba(5,14,40,.75)}
@@ -237,7 +237,7 @@ body:has(#sheet.on) #burger,body:has(#pr.on) #burger{z-index:6}
 .mn-it.on svg{transform:scale(1.12) rotate(-6deg)}
 .mn-it span{transition:transform .5s cubic-bezier(.22,1,.36,1)}
 .mn-it.on span{transform:translateX(3px)}
-/* «Скачать АПК» — отдельно от разделов, в самом низу меню, с отступом от низа экрана */
+/* «Скачать мобильное приложение» — отдельно от разделов, в самом низу меню, с отступом от низа экрана */
 .mn-foot{flex:none;position:relative;padding:14px 12px calc(env(safe-area-inset-bottom,0px) + 24px)}
 .mn-foot::before{content:"";position:absolute;left:26px;right:26px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--ln) 20%,var(--ln) 80%,transparent)}
 .mn-dl{-webkit-tap-highlight-color:transparent;position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;width:100%;height:58px;padding:0 14px 0 10px;border-radius:18px;text-align:left;color:#fff;background:linear-gradient(135deg,#1C4DB4,#0E2B6B);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 22px -12px rgba(15,46,110,.75);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
@@ -2127,7 +2127,7 @@ frame()
 <aside id="drawer" aria-label="Разделы" aria-hidden="true">
 <div class="mn-head"><div class="mn-av"><div class="mn-logo" id="mnav"><span id="mnini"></span></div></div><div class="mn-who"><b id="mnname">Профиль</b><small>Кабинет репетитора</small></div><button class="mn-x" id="mnx" type="button" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button><svg class="mn-paw" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10L2 25l30 15 24-12v17h4V25z"/><path d="M14 38v10c0 4 8 9 18 9s18-5 18-9V38L32 47z"/></svg></div>
 <nav id="nv"><i id="nvi"></i><button class="mn-it on" data-t="ch" style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v7a2.5 2.5 0 01-2.5 2.5H12l-4.5 4v-4h-1A2.5 2.5 0 014 13.5z"/></svg><span>Чат с ИИ</span></button><button class="mn-it" data-t="c" style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span>Расписание</span></button><button class="mn-it" data-t="p" style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 16.5V7.5h3.2a2.6 2.6 0 010 5.2H8.5M8.5 15h5"/></svg><span>Оплаты</span></button><button class="mn-it" data-t="s" style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z"/><path d="M6.5 11.8v4c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4M21.5 9.5v5"/></svg><span>Ученики</span></button><button class="mn-it" data-t="ai" style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7.5A2.5 2.5 0 005 5.5v13A2.5 2.5 0 007.5 21h9a2.5 2.5 0 002.5-2.5V8z"/><path d="M14 3v4a1 1 0 001 1h4"/><path d="M9 14.2l2.1 2.1 3.9-4"/></svg><span>ИИ-проверка</span></button><button class="mn-it" data-t="mt" style="--i:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span>Материалы</span></button></nav>
-<div class="mn-foot"><button class="mn-dl" type="button" style="--i:6" onclick="apkDl()" aria-label="Скачать АПК — последняя версия приложения"><span class="mn-dli"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10.5"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg></span><span class="mn-dlt"><b>Скачать АПК</b><small>Последняя версия</small></span></button></div>
+<div class="mn-foot"><button class="mn-dl" type="button" style="--i:6" onclick="apkDl()" aria-label="Скачать мобильное приложение — последняя версия приложения"><span class="mn-dli"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10.5"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg></span><span class="mn-dlt"><b>Скачать мобильное приложение</b><small>Последняя версия</small></span></button></div>
 </aside>
 <main id="app"></main>
 <div id="aic-c" hidden></div>   <!-- поле ввода чата с ИИ: вне #app, монтируется в render() и не прыгает при анимации перехода -->
@@ -2181,7 +2181,7 @@ if(APP){tg.showConfirm=(q,cb)=>cb(window.confirm(q));tg.showAlert=(m,cb)=>{windo
   if(u.photo_url)av_(u.photo_url);
   if(APP){if(localStorage.sesName){const n=localStorage.sesName;$("#mnname").textContent=n;$("#mnini").textContent=(n[0]||"?").toUpperCase()}
     const ph=safePhoto(localStorage.sesPhoto);if(ph)av_(ph);   /* АПК: имя и аватар из Telegram — при входе через Telegram */
-    $("#drawer .mn-foot").hidden=true}})();                     /* «Скачать АПК» — только в Telegram mini app */
+    $("#drawer .mn-foot").hidden=true}})();                     /* «Скачать мобильное приложение» — только в Telegram mini app */
 /* тема берётся из самого Telegram (а не из системной), а шапка и фон окна красятся в цвет бренда */
 function brand(){document.documentElement.dataset.theme="light";   // тёмной темы нет — приложение всегда светлое
  
@@ -4443,7 +4443,7 @@ async function chFresh(i,j){const x=((CH[i]||{}).a||[])[j];if(!x||!x.u||!chIsDoc
 /* ОТКРЫТИЕ ФАЙЛА — СИНХРОННО В ОБРАБОТЧИКЕ ТАПА (баг-репорт 013).
    tg.openLink честно обрабатывается Telegram ТОЛЬКО в ответ на тап: любой await перед вызовом
    (хотя бы сетевой запрос за свежей ссылкой) выносит вызов из user-gesture, и клиенты его
-   МОЛЧА игнорируют. Отсюда и разница, которую видел пользователь: «Скачать АПК» работал
+   МОЛЧА игнорируют. Отсюда и разница, которую видел пользователь: «Скачать мобильное приложение» работал
    (там openLink без await), а PDF — нет. Поэтому здесь НЕТ ни одного await до вызова Telegram,
    а свежая ссылка подогревается В ФОНЕ (chRefresh) и кладётся обратно в карточку к следующему тапу. */
 function chPut(i,j,x){const a=((CH[i]||{}).a||[])[j];if(a&&x&&x.u){a.u=x.u;if(x.m)a.m=x.m}return a||x}
@@ -4470,7 +4470,7 @@ function chDl(i,j){chOpen(i,j)}   // кнопка «Скачать» — ров�
    GitHub-релиз «apk-latest» — CI при каждой сборке ПЕРЕЗАЛИВАЕТ туда файлы, поэтому адрес
    не меняется и всегда ведёт на свежую версию. Номер версии в ссылку не зашит. */
 const APK_URL="https://github.com/vladimirgladik1996-commits/Shkola_EGE/releases/download/apk-latest/kabinet-repetitora-prod.apk";
-/* «Скачать АПК» (нижний пункт меню): тап → скачивается последняя версия мобильного приложения.
+/* «Скачать мобильное приложение» (нижний пункт меню): тап → скачивается последняя версия мобильного приложения.
    Универсальная ссылка APK_URL — основная; /apk (тот же файл от кабинета) — запасной вариант. */
 function apkDl(){const A=window.Android||{},go=u=>{
     try{
