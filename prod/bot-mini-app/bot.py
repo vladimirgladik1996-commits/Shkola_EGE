@@ -553,8 +553,8 @@ def week_pdf(start):
         nm = " ".join(x["name"].split())
         end = f"{e // 60:02d}:{e % 60:02d}"
         trange = f"{x['time']}–{end}"
-        # регулярные занятия помечены «повтор» (как в предпросмотре печати мини-аппа)
-        dur_txt = f"({x['dur']} мин · повтор)" if x["regular_id"] else f"({x['dur']} мин)"
+        # регулярные занятия в распечатке не помечаются — значок только в раскрытой карточке занятия (мини-апп)
+        dur_txt = f"({x['dur']} мин)"
 
         c.saveState()
         p = c.beginPath(); p.roundRect(bx, ybot, bwid, h, 2.2)
