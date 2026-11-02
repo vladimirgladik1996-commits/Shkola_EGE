@@ -604,9 +604,11 @@ def _blocks(r, kind, student, now):
     for e in errs:
         cls = CSS_CLS.get(e["type"], "")
         src = f'<span class="src">{_e(e["src"])}</span>' if e.get("src") else ""
+        unc = ('<span class="src">фрагмент не найден в распознанном тексте — ошибка не подтверждена</span>'
+               if e.get("unconfirmed") else "")
         add(f'<tr><td><span class="num{cls}">{_e(e["i"])}</span></td><td><span class="pill{cls}">{_e(e["type"])}</span>'
             f'<div class="fix"><s>{_e(e["found"])}</s><span class="ar">→</span><b>{_e(e["correct"] or "—")}</b></div></td>'
-            f'<td>{_e(e["why"])}{src}</td></tr>', w="tbl")
+            f'<td>{_e(e["why"])}{src}{unc}</td></tr>', w="tbl")
 
     # --- страница 3: критерии ФИПИ и рекомендации ---
     crit_tag = f"{sc.get('got', 0)} из {sc.get('max', 0)}" if crits else ""

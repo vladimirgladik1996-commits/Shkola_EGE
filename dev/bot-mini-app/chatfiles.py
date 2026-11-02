@@ -34,11 +34,20 @@ def _b64(s):
 
 
 def to_jpeg_b64(raw):
-    """Любая картинка → JPEG ≤1600 px в base64 (kimi.build_payload помечает все изображения как jpeg)."""
-    from PIL import Image
+    """Любая картинка → JPEG ≤1600 px в base64 (kimi.build_payload помечает все изображения как jpeg).
+    JPEG в пределах лимита и без поворота по EXIF проходит БЕЗ повторного пережатия: второе кодирование
+    quality=85 размывало тонкие штрихи рукописи, и OCR «ИИ-проверки» возвращал обрывки текста
+    (баг-репорт 018). EXIF-поворот запекается в пиксели — иначе фото могло уйти к OCR повёрнутым."""
+    from PIL import Image, ImageOps
     try:
         im = Image.open(io.BytesIO(raw))
         im.load()
+        try:
+            orient = (im.getexif() or {}).get(0x0112, 1) or 1
+        except Exception:
+            orient = 1
+        if (im.format or "").upper() == "JPEG" and max(im.size) <= 1600 and im.mode in ("RGB", "L") and orient == 1:
+            return base64.b64encode(raw).decode()
         if im.mode in ("RGBA", "LA", "P"):
             im = im.convert("RGBA")
             bg = Image.new("RGB", im.size, (255, 255, 255))
@@ -46,9 +55,11 @@ def to_jpeg_b64(raw):
             im = bg
         else:
             im = im.convert("RGB")
+        im2 = ImageOps.exif_transpose(im)
+        im = im2 if im2 is not None else im
         im.thumbnail((1600, 1600))
         out = io.BytesIO()
-        im.save(out, "JPEG", quality=85)
+        im.save(out, "JPEG", quality=92)
     except Exception:
         raise ValueError
     return base64.b64encode(out.getvalue()).decode()

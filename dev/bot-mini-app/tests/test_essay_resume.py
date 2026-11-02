@@ -64,7 +64,7 @@ assert 'ecWhy==="link"' in html and "Работа не потеряна" in html
 assert 'ecWhy==="srv"' in html, "для «srv» (сбой на сервере) нужен свой текст ошибки"
 run_body = html[html.index("async function ecRun(){"):html.index("function ecRetry(")]
 assert "for(let a=0;a<=EC_RETRY;a++)" in run_body, "ecRun обязан переподключаться к той же проверке"
-assert 'ecLive=[];ecWait=EC_STAGES.slice();ecThink=""' in run_body, \
+assert 'ecLive=[];ecWait=ecStages();ecThink=""' in run_body, \
     "журнал сеанса приходит с начала — экран пересобирается заново на каждом подключении"
 assert "ecLive.indexOf(ev.v)<0" in run_body, \
     "статусы из журнала не должны дублироваться в ecLive при повторном подключении"

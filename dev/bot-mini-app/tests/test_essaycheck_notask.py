@@ -46,23 +46,27 @@ r2 = essaycheck._result(a, TEXT, "Условие: по тексту…")
 assert "задани" in r2["errors"][0]["why"].lower() and r2["criteria"][0]["tip"] != ""
 ok("_result(): без задания выдумки вырезаны, с заданием — модель не фильтруется")
 
-# ---------- 3. выдуманные ошибки (found нет в тексте) отбрасываются ----------
+# ---------- 3. ошибки без фрагмента в тексте НЕ теряются: пометка «не подтверждена», без оверлея ----------
 an = {"errors": [{"type": "Орфография", "found": "влеяния", "correct": "влияния", "why": "проверка гласной", "src": "Розенталь"},
                  {"type": "Речь", "found": "абракадабра", "correct": "…", "why": "выдумка", "src": "…"}],
       "criteria": [{"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""}]}
 essaycheck._bind_coords(an, [PAGE])
 r = essaycheck._result(an, TEXT, "")
-assert [e["found"] for e in r["errors"]] == ["влеяния"], r["errors"]
+assert [e["found"] for e in r["errors"]] == ["влеяния", "абракадабра"], r["errors"]
+assert "x" in r["errors"][0] and "y" in r["errors"][0]                       # подтверждённая — с привязкой
+assert r["errors"][1].get("unconfirmed") is True and "x" not in r["errors"][1]   # нет фрагмента — без оверлея
 assert "errors" not in r["missing"]
-ok("_bind_coords()+_result(): ошибка без фрагмента в тексте не показывается")
+r2 = essaycheck._result(r, TEXT, "")                                        # пересборка из истории — пометка живёт
+assert r2["errors"][1].get("unconfirmed") is True, r2["errors"]
+ok("_bind_coords()+_result(): ошибка без фрагмента остаётся с пометкой «не подтверждена», а не выбрасывается")
 
-# ---------- 4. ни одна ошибка не подтвердилась → блок errors пустой, а не «0 ошибок» ----------
+# ---------- 4. ни одна ошибка не подтвердилась → все помечены, блок не притворяется пустым ----------
 an = {"errors": [{"type": "Речь", "found": "абракадабра", "correct": "…", "why": "выдумка", "src": "…"}],
       "criteria": [{"name": "К1", "got": 1, "max": 1, "why": "ок", "tip": ""}]}
 essaycheck._bind_coords(an, [PAGE])
 r = essaycheck._result(an, TEXT, "")
-assert r["errors"] == [] and "errors" in r["missing"], (r["errors"], r["missing"])
-ok("все ошибки выдуманы → errors в missing (фронт покажет блок пустым, без «0 ошибок»)")
+assert len(r["errors"]) == 1 and r["errors"][0].get("unconfirmed") is True and "errors" not in r["missing"], (r["errors"], r["missing"])
+ok("ошибки не подтверждены текстом → показаны с честной пометкой, а не выброшены")
 
 # ---------- 5. run(): этапы идут ПАРАЛЛЕЛЬНО (OCR работы ∥ OCR задания ∥ критерии ФИПИ) ----------
 def run_pipeline():

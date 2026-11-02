@@ -46,18 +46,17 @@ assert "К1 = 0" in r["criteria"][1]["why"] and "К1 = 0" in r["criteria"][2]["w
 assert r["score"]["got"] == 16, r["score"]          # 22 − 1 − 3 − 2
 ok("баллы зажимаются эталонными максимумами; К1 = 0 → К2 и К3 обнуляются с пометкой")
 
-# ---------- 3. минимальный объём (правило ФИПИ): меньше — 0 по всем критериям ----------
+# ---------- 3. минимальный объём (правило ФИПИ): честная пометка, но разбор НЕ уничтожается ----------
 r = essaycheck._result(full("ege"), SHORT, "")
-assert r["score"] == {"got": 0, "max": 22, "percent": 0, "level": "Нужно доработать"}, r["score"]
-assert all(c["got"] == 0 for c in r["criteria"])
+assert r["score"] == {"got": 22, "max": 22, "percent": 100, "level": "Отлично"}, r["score"]   # баллы целы
 assert r["criteria"][0]["why"].startswith("Объём 149 слов (минимум 150)"), r["criteria"][0]["why"]
 r2 = essaycheck._result(r, r["text"], r["task"])     # пересборка отчёта из истории (essayreport.from_client)
 assert [c["why"] for c in r2["criteria"]] == [c["why"] for c in r["criteria"]], "пометка об объёме удвоилась"
 assert r2["score"] == r["score"], (r2["score"], r["score"])
-assert essaycheck._result(full("oge"), " ".join(["слово"] * 69), "")["score"]["got"] == 0     # ОГЭ: минимум 70
+assert essaycheck._result(full("oge"), " ".join(["слово"] * 69), "")["score"]["got"] == 8     # ОГЭ: ниже минимума — пометка, балл цел
 assert essaycheck._result(full("oge"), " ".join(["слово"] * 70), "")["score"]["got"] == 8     # ровно 70 — засчитана
 assert essaycheck._result(full("ege"), " ".join(["слово"] * 150), "")["score"]["got"] == 22   # ровно 150 — засчитана
-ok("правило объёма: 149/69 слов → 0 по всем; 150/70 — засчитывается; пометка идемпотентна")
+ok("правило объёма: ниже минимума — пометка ФИПИ на карточках, разбор не обнуляется")
 
 # ---------- 4. свободные имена → коды эталона; лишние карточки балл не портят ----------
 a = {"errors": [], "criteria": [

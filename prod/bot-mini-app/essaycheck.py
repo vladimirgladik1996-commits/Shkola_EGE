@@ -308,14 +308,19 @@ def _result(a, essay, task, why="", kind=""):
     for e in _as_list(a.get("errors")):
         if not isinstance(e, dict) or not _s(e.get("found")):
             continue
-        if e.pop("_miss", False):
-            # found нет в тексте работы — ошибка ВЫДУМАНА моделью, а не найдена: не показываем
-            log.warning("essaycheck: выдуманная ошибка отброшена (found=%r)", _s(e.get("found"))[:40])
-            continue
+        miss = bool(e.pop("_miss", False)) or e.get("unconfirmed") is True
+        if miss:
+            # found не нашёлся в РАСПОЗНАННОМ тексте: при фрагментарном OCR слова могли просто не
+            # распознаться — раньше такая ошибка выбрасывалась как «выдуманная» и разбор терял её
+            # (нарушение обработки ошибок при недостатке слов в тексте, баг-репорт 018). Теперь
+            # ошибка остаётся с честной пометкой «не подтверждена текстом» и без привязки к фото.
+            log.warning("essaycheck: ошибка не подтверждена распознанным текстом (found=%r)", _s(e.get("found"))[:40])
         e2 = {"i": len(errors) + 1,
               "type": e.get("type") if e.get("type") in TYPES else "Речь",
               "found": _s(e.get("found")), "correct": _s(e.get("correct")),
               "why": clean(_s(e.get("why"))), "src": clean(_s(e.get("src"))) or SRC_TEMPLATE}
+        if miss:
+            e2["unconfirmed"] = True
         # демо-оверлей: координаты ошибки на фото (page — индекс фото, x/y — проценты)
         for k, lo, hi in (("page", 0, 20), ("x", 0, 100), ("y", 0, 100)):
             v = _finite(e.get(k))
@@ -331,11 +336,13 @@ def _result(a, essay, task, why="", kind=""):
     criteria = _canon(kind, a.get("criteria"), clean, errors if lang else None)   # эталонная таблица, баллы — кодом
     n_words = _words(essay)
     if criteria and essay and n_words < MIN_WORDS[kind]:
-        # Правило ФИПИ: работа меньше минимального объёма не засчитывается — по всем критериям 0.
-        # Отметка на каждой карточке; идемпотентно — повторная нормализация не удваивает её.
-        note = "Объём %d слов (минимум %d): по правилам ФИПИ выставлен 0. " % (n_words, MIN_WORDS[kind])
+        # Объём меньше минимума ФИПИ. Раньше код ОБНУЛЯЛ все критерии — но текст приходит из OCR,
+        # и при фрагментарном распознавании (недостаток слов в тексте) нормальная работа получала
+        # 0/8 и 0/22 (баг-репорт 018). Теперь баллы сохраняются, а правило ФИПИ о незачёте работы
+        # донесено честной пометкой на каждой карточке. Идемпотентно — пометка не удваивается.
+        note = ("Объём %d слов (минимум %d): на экзамене такую работу не засчитывают (0 баллов); "
+                "если текст распознан не полностью — объём мог занизиться. " % (n_words, MIN_WORDS[kind]))
         for c in criteria:
-            c["got"] = 0
             if note not in c["why"]:
                 c["why"] = note + c["why"]
     zero = _zero_reason(kind, a.get("flags"), task)
