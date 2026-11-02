@@ -4178,7 +4178,7 @@ async function ecCamOpen(){
 function ecCamShot(){const v=$("#ec-cv");
   if(!v||!v.videoWidth){toast("Камера ещё не готова — подождите секунду");return}
   if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");return}
-  const k=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
+  const k=Math.min(1,2600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
   c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
   c.getContext("2d").drawImage(v,0,0,c.width,c.height);
   ecShots[ecSet].push({src:c.toDataURL("image/jpeg",.9),set:ecSet,id:null,st:"wait"});ecThUpd(true);ecUpKick()}
@@ -4612,7 +4612,7 @@ function chPick(id){chMenu();const i=$("#"+id);if(i)i.click()}
 function chDel(i){chAtt.splice(i,1);chAttUi()}
 const chBytes=a=>a.reduce((s,x)=>s+Math.floor((x.d||"").length*.75),0);
 function chJpeg(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();
-  im.onload=()=>{try{const k=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+  im.onload=()=>{try{const k=Math.min(1,2600/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
     const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);const d=c.toDataURL("image/jpeg",.9);URL.revokeObjectURL(u);ok(d)}catch(e){URL.revokeObjectURL(u);no(e)}};
   im.onerror=()=>{URL.revokeObjectURL(u);no(new Error("img"))};im.src=u})}
 const chB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]||"");r.onerror=()=>no(r.error);r.readAsDataURL(f)});
@@ -4697,7 +4697,7 @@ function chCamShot(){   // один кадр из превью → JPEG ≤1600 
   const v=$("#aic-cam-v");
   if(!v||!v.videoWidth){toast("Камера ещё не готова — подождите секунду");return}
   if(chAtt.length+chCamS.length>=CH_MAX){toast("Не больше "+CH_MAX+" вложений");return}
-  const k=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
+  const k=Math.min(1,2600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
   c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
   c.getContext("2d").drawImage(v,0,0,c.width,c.height);
   const d=c.toDataURL("image/jpeg",.85);

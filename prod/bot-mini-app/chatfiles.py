@@ -46,7 +46,7 @@ def to_jpeg_b64(raw):
             orient = (im.getexif() or {}).get(0x0112, 1) or 1
         except Exception:
             orient = 1
-        if (im.format or "").upper() == "JPEG" and max(im.size) <= 1600 and im.mode in ("RGB", "L") and orient == 1:
+        if (im.format or "").upper() == "JPEG" and max(im.size) <= 2600 and im.mode in ("RGB", "L") and orient == 1:
             return base64.b64encode(raw).decode()
         if im.mode in ("RGBA", "LA", "P"):
             im = im.convert("RGBA")
@@ -57,7 +57,7 @@ def to_jpeg_b64(raw):
             im = im.convert("RGB")
         im2 = ImageOps.exif_transpose(im)
         im = im2 if im2 is not None else im
-        im.thumbnail((1600, 1600))
+        im.thumbnail((2600, 2600))
         out = io.BytesIO()
         im.save(out, "JPEG", quality=92)
     except Exception:
