@@ -825,6 +825,10 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 @keyframes plUp{from{transform:translateY(calc(var(--vh)*1.06)) rotate(calc(var(--r)*-1))}to{transform:translateY(-32vmin) rotate(var(--r))}}
 @keyframes plDn{from{transform:translateY(-32vmin) rotate(calc(var(--r)*-1))}to{transform:translateY(calc(var(--vh)*1.06)) rotate(var(--r))}}
 @keyframes plSpin{to{transform:rotate(360deg)}}
+/* плавное появление прелоадера: перетекает из стартового экрана приложения (иконка на кремовом фоне), а не «вспыхивает» */
+@keyframes plIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+#pl .pl-page{animation:plIn .5s cubic-bezier(.2,.8,.2,1) both}
+@media (prefers-reduced-motion:reduce){#pl .pl-page{animation:none}}
 @keyframes plDrift{to{background-position:240px 240px}}
 @keyframes plBk{0%{transform:translateY(0) scale(.7);opacity:0}15%{opacity:.55}100%{transform:translateY(-55vh) scale(1.2);opacity:0}}
 @keyframes plDots{0%,25%{opacity:.15}55%{opacity:1}100%{opacity:.15}}

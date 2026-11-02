@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_window</item>
+        <!-- системный сплэш Android 12+: иконка приложения на кремовом фоне прелоадера (вместо белого) -->
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+    </style>
+</resources>
