@@ -40,7 +40,7 @@ echo "==> aapt2 compile (ресурсы: иконка)"
 "$BT/aapt2" compile --dir res -o build/res.zip
 
 echo "==> aapt2 link"
-"$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -R build/res.zip \
+"$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml --auto-add-overlay -R build/res.zip \
   --min-sdk-version 24 --target-sdk-version 34 --version-code "$VC" --version-name "1.0-dev.$VC" -o build/base.apk
 
 echo "==> dex в apk"
