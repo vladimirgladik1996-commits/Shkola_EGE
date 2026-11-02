@@ -57,6 +57,14 @@ def to_jpeg_b64(raw):
             im = im.convert("RGB")
         im2 = ImageOps.exif_transpose(im)
         im = im2 if im2 is not None else im
+        # предобработка под рукопись: авто-контраст + оттенки серого — тонкие штрихи
+        # пера лучше отделяются от фона, OCR меньше «глючит» (баг-репорт 018, п.3 «качество»)
+        try:
+            from PIL import ImageEnhance
+            im = ImageOps.autocontrast(im.convert("L"), cutoff=1).convert("RGB")
+            im = ImageEnhance.Contrast(im).enhance(1.15)
+        except Exception:
+            pass
         im.thumbnail((2600, 2600))
         out = io.BytesIO()
         im.save(out, "JPEG", quality=92)
