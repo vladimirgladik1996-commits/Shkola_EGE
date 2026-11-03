@@ -387,6 +387,48 @@ def _result(a, essay, task, why="", kind=""):
             "score": {"got": got, "max": mx, "percent": pct, "level": level}}
 
 
+def _reflow(text):
+    """Реконструкция абзацев OCR-текста (ДЕТЕРМИНИРОВАННО, без LLM).
+    OCR отдаёт строки по визуальным переносам рукописи — на экране это «рандомный набор
+    предложений на разных строках». Функция убирает soft-wrap: склеивает переносы по дефису
+    и хвосты строк внутри предложения, а новый абзац открывает только на красной строке или
+    после конца предложения с заглавной. ОШИБКИ НЕ ИСПРАЛЯЕТ и слова не меняет — только
+    структура (баг-репорт 018: структура эссе). Идемпотентна."""
+    if not isinstance(text, str) or not text.strip():
+        return text if isinstance(text, str) else ""
+    raw = text.replace("\r\n", "\n").split("\n")
+    lines = [l.rstrip() for l in raw]
+    paras, cur = [], ""
+    def flush():
+        nonlocal cur
+        if cur.strip():
+            paras.append(cur.strip())
+        cur = ""
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            flush()                      # пустая строка — разрыв абзаца
+            continue
+        # перенос по дефису: «сло-» + «во» -> «слово»
+        if cur.endswith("-") and not cur.endswith("--"):
+            cur = cur[:-1] + s
+            continue
+        if not cur:
+            cur = s
+            continue
+        # новая строка-абзац: предыдущая кончилась .!?… и текущая с заглавной, либо явный отступ
+        ends = cur.rstrip().endswith((".", "!", "?", "…"))
+        upper = s[0].isupper() if s else False
+        indented = ln[:1].isspace()
+        if (ends and upper) or indented:
+            flush()
+            cur = s
+        else:
+            cur = cur.rstrip() + " " + s
+    flush()
+    return "\n\n".join(paras)
+
+
 def _norm(s):
     """Нормализация для поиска фрагмента в словах OCR: ё→е, регистр, только буквы/цифры.
     Модель может прислать что угодно («found»: 2024 — число, или объект): не-строка
@@ -569,14 +611,14 @@ async def run(w, t, kind="ege"):
 
     (pages, werr), (tpages, terr), extra = await asyncio.gather(_ocr(w), _ocr(t), _criteria())
     t_ocr = time.monotonic() - t0              # OCR работы, OCR задания и критерии идут параллельно
-    task = "\n\n".join(_s(p.get("text")) for p in (tpages or [])).strip()
+    task = _reflow("\n\n".join(_s(p.get("text")) for p in (tpages or [])).strip())
     # часть фото не распозналась — итог честно помечаем (фронт: «часть данных получить не удалось»)
     part = any(isinstance(p, dict) and p.get("failed") for p in list(pages or []) + list(tpages or []))
     if werr:
         log.warning("essaycheck: OCR работы не прошёл (%s)", werr)
         yield "done", _result({}, "", task, why=werr)   # превью с пустыми блоками, а не тупик
         return
-    essay = "\n\n".join(_s(p.get("text")) for p in (pages or [])).strip()
+    essay = _reflow("\n\n".join(_s(p.get("text")) for p in (pages or [])).strip())
     if not essay:
         log.warning("essaycheck: OCR работы дал пустой текст")
         yield "done", _result({}, "", task, why="empty")
