@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, billing, chatfiles, chatprompt, essaycheck, essayreport, kimi, matlib, whisper, yavision
+import assist, auth, billing, chatfiles, chatprompt, essaycheck, essaylast, essayreport, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -107,6 +107,11 @@ MIGRATIONS = [
         "create table if not exists chat_files(tok text primary key, uid integer not null, "
         "data blob not null, name text not null, mime text, ts real not null, tg_fid text)",
         "create index if not exists ix_chat_files_ts on chat_files(ts)",
+    ],
+    [   # v6: «ИИ-проверка» — ПОСЛЕДНЯЯ проверка переживает выход из Telegram и рестарт (essaylast.py).
+        # Одна запись на tg_id; разбор и фото работы пишутся при готовом итоге, до отдачи клиенту.
+        "create table if not exists essay_last(tg_id integer primary key, kind text not null, "
+        "result text not null, photos text, created text default (datetime('now','localtime')))",
     ],
 ]
 
@@ -3039,6 +3044,14 @@ async def api_essay_check_upload(request):
     return web.json_response({"id": cid, "n_w": len(out["w"]), "n_t": len(out["t"])})
 
 
+def ec_last_save(uid, kind, result, photos):
+    """Автосохранение «последней проверки» (essaylast.put): сбой записи не должен ломать саму проверку."""
+    try:
+        essaylast.put(run, uid, kind if kind in EC_KINDS else "ege", result, photos)
+    except Exception:
+        log.exception("essay last: tg_id=%s последняя проверка не сохранилась", uid)
+
+
 @guarded
 async def api_essay_check_run(request):
     """Запуск проверки по фото сеанса (пуш 5): NDJSON-стрим — события стадий
@@ -3093,6 +3106,7 @@ async def api_essay_check_run(request):
                         _ec_job_end(job, {"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
                         return
                     else:                          # done
+                        ec_last_save(uid, kind, v, rec[1]["w"])      # «Последняя проверка»: пишем ДО отдачи — клиент мог уже выйти
                         log.info("essay check: tg_id=%s готово за %.1f с (%s)", uid, time.monotonic() - p0,
                                  "часть данных" if (v or {}).get("why") else "полный разбор")
                         _ec_job_end(job, {"t": "done", "result": v})
@@ -3350,6 +3364,11 @@ async def api_essay_check_load(request):
     uid = ec_uid(request)
     if not isinstance(j, dict):
         raise ValueError
+    if j.get("last") is True:                                # «Последняя проверка»: разбор + фото из essay_last
+        d = essaylast.full(q, uid)
+        if not d:
+            raise ValueError                                 # проверок ещё не было → 400, как у неизвестного id
+        return web.json_response(d)
     cid = j.get("id")
     if isinstance(cid, bool) or not isinstance(cid, int):
         raise ValueError
@@ -3363,6 +3382,14 @@ async def api_essay_check_load(request):
     return web.json_response({"id": r["id"], "kind": r["kind"], "created": r["created"],
                               "student_id": r["student_id"], "student_name": r["student_name"],
                               "result": json.loads(r["result"])})
+
+
+@guarded
+async def api_essay_check_last(request):
+    """Возврат в раздел «ИИ-проверка»: шапка самой последней проверки (тип ЕГЭ/ОГЭ, дата, итоговый
+    балл) для кнопки «Последняя проверка». {"last": null} — проверок ещё не было. Сам разбор и фото
+    отдаёт /api/essay_check/load с {"last": true}."""
+    return web.json_response({"last": essaylast.head(q, ec_uid(request))})
 
 
 def make_app():
@@ -3404,6 +3431,7 @@ def make_app():
     app.router.add_post("/api/essay_check/save", api_essay_check_save)         # «ИИ-проверка»: сохранение проверки за учеником (пуш 7)
     app.router.add_post("/api/essay_check/history", api_essay_check_history)   # «ИИ-проверка»: история сохранённых проверок (пуш 7)
     app.router.add_post("/api/essay_check/load", api_essay_check_load)         # «ИИ-проверка»: повторный просмотр сохранённого разбора (пуш 7)
+    app.router.add_post("/api/essay_check/last", api_essay_check_last)         # «ИИ-проверка»: шапка последней проверки для экрана возврата
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)
     app.router.add_post("/api/fragment", api_fragment)

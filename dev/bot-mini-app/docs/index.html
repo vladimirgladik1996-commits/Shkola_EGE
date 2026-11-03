@@ -1229,6 +1229,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 /* ===== ИИ-проверка: каркас раздела (пуш 3) ===== */
 .ec-hero{display:flex;flex-direction:column;align-items:center;gap:4px;padding:2px 0 0;margin-bottom:14px}
 .ec-sub{font-size:13.5px;font-weight:700;color:var(--hint);text-align:center;line-height:1.45;max-width:250px}
+.ec-pb[disabled]{opacity:.72;cursor:default;pointer-events:none}
 .ec-art{width:100%;max-width:340px;height:auto;margin:-4px 0 -6px;pointer-events:none;-webkit-user-drag:none;user-select:none}
 .ec-big{width:100%;display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;background:var(--card);box-shadow:0 0 0 1px var(--ln);margin-bottom:10px;text-align:left;font:inherit;color:var(--tx)}
 .ec-big:active{transform:scale(.98)}
@@ -1666,6 +1667,16 @@ body.ec-nb{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
 .ec-er.sel b{background:#c98e00}
 .ec-er.ec-ok{background:rgba(31,154,91,.2);border-color:var(--grn);cursor:default}
 .ec-er.ec-ok b{display:none}
+/* Фото-режим: поздний общий .ec-er (подсветка в тексте) перебивал .ec-ovl — position:relative уводил круглые метки
+   под страницу фото. Возвращаем метки поверх фото (x/y — проценты от страницы), в т.ч. на вкладке «ФИПИ». */
+.ec-er.ec-ovl{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;padding:0;margin:0;border:2px solid #fff;border-radius:50%;background:#E8294F;color:#fff;font-weight:900;text-align:center;line-height:26px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.ec-er.ec-ovl b{position:static;width:auto;height:auto;margin:0;background:none;box-shadow:none;animation:none;color:#fff;font:900 11px/26px "Nunito",system-ui,sans-serif;vertical-align:baseline}
+.ec-er.ec-ovl.sel{outline:3px solid rgba(232,41,79,.45);background:#B3142F;border-color:#fff}
+.ec-er.ec-ovl.ec-ok{background:var(--grn);outline:none;border-color:#fff}
+.ec-er.ec-ovl.ec-ok b{display:inline}
+.ec-desk.mf .ec-er.ec-ovl{background:#d99200;border-color:#fff}
+.ec-desk.mf .ec-er.ec-ovl.sel{background:#b57c00}
+.ec-desk.mf .ec-er.ec-ovl b{min-width:0;padding:0;border-radius:0;background:none;font:900 10px/26px "Nunito",system-ui,sans-serif}
 @keyframes ecPing{0%,100%{transform:scale(1)}55%{transform:scale(1.18)}}
 /* === Полноэкранные «Съёмка» и «Превью» — как в макете: убрать общую шапку (☰ ИИ-проверка), контент во всю ширину/до низа === */
 body:has(.ec-view),body:has(.ec-hd){padding-top:0!important}
@@ -3535,12 +3546,46 @@ let ecSess="",ecState="run",ecWhy="",ecLive=[],ecWait=[],ecThink="",ecRes=null,e
 const ecUpGen=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,10);   /* sid копилки фото: своя на каждый запуск съёмки */
 let ecUpId=ecUpGen(),ecUpWhy="",ecUpSkip=false;   /* ecUpWhy — причина сбоя загрузки (F-4), ecUpSkip — режим «продолжить без задания» для повтора */
 let ecSid=null,ecSaved=0,ecView="",ecViewInfo="",ecHist={sid:"all",list:null,busy:false};   /* ученик, «сохранено», просмотр из истории (пуш 7) */
-function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():`<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки и оценит по критериям ФИПИ</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
+function aiCheck(){return ecStep===4?ecHistScr():ecStep===3?ecResult():ecStep===2?ecProc():ecStep===1?ecShot():ecHome()}
+function ecPick(){return `<div class="ec-hero"><div class="ec-sub">Сфотографируйте работу — Вишенка найдёт ошибки и оценит по критериям ФИПИ</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
 <button class="ec-pb a" onclick="ecStart('ege')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/></svg></span><span class="ec-pbt"><b>Сочинение для ЕГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
 <button class="ec-pb b" onclick="ecStart('oge')"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><span class="ec-pbt"><b>Эссе для ОГЭ</b><small>по критериям ФИПИ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>`}
+/* --- возврат в раздел: две кнопки — последняя проверка и новая.
+   Раньше после выхода из мини-аппа готовая проверка терялась. Теперь сервер сам запоминает её (essaylast.py),
+   а на входе в раздел показывается этот экран. ecLast: undefined — ещё не спрашивали, null — проверок нет. --- */
+let ecLast=undefined,ecNew=false,ecLoadBusy=false,ecLastAt=0;
+function ecNowStr(){const d=new Date(),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+function ecLastSet(r,n){   /* свежий разбор — сразу «последняя проверка» (сервер сохранил его сам); сбой/пустой разбор не считается */
+  if(!r||typeof r!="object"||!(n.errors.length||n.criteria.length))return;
+  ecLast={kind:ecKind,created:ecNowStr(),got:n.score.got,max:n.score.max,percent:n.score.percent,level:n.score.level};ecLastAt=Date.now();ecNew=false}
+async function ecLastLoad(bg){if(ecLoadBusy)return;ecLoadBusy=true;let d=null,fail=false;
+  try{d=await api("/api/essay_check/last",{})}catch(e){fail=true}
+  ecLoadBusy=false;ecLastAt=Date.now();
+  if(fail&&bg)return;   /* фоновое обновление не затирает уже показанную проверку при сбое сети */
+  const nl=d&&d.last&&typeof d.last=="object"?d.last:null;
+  if(bg&&JSON.stringify(nl)===JSON.stringify(ecLast))return;
+  ecLast=nl;if(tab=="ai"&&ecStep===0)render()}
+function ecHome(){if(ecLast===undefined){ecLastLoad();return ecHub(null)}
+  if(Date.now()-ecLastAt>30000)ecLastLoad(true);   /* мини-апп мог пролежать свёрнутым, пока проверка доделывалась на сервере */
+  return ecLast&&!ecNew?ecHub(ecLast):ecPick()}
+function ecHub(l){   /* l=null — шапка ещё грузится: кнопка «Новая проверка» работает сразу */
+  const sub=l?[l.kind=="oge"?"ОГЭ":"ЕГЭ",ecWhen(l.created),(+l.got||0)+" из "+(+l.max||0)].join(" · "):"Загружаю…";
+  return `<div class="ec-hero"><div class="ec-sub">${l?"Откройте последнюю проверку или начните новую":"Ищу вашу последнюю проверку…"}</div><img class="ec-art" src="${EC_ART}" alt="Вишенка"></div>
+<button class="ec-pb a" id="ec-last"${l?' onclick="ecLastOpen()"':' disabled aria-busy="true"'}><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="ec-pbt"><b>Последняя проверка</b><small>${esc(sub)}</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+<button class="ec-pb b" id="ec-new" onclick="ecNewCheck()"><span class="ec-pbi"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="ec-pbt"><b>Новая проверка</b><small>Выбрать ЕГЭ или ОГЭ</small></span><svg class="ec-pbc" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>`}
+function ecNewCheck(){ecNew=true;render();scrollTo(0,0)}   /* → прежний первый экран с выбором ЕГЭ/ОГЭ */
+async function ecLastOpen(){if(ecLoadBusy)return;ecLoadBusy=true;let d=null;
+  try{d=await api("/api/essay_check/load",{last:true})}catch(e){}
+  ecLoadBusy=false;
+  if(!d||!d.result){toast("Не получилось открыть последнюю проверку");return}
+  ecRes=ecNrm(d.result);ecKind=d.kind=="oge"?"oge":"ege";ecSaved=0;ecState="done";ecWhy="";
+  ecShots={w:(Array.isArray(d.photos)?d.photos:[]).filter(b=>typeof b=="string"&&b).map(b=>({src:"data:image/jpeg;base64,"+b,set:"w",id:null,st:"ok"})),t:[]};
+  ecView="last";ecViewInfo=["Последняя проверка",ecKindLabel(),ecWhen(d.created)].join(" · ");
+  ecStep=3;ecTab="e";ecFix=false;ecFx={};ecCur=0;ecErrClose();render();scrollTo(0,0)}
+function ecLastBack(){ecErrClose();ecFragClose();ecShots={w:[],t:[]};ecRes=null;ecView="";ecViewInfo="";ecNew=false;ecStep=0;render();scrollTo(0,0)}
 function ecStart(k){ecKind=k;ecStep=1;ecUpId=ecUpGen();ecUpWhy="";render();scrollTo(0,0);ecCamOpen()}
 function ecBack(){   /* по макету: «Назад» с разбора — к съёмке (goCam), из просмотра истории — в список */
-  if(ecStep===3){if(ecView=="hist"){ecHistOpen()}else{ecStep=1;render();scrollTo(0,0);ecCamOpen()}return}
+  if(ecStep===3){if(ecView=="last"){ecLastBack()}else if(ecView=="hist"){ecHistOpen()}else{ecStep=1;render();scrollTo(0,0);ecCamOpen()}return}
   if(ecStep===1||ecStep===4){ecStep=0;ecView="";render()}}
 function ecReset(){ecRunId++;ecBusy=false;ecUpWhy="";ecUpSkip=false;ecSess="";ecRes=null;ecState="run";ecWhy="";ecLive=[];ecWait=[];ecThink="";ecSaved=0;ecView="";ecViewInfo="";ecErrClose();ecFragClose();ecShots={w:[],t:[]};ecStep=0;render();scrollTo(0,0)}
 /* --- ученик и история (пуш 7): привязка проверки к ученику, «Сохранить за учеником»,
@@ -3791,7 +3836,7 @@ async function ecRun(){   /* живой стрим POST /api/essay_check/run (ND
   if(id===ecRunId&&ecState=="run"&&!locked)ecFail("link")}   /* связь не восстановилась — честный сбой + «Повторить»; раньше это был ecFail("net"),
    и обрыв соединения выглядел как «проверьте интернет», хотя проверка на сервере была жива (баг-репорт 010) */
 function ecRetry(){if(ecState=="run"||!ecSess)return;ecStep=2;ecState="run";render();scrollTo(0,0);ecRun()}     /* повтор после сбоя: тот же сеанс с уже загруженными фото — и с превью, и с экрана обработки */
-function ecDone(r){const n=ecNrm(r);ecRes=n;
+function ecDone(r){const n=ecNrm(r);ecRes=n;ecLastSet(r,n);
   const thin=n.missing.filter(k=>k!="recommendations").length;   /* есть блоки без данных — говорим честно */
   ecWhy=n.why||ecWhy||(thin?"part":"");   /* ГЛАВНОЕ ПРАВИЛО: превью ВСЕГДА открывается, пустые блоки — без додумывания */
   ecState="done";ecStep=3;ecTab="e";ecFix=false;ecSaved=0;ecView="";ecViewInfo="";ecFx={};ecCur=0;
@@ -3851,7 +3896,7 @@ function ecPhotoDesk(r){   /* страницы-фото с маркерами о
      координат не теряются — карточками под фото. L[p] — объект {src,…}, а не строка: раньше в src уходил
      [object Object] и фото не могли отрисоваться (баг-репорт 018) */
   const L=ecShots.w,out=[],bound=[];
-  for(let p=0;p<L.length;p++)out.push('<div class="ec-page"><img src="'+L[p].src+'" alt="Страница '+(p+1)+'">'
+  for(let p=0;p<L.length;p++)out.push('<div class="ec-page"><img src="'+((L[p]&&L[p].src)||L[p])+'" alt="Страница '+(p+1)+'">'
     +r.errors.filter(e=>(e.page||0)%L.length===p&&ecFx[e.i]!=="del"&&typeof e.x=="number"&&typeof e.y=="number").map(e=>{const st=ecFx[e.i];
       bound.push(e.i);
       return '<span class="ec-er ec-ovl'+(st=="ok"?" ec-ok":"")+'" role="button" tabindex="0" data-i="'+e.i+'" style="left:'+e.x+'%;top:'+e.y+'%" onclick="ecErrShow('+e.i+')" onkeydown="if(event.key===\'Enter\')ecErrShow('+e.i+')" title="Ошибка №'+e.i+' — нажмите для разбора"><b>'+(st=="ok"?"✓":ecTab=="f"?(EC_FTAG[e.type]||e.type):e.i)+'</b></span>'}).join('')+'</div>');
@@ -3910,7 +3955,7 @@ function ecResult(){
   <span class="ec-spr"></span>
   <button type="button" class="ec-round" id="ec-tg" onclick="ecFixTgl()" title="${ecTgLbl(ecFix)}" aria-label="${ecTgLbl(ecFix)}">${ecTgIcon(ecFix)}</button>
 </div>
-${ecView=="hist"?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
+${ecView?`<div class="ec-note">${esc(ecViewInfo)}</div>`:""}
 ${ecView=="hist"?"":ecResNote()}
 <div class="ec-desk${ecTab=="f"?" mf":""}" id="ec-desk">${ecDeskHtml()}</div>
 <div id="ec-ve"${ecTab=="e"?"":' class="ec-hid"'}>${ecErrorsView(r)}</div>
