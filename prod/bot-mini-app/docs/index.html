@@ -357,12 +357,13 @@ mark.hl{background:color-mix(in srgb,var(--yel) 70%,transparent);color:inherit;f
 /* строка ученика */
 /* чипсина ученика: аватар · имя / класс + предмет. Строго два ряда текста, каждый в одну строку; цена, число занятий и баланс — в карточке.
    Статус оплаты — плашка справа без сумм */
-.srow{transition:transform .15s;gap:13px;padding:11px 14px 11px 13px;margin-bottom:10px;border-radius:var(--rc);background:var(--card);box-shadow:var(--shc)}
+.srow{transition:transform .15s;gap:12px;padding:11px 14px 11px 12px;margin-bottom:10px;border-radius:var(--rc);background:var(--card);box-shadow:var(--shc)}
 .srow:active{transform:scale(.985)}
-.srow .av{position:relative;width:48px;height:48px;font-size:16px;box-shadow:0 0 0 2px var(--card),0 0 0 3.5px color-mix(in srgb,var(--yel) 80%,transparent),0 6px 12px -6px rgba(15,46,110,.5)}
+.srow .av{position:relative;width:44px;height:44px;font-size:16px}
+.srow .av,.feed .av{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px color-mix(in srgb,var(--yel) 80%,transparent),0 6px 12px -6px rgba(15,46,110,.5)}   /* кольцо аватара: ученики и оплаты */
 .srow .info{display:flex;flex-direction:column;gap:3px}
 .srow .nm{display:flex;align-items:center;gap:6px;min-width:0}
-.srow .nm b{flex:0 1 auto;min-width:0;font-size:16.5px;font-weight:800;letter-spacing:-.01em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .nm b{flex:0 1 auto;min-width:0;font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srow small{display:flex;align-items:center;gap:6px;min-width:0;line-height:1.25;white-space:nowrap}
 .srow small .sj{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .srow small.no .sj{opacity:.65}
@@ -1947,6 +1948,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .pdock .sep{flex:none;width:1px;height:24px;margin:0 3px;background:var(--ln)}
 .ph-c{padding:7px;border-radius:22px}.ph-c .ph-top,.ph-c .ph-amt,.ph-c .ph-tr,.ph-c .ph-st{display:none}.ph-c .ph-seg{margin-top:0}
 .ph{margin:-12px 0 12px}
+#flist,#dash{position:relative}   /* строки поверх тени шапки: тень не заезжает на первую чипсину */
 .ph-m{padding:7px 7px 0}
 .ph-m .pdock{display:flex;align-items:center;gap:6px;margin:7px -7px 0;padding:8px;border-radius:0;background:var(--card);box-shadow:inset 0 -1px 0 var(--ln),inset 1px 0 0 var(--ln),inset -1px 0 0 var(--ln)}
 .ph-m .pdock .sep{display:none}
@@ -3116,7 +3118,7 @@ function stuList(){
   if(!f.length)return '<div class="empty0"><div class="e0i">🔍</div><b>Учеников по этому запросу нет</b><p>Попробуйте другое имя или сбросьте фильтры.</p><button class="btn" style="width:100%" onclick="sq=\'\';sg=\'all\';render()">Сбросить фильтры</button></div>';
   return f.map(s=>{const g=(s.grade||"").trim()?stGrade(s.id):"",sub=(s.subject||"").trim(),nw=s.id==freshSt;
     const pl=!s.price&&!s.b?"":s.b<0?'<span class="stp dn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Есть долги</span>':'<span class="stp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Все оплачено</span>';
-    return `<div class="srow${s.b<0?" dn":s.b>0?" up":""}${nw?" st-new":""}" data-sid="${s.id}" onclick="card(${s.id})">${av(s)}<span class="info"><span class="nm"><b>${hlName(s.name,q_)}</b>${nw?'<span class="nw">Новый</span>':""}</span><small${sub?"":' class="no"'}>${g?`<span class="gt">${esc(g)}</span>`:""}<span class="sj">${esc(sub||"предмет не указан")}</span></small></span>${pl}<i class="chev">›</i></div>`}).join("")}
+    return `<div class="srow${s.b<0?" dn":s.b>0?" up":""}${nw?" st-new":""}" data-sid="${s.id}" onclick="card(${s.id})">${av(s)}<span class="info"><span class="nm"><b>${hlName(s.name,q_)}</b>${g?`<span class="gt">${esc(g)}</span>`:""}${nw?'<span class="nw">Новый</span>':""}</span><small${sub?"":' class="no"'}><span class="sj">${esc(sub||"предмет не указан")}</span></small></span>${pl}<i class="chev">›</i></div>`}).join("")}
 /* новый ученик: прокрутить к строке; через 3 с снять подсветку и бейдж «Новый» (без перерисовки списка) */
 function stuFresh(id){
   const el=$(`.srow[data-sid="${id}"]`);
