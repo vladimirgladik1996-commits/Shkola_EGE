@@ -338,6 +338,7 @@ input,select{box-shadow:0 0 0 1px var(--ln)}
 .dk .dkp{flex:none;text-align:right;font-size:14.5px;font-weight:800;line-height:1.15;white-space:nowrap}
 .dk .dkp small{display:block;font-size:11px;font-weight:600;color:var(--hint)}
 @media (max-width:350px){.sbi{display:none}.sbx{padding-left:12px}}
+mark.hl{background:color-mix(in srgb,var(--yel) 70%,transparent);color:inherit;font-weight:inherit;border-radius:4px;padding:0 1px;margin:0 -1px}   /* подсветка совпавших букв в поиске */
 @media (prefers-reduced-motion:reduce){.sfb .fb{animation:none}}
 .fold .in .pill{background:var(--bg)}.fold .in .pill.on{background:var(--acc)}
 .srow .info b{overflow:hidden;text-overflow:ellipsis}
@@ -2337,7 +2338,17 @@ const act=()=>S.filter(s=>!s.deleted);
 const when=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"long"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
 const norm=s=>String(s).toLowerCase().replace(/ё/g,"е");
 /* поиск по любой части имени: «петров», «иван», «иван петров» (порядок слов не важен) */
-const nameMatch=(name,q)=>norm(q).split(/\s+/).filter(Boolean).every(t=>norm(name).includes(t));
+/* поиск по началу слов: каждое слово запроса — начало имени, фамилии или отчества (в любом порядке, «ив пе» → Иван Петров); ё = е */
+function nameHit(name,q){
+  const ws=[...String(name).matchAll(/[^\s\-]+/g)].map(m=>({i:m.index,w:norm(m[0]),len:0})),ts=norm(q).split(/\s+/).filter(Boolean).sort((a,b)=>b.length-a.length);
+  for(const t of ts){const w=ws.find(x=>!x.len&&x.w.startsWith(t));if(!w)return null;w.len=t.length}
+  return ws}
+const nameMatch=(name,q)=>!!nameHit(name,q);
+/* имя с подсветкой совпавших начальных букв */
+function hlName(name,q){
+  const n=String(name),ws=q&&q.trim()?nameHit(n,q):null;if(!ws)return esc(n);
+  let o="",p=0;for(const w of ws.filter(x=>x.len).sort((a,b)=>a.i-b.i)){o+=esc(n.slice(p,w.i))+'<mark class="hl">'+esc(n.slice(w.i,w.i+w.len))+"</mark>";p=w.i+w.len}
+  return o+esc(n.slice(p))}
 const stName=id=>S.find(s=>s.id==id).name;
 /* уведомления: тип (цвет) и эмодзи подбираются по смыслу текста, сами вызовы toast("…") менять не нужно */
 const TOAST_RULES=[
@@ -3099,7 +3110,7 @@ function stuList(){
   if(!f.length)return '<div class="empty0"><div class="e0i">🔍</div><b>Учеников по этому запросу нет</b><p>Попробуйте другое имя или сбросьте фильтры.</p><button class="btn" style="width:100%" onclick="sq=\'\';sg=\'all\';render()">Сбросить фильтры</button></div>';
   return f.map(s=>{const g=(s.grade||"").trim()?stGrade(s.id):"",sub=(s.subject||"").trim(),nw=s.id==freshSt;
     const pl=!s.price&&!s.b?"":s.b<0?'<span class="stp dn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Есть долги</span>':'<span class="stp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Все оплачено</span>';
-    return `<div class="srow${s.b<0?" dn":s.b>0?" up":""}${nw?" st-new":""}" data-sid="${s.id}" onclick="card(${s.id})">${av(s)}<span class="info"><span class="nm"><b>${esc(s.name)}</b>${nw?'<span class="nw">Новый</span>':""}</span><small${sub?"":' class="no"'}>${g?`<span class="gt">${esc(g)}</span>`:""}<span class="sj">${esc(sub||"предмет не указан")}</span></small></span>${pl}<i class="chev">›</i></div>`}).join("")}
+    return `<div class="srow${s.b<0?" dn":s.b>0?" up":""}${nw?" st-new":""}" data-sid="${s.id}" onclick="card(${s.id})">${av(s)}<span class="info"><span class="nm"><b>${hlName(s.name,q_)}</b>${nw?'<span class="nw">Новый</span>':""}</span><small${sub?"":' class="no"'}>${g?`<span class="gt">${esc(g)}</span>`:""}<span class="sj">${esc(sub||"предмет не указан")}</span></small></span>${pl}<i class="chev">›</i></div>`}).join("")}
 /* новый ученик: прокрутить к строке; через 3 с снять подсветку и бейдж «Новый» (без перерисовки списка) */
 function stuFresh(id){
   const el=$(`.srow[data-sid="${id}"]`);
