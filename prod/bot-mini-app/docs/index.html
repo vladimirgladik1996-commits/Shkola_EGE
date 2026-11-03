@@ -1817,6 +1817,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .wg:not(.bw) .ls.sm small{display:none}
 .tl i.nt{right:2px;font-size:9px;background:var(--red);color:#fff;border-radius:99px;padding:1px 3px;font-weight:800;z-index:4;transform:translateY(-50%)}
 .sx-gh{position:absolute;left:2px;right:2px;z-index:2;display:grid;place-items:center;border-radius:8px;border:1.5px dashed var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--acc);font-size:10.5px;font-weight:800;pointer-events:none;animation:sxg .22s cubic-bezier(.34,1.56,.64,1)}
+.sx-hint{margin:8px 4px 0;text-align:center;font-size:12px;color:var(--hint)}
 @keyframes sxg{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
 /* день */
 .sx-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:6px;margin-bottom:12px;background:var(--card);border-radius:20px;box-shadow:0 0 0 1px var(--ln)}
@@ -2492,7 +2493,7 @@ function weekView(){
   const r=k==iso(w0)?"Эта неделя":k==iso(addD(w0,7))?"Следующая":k==iso(addD(w0,-7))?"Прошлая":String(ws.getFullYear());
   const m=d=>d.toLocaleDateString("ru-RU",{month:"short"}).replace(".","");
   return [schedHead(`${ws.getDate()} ${m(ws)} – ${e.getDate()} ${m(e)}`,`${r} · ${zanW(ls.length)}`,k==iso(w0)),
-    `<div class="sc wk">${grid(ws,0)}</div>`]}
+    `<div class="sc wk">${grid(ws,0)}</div><p class="sx-hint">Тап по пустой клетке — новое занятие · тап по дню — открыть день</p>`]}
 function monthView(){
   const y=mo.getFullYear(),m=mo.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),mk=`${y}-${pad(m+1)}-`,
     nl=L.filter(l=>l.day>=mk+"01"&&l.day<=mk+"31").length,curM=y==T.getFullYear()&&m==T.getMonth();
@@ -2548,7 +2549,7 @@ function form(id,day,from,opt){
        (тоже отдельным поп-апом); после сохранения форма продолжается с новым учеником */
   fSid=l?l.sid:((opt&&opt.sid)||(sts[0]?sts[0].id:null));
   const durs=[45,60,90,120,150,180];if(fd&&!durs.includes(fd))durs.push(fd);durs.sort((a,b)=>a-b);
-  const stBlock=l?`<label>Ученик</label><div class="row" style="cursor:default;margin-bottom:10px">${av(S.find(x=>x.id==l.sid)||{id:l.sid,name:stName(l.sid)},"sm")}<span class="info"><b>${esc(stName(l.sid))}</b></span></div>`
+  const stBlock=l?`<label>Ученик</label><div class="row" style="cursor:default;margin-bottom:10px">${av(S.find(x=>x.id==l.sid)||{id:l.sid,name:stName(l.sid)},"sm")}<span class="info"><b>${esc(stName(l.sid))}</b><small>${esc([stGrade(l.sid),stSubj(l.sid)].filter(Boolean).join(" · "))}</small></span></div><div class="sk-list" style="margin-bottom:10px"><div class="sk-r ro"><span>Цена за занятие</span><b>${l.price>0?money(l.price):"не указана"}</b><i></i></div></div>`
     :none?`<div class="hint0"><b>Учеников пока нет</b><span>Нажмите «Добавить ученика» внизу — он сразу появится в разделе «Ученики», а занятие встанет в расписание.</span></div>`
     :`<label>Ученик</label><div class="stc" id="fst">${sts.map(s=>`<button type="button" data-v="${s.id}" class="${s.id==fSid?"on":""}" onclick="pickSt('${s.id}')">${av(s)}<span class="t">${esc(s.name)}</span></button>`).join("")}<button type="button" class="add" onclick="nsFromLesson()">＋ Новый</button></div>`;
   open(`${from?`<button class="pen" aria-label="Назад" onclick="dayCard('${from}')">‹</button>`:""}<h3>${l?"Изменить занятие":"Новое занятие"}</h3><p class="sub" id="fend"></p>
