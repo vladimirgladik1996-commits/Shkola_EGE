@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<script>if(window.Android)document.documentElement.classList.add("apk")</script>
+<script>if(window.Android){var h=document.documentElement;h.classList.add("apk");try{if(window.Android.shell&&window.Android.shell()>=2)h.classList.add("apk2")}catch(e){}}</script>
 <meta name="theme-color" content="#FBF7E9"><meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap">
@@ -2046,6 +2046,11 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
    прилипала к системной полосе. Класс html.apk ставит ранний скрипт в <head> (есть window.Android). */
 html.apk{--hd:64px}
 html.apk #ttl{padding-top:2px}
+/* APK с оболочкой v2 (Android.shell()>=2): WebView лежит ниже нативной полосы TG_BAR_DP (12dp; шапка Telegram — 56dp),
+   статус-бар и нижняя панель красятся в --bg (Android.setBarColor из brand()). Окно страницы такое же, как в
+   мини-аппе (заметно выше), поэтому шапка кабинета обычная — 56 px, без «воздуха» старой оболочки. */
+html.apk.apk2{--hd:56px}
+html.apk.apk2 #ttl{padding-top:0}
 /* «ИИ-проверка»: на высоких экранах (APK выше мини-аппа на ~56 px) кнопки уходят вниз, а картинка
    центрируется в свободном месте — вместо пустой «ямы» под последней кнопкой */
 body.ec-nb #app:has(.ec-hero){display:flex;flex-direction:column;min-height:calc(100vh - var(--hd,56px) - 16px - 28px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
@@ -2189,7 +2194,8 @@ if(APP){tg.showConfirm=(q,cb)=>cb(window.confirm(q));tg.showAlert=(m,cb)=>{windo
 function brand(){document.documentElement.dataset.theme="light";   // тёмной темы нет — приложение всегда светлое
  
   const c=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-  try{tg.setHeaderColor(c);tg.setBackgroundColor(c);if(tg.setBottomBarColor)tg.setBottomBarColor(c)}catch(e){}}
+  try{tg.setHeaderColor(c);tg.setBackgroundColor(c);if(tg.setBottomBarColor)tg.setBottomBarColor(c)}catch(e){}
+  try{if(window.Android&&window.Android.setBarColor)window.Android.setBarColor(c)}catch(e){}}   /* APK: статус-бар и нижняя панель телефона — в цвет приложения */
 brand();if(tg.onEvent)tg.onEvent("themeChanged",brand);
 let S=[],L=[],P=[],cur="₽",loaded=false;const w0=mon(T);   /* loaded: реальные данные уже были — их нельзя подменять демо/пустотой */
 // API_BASE — откуда брать backend API.

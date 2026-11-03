@@ -27,6 +27,9 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
@@ -72,6 +75,54 @@ public class MainActivity extends Activity {
     private long micT0;
     private boolean webPaused;                      // WebView приостановлен (onPause) — не гасить его повторно
 
+    // --- «как мини-апп в Telegram»: системные панели в цветах приложения + отступ сверху под шапку Telegram ---
+    private static final int APP_BG = 0xFFFBF7E9;       // = --bg страницы (#FBF7E9): цвет шапки и подвала Telegram в мини-аппе
+    private static final int TG_BAR_DP = 12;            // отступ сверху вместо шапки Telegram (там она 56dp): гамбургер и название страницы стоят заметно выше,
+                                                    // чем в мини-аппе, но чуть ниже, чем в старом APK (0 = вплотную). Единственная «ручка» высоты
+    private static final int SHELL_VERSION = 2;         // Android.shell(): по нему страница отличает эту оболочку от старой (html.apk2)
+    private FrameLayout shellRoot;                      // корень с отступом сверху; его фон = цвет полосы под статус-баром
+    private int barColor = APP_BG;                      // текущий цвет системных панелей (страница меняет его через Android.setBarColor)
+
+    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    /** Статус-бар и панель навигации — в цвет страницы, значки тёмные на светлом (то же, что setHeaderColor / setBottomBarColor
+     *  делают в Telegram). targetSdk 34: на Android 15 ещё не принудительный edge-to-edge, цвета панелей работают. */
+    private void paintBars(int color) {
+        barColor = color;
+        try {
+            Window w = getWindow();
+            w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            boolean light = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) > 160;
+            boolean navLight = light && Build.VERSION.SDK_INT >= 26;          // тёмные значки нижней панели — с Android 8
+            int nav = (light && Build.VERSION.SDK_INT < 26) ? 0xFF000000 : color; // на 7.x светлая панель с белыми значками нечитаема
+            w.setStatusBarColor(color);
+            w.setNavigationBarColor(nav);
+            if (Build.VERSION.SDK_INT >= 28) w.setNavigationBarDividerColor(nav);   // без светлой линии над панелью
+            if (Build.VERSION.SDK_INT >= 29) {                                     // без полупрозрачной подложки у панели жестов
+                w.setStatusBarContrastEnforced(false);
+                w.setNavigationBarContrastEnforced(false);
+            }
+            if (Build.VERSION.SDK_INT >= 30) {
+                WindowInsetsController c = w.getInsetsController();
+                if (c != null) {
+                    int st = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS;
+                    int mask = st | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                    c.setSystemBarsAppearance(light ? (navLight ? mask : st) : 0, mask);
+                }
+            } else if (Build.VERSION.SDK_INT >= 23) {
+                View d = w.getDecorView();
+                int f = d.getSystemUiVisibility();
+                f = light ? (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+                if (Build.VERSION.SDK_INT >= 26) {
+                    f = navLight ? (f | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                }
+                d.setSystemUiVisibility(f);
+            }
+        } catch (Exception ignored) {
+            // косметика: панели останутся системными, приложение работает
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -99,6 +150,7 @@ public class MainActivity extends Activity {
         box.addView(edit, new LinearLayout.LayoutParams(-1, -2));
         box.addView(b, new LinearLayout.LayoutParams(-1, -2));
         setContentView(box);
+        paintBars(APP_BG);
 
         b.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -126,6 +178,7 @@ public class MainActivity extends Activity {
             public void run() {
                 ViewGroup p = (ViewGroup) sp.getParent();
                 if (p != null) p.removeView(sp);
+                if (shellRoot != null) shellRoot.setBackgroundColor(barColor);   // дальше полоса сверху — цвет страницы, а не прелоадера
             }
         }).start();
     }
@@ -141,7 +194,12 @@ public class MainActivity extends Activity {
         int sid = getResources().getIdentifier("splash_window", "drawable", getPackageName());   // R.java в сборке нет
         if (sid != 0) splash.setBackgroundResource(sid); else splash.setBackgroundColor(0xFFFBF7EE);
         root.addView(splash, new FrameLayout.LayoutParams(-1, -1));
+        // WebView лежит ниже полосы TG_BAR_DP (в мини-аппе страница тоже начинается под шапкой Telegram, но там она 56dp):
+        // страницы выглядят как в Telegram, но заметно выше; цвет полосы — цвет страницы, как у setHeaderColor
+        root.setPadding(0, dp(TG_BAR_DP), 0, 0);
+        shellRoot = root;
         setContentView(root);
+        paintBars(APP_BG);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -383,10 +441,30 @@ public class MainActivity extends Activity {
      *    звать ли getUserMedia или сразу вести пользователя в настройки;
      *  - askMic() — явный системный запрос микрофона (без pending-запроса WebView);
      *  - camStatus() / askCamera() — то же самое для камеры («Снять камерой» — съёмка в приложении);
-     *  - openSettings() — настройки приложения: включить микрофон/камеру после «больше не спрашивать».
+     *  - openSettings() — настройки приложения: включить микрофон/камеру после «больше не спрашивать»;
+     *  - shell() — версия оболочки (2: нативный отступ сверху под шапку Telegram, панели в цвет страницы);
+     *  - setBarColor("#rrggbb") — цвет статус-бара и нижней панели (аналог tg.setHeaderColor / setBottomBarColor).
      * Методы моста вызываются из фонового потока — работу переносим в UI-поток.
      */
     private class JsBridge {
+        @JavascriptInterface
+        public int shell() { return SHELL_VERSION; }
+
+        @JavascriptInterface
+        public void setBarColor(final String css) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    try {
+                        int c = 0xFF000000 | Color.parseColor(css);
+                        paintBars(c);
+                        if (shellRoot != null && splashGone) shellRoot.setBackgroundColor(c);
+                    } catch (Exception ignored) {
+                        // не цвет — оставляем прежний
+                    }
+                }
+            });
+        }
+
         @JavascriptInterface
         public void sharePdf(final String url, final String name) {
             runOnUiThread(new Runnable() {
