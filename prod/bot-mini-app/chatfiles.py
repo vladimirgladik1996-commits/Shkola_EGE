@@ -1,11 +1,12 @@
 """Файлы для «Чата с ИИ»: чтение вложений мини-аппа и сборка ответа в Word / PDF / картинку.
 
-Зависимости: stdlib + reportlab (Pillow ставится вместе с ним) + pypdf + xhtml2pdf (HTML → PDF для
-инфографики) + pypdfium2 (PDF → PNG). Ничего не знает про aiohttp/aiogram, поэтому проверяется
+Зависимости: stdlib + reportlab (Pillow ставится вместе с ним) + pypdf + xhtml2pdf (запасной
+HTML → PDF) + pypdfium2 (PDF → PNG); HTML → PDF основным путём печатает Chromium (playwright,
+как в essayreport) — точная вёрстка. Ничего не знает про aiohttp/aiogram, поэтому проверяется
 отдельным тестом (tests/test_chat_files.py). Любая ошибка разбора вложения — ValueError
 (бот ответит 400), а не падение.
 """
-import base64, binascii, html as html_lib, io, json, logging, os, re, zipfile
+import base64, binascii, html as html_lib, io, json, logging, os, pathlib, re, zipfile
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -34,7 +35,7 @@ def _b64(s):
 
 
 def to_jpeg_b64(raw):
-    """Любая картинка → JPEG ≤1600 px в base64 (kimi.build_payload помечает все изображения как jpeg).
+    """Любая картинка → JPEG ≤2600 px в base64 (kimi.build_payload помечает все изображения как jpeg).
     JPEG в пределах лимита и без поворота по EXIF проходит БЕЗ повторного пережатия: второе кодирование
     quality=85 размывало тонкие штрихи рукописи, и OCR «ИИ-проверки» возвращал обрывки текста
     (баг-репорт 018). EXIF-поворот запекается в пиксели — иначе фото могло уйти к OCR повёрнутым."""
@@ -683,22 +684,60 @@ def image_title(html):
     return _html_title(html)
 
 
-def _html_for_pdf(html):
+def _html_for_pdf(html, chrome=False):
     """HTML модели готовится к рендеру: убираем font-family (модель могла прописать шрифт без
-    кириллицы) и вшиваем @font-face с DejaVu из fonts/ — иначе русский текст выйдет пустыми рамками."""
+    кириллицы) и вшиваем @font-face с DejaVu из fonts/ — иначе русский текст выйдет пустыми рамками.
+    chrome=True — ссылки на шрифты file://-URI (так их понимает Chromium); xhtml2pdf — обычные пути."""
     html = re.sub(r"font-family\s*:[^;\"'}]+;?", "", html, flags=re.I)
-    css = _HTML_FONT_CSS % {"reg": os.path.join(FONTS, "DejaVuSans.ttf"), "bold": os.path.join(FONTS, "DejaVuSans-Bold.ttf")}
+
+    def _uri(p):
+        p = os.path.join(FONTS, p)
+        return pathlib.Path(p).resolve().as_uri() if chrome else p
+
+    css = _HTML_FONT_CSS % {"reg": _uri("DejaVuSans.ttf"), "bold": _uri("DejaVuSans-Bold.ttf")}
     if "</head" in html.lower():
         i = html.lower().rfind("</head")
         return html[:i] + "<style>" + css + "</style>" + html[i:]
     return "<style>" + css + "</style>" + html
 
 
+def _pdf_chromium(html, timeout=60):
+    """HTML → PDF браузерной печатью (Chromium через playwright): вёрстка выходит ровно как
+    в макете — flexbox, скругления, круглые номера и рамки на месте. xhtml2pdf такое ломает
+    (кривые иконки цифр, «уехавшие» блоки — баг вёрстки PDF в чате), поэтому Chromium — основной
+    путь, а xhtml2pdf остаётся запасным. Любой сбой — исключение (html_pdf откатится).
+    Один Chromium на процесс — тот же lock, что у essayreport (512 МБ: параллельные запуски не нужны)."""
+    import tempfile
+    from essayreport import _RENDER_LOCK
+    from playwright.sync_api import sync_playwright
+    with _RENDER_LOCK, tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "doc.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+        with sync_playwright() as p:
+            br = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
+            try:
+                pg = br.new_page()
+                pg.goto(pathlib.Path(path).as_uri(), wait_until="load", timeout=timeout * 1000)
+                pdf = pg.pdf(format="A4", print_background=True, prefer_css_page_size=True,
+                             margin={"top": "0", "right": "0", "bottom": "0", "left": "0"})
+            finally:
+                br.close()
+    if not pdf or pdf[:4] != b"%PDF":
+        raise ValueError
+    return pdf
+
+
 def html_pdf(html):
-    """HTML-инфографика модели → PDF (xhtml2pdf) — первый шаг конвейера картинки.
-    ValueError — не строка, не HTML или PDF не собрался."""
+    """HTML-документ/инфографика модели → PDF — первый шаг конвейера картинки.
+    Основной путь — браузерная печать (_pdf_chromium): точная вёрстка. Запасной — xhtml2pdf
+    (образ/тесты без Chromium). ValueError — не строка, не HTML или PDF не собрался."""
     if not isinstance(html, str) or "<html" not in html.lower():
         raise ValueError
+    try:
+        return _pdf_chromium(_html_for_pdf(html, chrome=True))
+    except Exception as e:
+        log.warning("html_pdf: Chromium не собрал PDF (%r) — откат на xhtml2pdf", e)
     try:
         from xhtml2pdf import pisa
         pdf = io.BytesIO()

@@ -40,7 +40,7 @@ def _int(name, default, lo, hi):
 
 # Параллельность — главное ускорение OCR (12 фото по очереди = минуты тишины в стриме).
 # Квота API бережётся повторами на 429; жёсткий потолок 12, настройка — env.
-MAX_PARALLEL = _int("YANDEX_MAX_PARALLEL", 6, 1, 12)
+MAX_PARALLEL = _int("YANDEX_MAX_PARALLEL", 12, 1, 12)
 RETRIES = _int("YANDEX_RETRIES", 2, 0, 5)      # повторов на одно фото (сеть/429/5xx)
 
 

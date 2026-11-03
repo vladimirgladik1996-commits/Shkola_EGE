@@ -16,7 +16,7 @@ def ok(m):
 
 
 steps = html[html.index("const CH_ST={"):html.index("function chUpd(")]   # chLabel/chStep/chStepNew/chStepCur/chStepEnd/chThink/chReadLabel
-a = html.index("async function chAsk(){")                                  # сам прогон стрима: шаги → ответ последним
+a = html.index("async function chAsk(")                                  # сам прогон стрима: шаги → ответ последним
 chask = html[a:html.index("}   // ушли из раздела") + 1]
 assert "function chThink(" in steps and "function chStepNew(" in steps and "const answer=text=>" in chask
 ok("логика шагов и ответа вырезана из docs/index.html")
@@ -24,6 +24,7 @@ ok("логика шагов и ответа вырезана из docs/index.htm
 HARNESS = r"""
 let CH=[],chBusy=false,chFmt=0,chDeep=false,chAtt=[],chRec=null;
 const CH_IDLE=60000;   /* потолок тишины стрима — как в docs/index.html (см. apiStream) */
+const CH_RETRY=2,CH_RETRY_MS=0;   /* переподключения к журналу запроса — без пауз (как в test_chat_resume) */
 const CH_FMT=["text","docx","pdf","image"],tab="ch",esc=s=>String(s),chSave=()=>{},chUpd=()=>{},chUpdSoon=()=>{};
 let EVENTS=[],SNAPS=[];
 const show=()=>JSON.stringify(CH.map(m=>({r:m.r,step:!!m.step,st:m.st||"",lbl:m.lbl||"",t:m.t,tg:m.tg||0,err:m.err||0,live:!!m.live,a:(m.a||[]).map(x=>x.n)})));
@@ -49,6 +50,12 @@ async function apiStream(p,b,onEv){for(const e of EVENTS){onEv(e);SNAPS.push(sho
   EVENTS=[{t:"status",v:"think"},{t:"think",v:"мысль"},{t:"fail",why:"net"}];
   chFmt=0; await chAsk();
   console.log("RUN3:"+show());
+  /* 4) обрыв соединения без итога: переподключение к журналу того же запроса, шаги доигрываются;
+        связь так и не вернулась — честная ошибка «работа не потеряна» с кнопкой повтора */
+  CH=[]; CH.push({r:"u",t:"вопрос 2"});
+  EVENTS=[{t:"status",v:"write"},{t:"text",v:"текст"}];
+  chFmt=0; await chAsk();
+  console.log("RUN4:"+show());
 })();
 """
 
@@ -88,4 +95,10 @@ ok("для файла готовый ответ — последним сооб�
 run3 = out["RUN3"]
 assert run3[-1]["err"] == 1 and run3[-1]["t"].startswith("ИИ сейчас не отвечает") and [m["t"] for m in run3 if m["st"] == "think"] == ["мысль"]
 ok("сбой: шаги видны, последним — честное сообщение об ошибке с кнопкой повтора")
+
+# --- 4) обрыв соединения = переподключение, а не «нет связи» ---
+run4 = out["RUN4"]
+assert run4[0]["r"] == "u" and run4[-1]["err"] == 1 and "работа не потеряна" in run4[-1]["t"], run4
+assert [m["t"] for m in run4 if m["st"] == "write"] == ["текст"], run4   # шаги доиграны, а не продублированы
+ok("обрыв: честное «работа не потеряна» + переподключение к журналу запроса (CH_RETRY)")
 print("test_chat_steps: OK")

@@ -98,6 +98,15 @@ def unenv(saved):
         else: os.environ[k] = v
 
 
+async def report2():
+    """Сводка ДВУМЯ секциями — как отдавался /balance до 455bcc5: Кими (report()) + Яндекс (_yandex).
+    Секция Яндекса убрана из самого отчёта (это проверяется отдельно в test_full_report), но её
+    ветки (ключи, ошибки, IAM) обязаны работать — поэтому тесты зовут секцию напрямую."""
+    import aiohttp
+    async with aiohttp.ClientSession() as s:
+        return await billing.report() + "\n" + billing.SEP + "\n" + await billing._yandex(s)
+
+
 def test_full_report():
     """Оба провайдера ответили: 2 секции, разделитель «______», деньги и поля на месте."""
     async def run():
@@ -106,18 +115,21 @@ def test_full_report():
         old_kimi, kimi.API_KEY = kimi.API_KEY, "KKEY-444455556666"
         try:
             async with serve():
-                text = await billing.report()
+                text = await report2()
+                solo = await billing.report()          # контракт 455bcc5: в /balance секции Яндекса нет
         finally:
             kimi.API_KEY = old_kimi
             unenv(saved_env)
-        return text
+        return text, solo
 
     # деньги и числа — теми же форматами, что и старый /balance
     assert billing._money("1234.5") == "1 234,50" and billing._money(None) == "—"
     assert billing._num(512) == "512" and billing._num(1.2) == "1,2" and billing._num(None) == "—"
-    text = asyncio.run(run())
+    text, solo = asyncio.run(run())
+    assert "☁" not in solo and billing.SEP not in solo, "секция Яндекс Cloud убрана из /balance (455bcc5)"
+    ok("/balance отдаёт только секцию Кими — секция Яндекс Cloud убрана (455bcc5)")
 
-    # одно сообщение: две секции, разделённые ровно строкой «______»
+    # сводка для проверки веток: две секции, разделённые ровно строкой «______»
     parts = text.split("\n" + billing.SEP + "\n")
     assert len(parts) == 2 and text.count(billing.SEP) == 1
     assert [p.splitlines()[0] for p in parts] == [
@@ -153,7 +165,7 @@ def test_no_keys():
         try:
             async with serve():
                 CALLS.clear()
-                text = await billing.report()
+                text = await report2()
         finally:
             kimi.API_KEY = old_kimi
             unenv(saved_env)
@@ -175,7 +187,7 @@ def test_errors():
         old_kimi, kimi.API_KEY = kimi.API_KEY, "KKEY-444455556666"
         try:
             async with serve():
-                out.append(await billing.report())
+                out.append(await report2())
         finally:
             kimi.API_KEY = old_kimi
             unenv(saved_env)
@@ -222,7 +234,7 @@ def test_billing_get():
         try:
             async with serve():
                 CALLS.clear()
-                return await billing.report()
+                return await report2()
         finally:
             unenv(saved_env)
 
@@ -239,7 +251,7 @@ def test_billing_get():
         saved_env = env(YANDEX_BILLING_API_KEY="***", YANDEX_BILLING_ID="dn0nope")
         try:
             async with serve():
-                return await billing.report()
+                return await report2()
         finally:
             unenv(saved_env)
 
@@ -275,8 +287,8 @@ def test_sa_iam():
             async with serve():
                 CALLS.clear()
                 BODIES.clear()
-                first = await billing.report()
-                second = await billing.report()          # второй раз — IAM-токен из кэша, без обмена
+                first = await report2()
+                second = await report2()          # второй раз — IAM-токен из кэша, без обмена
         finally:
             unenv(saved_env)
         return first, second
@@ -319,7 +331,7 @@ def test_sa_iam_fallback():
         try:
             async with serve():
                 CALLS.clear()
-                return await billing.report()
+                return await report2()
         finally:
             unenv(saved_env)
 

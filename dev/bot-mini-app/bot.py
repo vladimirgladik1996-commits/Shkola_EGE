@@ -2565,6 +2565,34 @@ async def api_chat_file_rebuild(request):
     return web.json_response({"url": chat_file_put(uid, data, name, mime)})
 
 
+# ---------- «Чат с ИИ»: журнал запроса переживает обрыв соединения (баг-репорт 019) ----------
+# Конвейер ответа (модель → сборка файла → проверка Кими → отправка в Telegram) идёт минутами
+# ОДНИМ HTTP-потоком; на мобильной сети (APK/WebView) такое соединение рвётся посреди работы —
+# клиент показывал «Не получилось получить ответ. Проверьте связь», хотя сервер был исправен
+# и файл приходил в Telegram-бот. Теперь события и итог копятся в CHAT_JOBS[rid] («журнал запроса» —
+# тот же приём, что у EC_JOBS в «ИИ-проверке», баг-репорт 010), а стрим только ПОДКЛЮЧАЕТСЯ
+# к журналу: обрыв не трогает ни работу, ни журнал; «Повторить» (тот же rid) доигрывает журнал
+# с начала и продолжает с места обрыва. Журнал удаляется, когда итог отдан клиенту.
+CHAT_JOBS = {}                                   # rid → {"uid", "events": [...], "final": bool, "task": Task|None, "ts": float}
+CHAT_JOB_TTL = 30 * 60                           # незабранный итог живёт полчаса — как подписные ссылки файлов чата
+CHAT_JOBS_MAX = 40                               # журналов одновременно (в итоге — файлы в base64): старые вытесняются
+
+
+def _chat_jobs_gc(now=None):
+    """Протухшие журналы запросов чата; идущий запрос не удаляется. Лишние (сверх потолка) —
+    начиная с давно отданных: память 512 МБ, а итог image-запроса — картинка в base64."""
+    now = time.time() if now is None else now
+    for rid, j in list(CHAT_JOBS.items()):
+        alive = j["task"] is not None and not j["task"].done()
+        if not alive and now - j["ts"] > CHAT_JOB_TTL:
+            CHAT_JOBS.pop(rid, None)
+    while len(CHAT_JOBS) > CHAT_JOBS_MAX:
+        idle = [r for r, j in CHAT_JOBS.items() if j["task"] is None or j["task"].done()]
+        if not idle:
+            break
+        CHAT_JOBS.pop(min(idle, key=lambda r: CHAT_JOBS[r]["ts"]), None)
+
+
 @guarded
 async def api_chat(request):
     """Чат с ИИ в мини-аппе: клиент присылает последние реплики (+ вложения к последней), сервер ничего не хранит.
@@ -2606,166 +2634,188 @@ async def api_chat(request):
             img_names.append(f["name"])
     task = hist[-1]["content"]                   # сама задача — для проверки готового файла моделью
     uid = user_id(request)
+    rid = j.get("rid")                           # id запроса: его журнал переживает обрыв соединения
+    if not isinstance(rid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,40}", rid):
+        rid = secrets.token_urlsafe(12)          # прежние сборки клиента без rid — журнал служит одному подключению
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
     await resp.prepare(request)
     request.stream_resp = resp              # guarded: сбой после начала стрима → {"t":"fail"}, а не второй статус
 
-    wlock, stop, dead = asyncio.Lock(), asyncio.Event(), False
-
-    async def send(ev):
-        """Событие в NDJSON-стрим. Молчащее соединение убивают reverse-proxy и WebView,
-        поэтому между событиями работает пульс beat(); клиент уже ушёл — дописывать некуда,
-        но обработка продолжается: файл всё равно уйдёт пользователю в Telegram."""
-        nonlocal dead
-        if dead:
-            return
-        try:
-            async with wlock:
-                await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
-        except (ConnectionResetError, BrokenPipeError, RuntimeError):
-            dead = True
-            stop.set()
-            return
-        if isinstance(ev, dict) and ev.get("t") in ("done", "fail", "off"):
-            stop.set()
-
-    async def beat():
-        """Пульс против тишины: глубокая генерация, проверка Кими и отправка в Telegram
-        могут молчать минутами — без пульса соединение умирает и клиент висит на
-        «бесконечной загрузке» (тот же приём, что EC_BEAT в «ИИ-проверке»)."""
-        while not stop.is_set():
-            try:
-                await asyncio.wait_for(stop.wait(), EC_BEAT)
-            except asyncio.TimeoutError:
-                if stop.is_set() or dead:
-                    return
-                async with wlock:
-                    try:
-                        await resp.write(b'{"t":"hb"}\n')
-                    except Exception:
-                        return
-
-    asyncio.ensure_future(beat())
-
     if not kimi.enabled():
-        await send({"t": "off"})
+        await resp.write(b'{"t":"off"}\n')
         await resp.write_eof()
         return resp
-    reply, mode, anchor, asked = "", None, "", None
-    async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt,
-                                            img_names=img_names or None):
-        if kind in ("status", "think", "text"):
-            if kind == "text":
-                reply += v
-            await send({"t": kind, "v": v})
-        elif kind == "mode":                    # запрос про сочинение: ege | oge | free (см. chatprompt.essay_kind)
-            mode = v
-        elif kind == "task":                    # «📌 Задание, прочитанное с фото…» — видно сразу и остаётся в истории
-            anchor = v
-            if fmt == "text":
-                await send({"t": "text", "v": v + "\n\n"})
-        elif kind == "ask":                     # задание на фото не читается — вопрос вместо работы
-            asked = v
-        elif kind == "err":
-            log.warning("chat: tg_id=%s стрим оборвался (%s)", uid, v)
-            await send({"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
-            await resp.write_eof()
-            return resp
-        else:                                   # done
-            reply = v
-    log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s mode=%s ok=True", uid, len(hist), deep, fmt, len(names), mode)
-    ask = asked if asked is not None else (assist.chat_question(reply) if (fmt != "text" or mode) else None)
-    info = []                                   # строки под работой: примечание модели и объём по правилам ФИПИ
-    if mode and ask is None and fmt != "image":
-        reply, note, words = await assist.essay_finish(mode, fmt, reply, task, anchor, images)
-        info = [x for x in (("Примечание: " + note) if note else "", chatprompt.volume_line(mode, words)) if x]
-        task += ("\n\n" + anchor) if anchor else ""   # проверка готового файла видит и тему с фото
-    if fmt == "text" or ask is not None:
-        # готовый ответ (или уточняющий вопрос) приходит и в чат приложения, и в чат с бота;
-        # доставка в Telegram стартует одновременно с отдачей ответа в чат
-        say = ask if ask is not None else "\n\n".join([x for x in (anchor, reply) if x] + info)
-        tg = asyncio.create_task(tg_chat_answer(request.app.get("bot"), uid, say))
-        await send({"t": "done", "reply": say, "enabled": True})
-        if await tg:
-            await send({"t": "tg"})
-        await resp.write_eof()
-        return resp
-    data = name = title = None
-    warn, src = "", reply
-    for attempt in (1, 2):                       # вторая попытка — после того, как Кими поправит HTML
+
+    def _chat_job_add(job, ev):
+        """Событие в журнал запроса. В отличие от _ec_job_add («ИИ-проверка») мышление НЕ
+        склеивается: фронт показывает дельты по мере прихода (chThink), и повторное подключение
+        доигрывает журнал с той же точностью — каждое событие своим шагом."""
+        job["events"].append(ev)
+
+
+    async def pump(job):
+        """Конвейер ответа пишет события в журнал запроса (job), а НЕ в сокет: клиент мог уже
+        отключиться, но работа не прерывается — файл всё равно уйдёт в Telegram, а «Повторить»
+        с тем же rid доигрывает журнал с начала. Итог (done/fail) обязателен: без него клиенту
+        нельзя молчать — в журнал дописывается честный fail/srv."""
+        nonlocal task   # тема с фото дополняется после проверки модели — иначе task стал бы локальной в pump
         try:
-            if fmt == "image":                  # конвейер картинки виден по шагам: HTML → PDF → PNG
-                await send({"t": "status", "v": "pdf"})
-                pdf = await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: chatfiles.html_pdf(chatfiles.resolve_attach(src, attach)))
-                await send({"t": "status", "v": "png"})
-                data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
-                title = chatfiles.image_title(src) if isinstance(src, str) else ""
-                name = chatfiles.file_stem(title or "Инфографика") + ".png"
-                title = title or "Инфографика"
-            else:
-                await send({"t": "status", "v": "file"})
-                data, name, title = await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: chatfiles.build(fmt, src, attach))
-        except Exception as e:                   # модель ответила не тем форматом — просто «не отвечает»
-            log.warning("chat file: не собрался (%s, попытка %s): %r", fmt, attempt, e)
-            data = None
-            break
-        await send({"t": "status", "v": "check"})
-        shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.review_shots, fmt, data, src, attach)
-        ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет: не поехала ли вёрстка
-        if ok:
-            break
-        warn = problems
-        log.warning("chat file: проверка нашла огрехи (%s, попытка %s): %s", fmt, attempt, problems)
-        fixed = await assist.fix_source(task, src, problems, fmt) if attempt == 1 and assist.is_fixable(fmt) else None
-        if not fixed:
-            break
-        src = fixed
-    if not data:
-        await send({"t": "fail", "why": "build"})
-        await resp.write_eof()
-        return resp
-    # mime едет вместе с карточкой файла: чип кликабельный, пересылка (APK: shareFile) идёт
-    # с верным типом — docx/pdf/png, а не только PDF (см. index.html: chFileTap)
-    mime = ("image/png" if fmt == "image" else
-            "application/pdf" if fmt == "pdf" else
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    tg_bot, sent, tg_fid = request.app.get("bot"), False, None
-    if type(uid) is int and uid > 0 and tg_bot is not None:
-        try:
-            f = BufferedInputFile(data, filename=name)
+            reply, mode, anchor, asked = "", None, "", None
+            async for kind, v in assist.chat_stream(hist, deep, images=images, docs=docs, fmt=fmt,
+                                                    img_names=img_names or None):
+                if kind in ("status", "think", "text"):
+                    if kind == "text":
+                        reply += v
+                    _chat_job_add(job, {"t": kind, "v": v})
+                elif kind == "mode":                    # запрос про сочинение: ege | oge | free (см. chatprompt.essay_kind)
+                    mode = v
+                elif kind == "task":                    # «📌 Задание, прочитанное с фото…» — видно сразу и остаётся в истории
+                    anchor = v
+                    if fmt == "text":
+                        _chat_job_add(job, {"t": "text", "v": v + "\n\n"})
+                elif kind == "ask":                     # задание на фото не читается — вопрос вместо работы
+                    asked = v
+                elif kind == "err":
+                    log.warning("chat: tg_id=%s стрим оборвался (%s)", uid, v)
+                    _chat_job_add(job, {"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
+                    return
+                else:                                   # done
+                    reply = v
+            log.info("chat: tg_id=%s msgs=%s deep=%s fmt=%s files=%s mode=%s ok=True", uid, len(hist), deep, fmt, len(names), mode)
+            ask = asked if asked is not None else (assist.chat_question(reply) if (fmt != "text" or mode) else None)
+            info = []                                   # строки под работой: примечание модели и объём по правилам ФИПИ
+            if mode and ask is None and fmt != "image":
+                reply, note, words = await assist.essay_finish(mode, fmt, reply, task, anchor, images)
+                info = [x for x in (("Примечание: " + note) if note else "", chatprompt.volume_line(mode, words)) if x]
+                task += ("\n\n" + anchor) if anchor else ""   # проверка готового файла видит и тему с фото
+            if fmt == "text" or ask is not None:
+                # готовый ответ (или уточняющий вопрос) приходит и в чат приложения, и в чат с бота;
+                # доставка в Telegram стартует одновременно с отдачей ответа в чат
+                say = ask if ask is not None else "\n\n".join([x for x in (anchor, reply) if x] + info)
+                tg = asyncio.create_task(tg_chat_answer(bot_inst, uid, say))
+                _chat_job_add(job, {"t": "done", "reply": say, "enabled": True})
+                if await tg:
+                    _chat_job_add(job, {"t": "tg"})
+                return
+            data = name = title = None
+            warn, src = "", reply
+            for attempt in (1, 2):                       # вторая попытка — после того, как Кими поправит HTML
+                try:
+                    if fmt == "image":                  # конвейер картинки виден по шагам: HTML → PDF → PNG
+                        _chat_job_add(job, {"t": "status", "v": "pdf"})
+                        pdf = await asyncio.get_running_loop().run_in_executor(
+                            None, lambda: chatfiles.html_pdf(chatfiles.resolve_attach(src, attach)))
+                        _chat_job_add(job, {"t": "status", "v": "png"})
+                        data = await asyncio.get_running_loop().run_in_executor(None, chatfiles.pdf_png, pdf)
+                        title = chatfiles.image_title(src) if isinstance(src, str) else ""
+                        name = chatfiles.file_stem(title or "Инфографика") + ".png"
+                        title = title or "Инфографика"
+                    else:
+                        _chat_job_add(job, {"t": "status", "v": "file"})
+                        data, name, title = await asyncio.get_running_loop().run_in_executor(
+                            None, lambda: chatfiles.build(fmt, src, attach))
+                except Exception as e:                   # модель ответила не тем форматом — просто «не отвечает»
+                    log.warning("chat file: не собрался (%s, попытка %s): %r", fmt, attempt, e)
+                    data = None
+                    break
+                _chat_job_add(job, {"t": "status", "v": "check"})
+                shots = await asyncio.get_running_loop().run_in_executor(None, chatfiles.review_shots, fmt, data, src, attach)
+                ok, problems = await assist.check_render(task, fmt, shots)   # Кими проверяет: не поехала ли вёрстка
+                if ok:
+                    break
+                warn = problems
+                log.warning("chat file: проверка нашла огрехи (%s, попытка %s): %s", fmt, attempt, problems)
+                fixed = await assist.fix_source(task, src, problems, fmt) if attempt == 1 and assist.is_fixable(fmt) else None
+                if not fixed:
+                    break
+                src = fixed
+            if not data:
+                _chat_job_add(job, {"t": "fail", "why": "build"})
+                return
+            # mime едет вместе с карточкой файла: чип кликабельный, пересылка (APK: shareFile) идёт
+            # с верным типом — docx/pdf/png, а не только PDF (см. index.html: chFileTap)
+            mime = ("image/png" if fmt == "image" else
+                    "application/pdf" if fmt == "pdf" else
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            tg_bot, sent, tg_fid = bot_inst, False, None
+            if type(uid) is int and uid > 0 and tg_bot is not None:
+                try:
+                    f = BufferedInputFile(data, filename=name)
+                    if fmt == "image":
+                        await tg_bot.send_photo(uid, f, caption=title[:200])   # …и в диалог Telegram-бота
+                    else:
+                        msg = await tg_bot.send_document(uid, f, caption=title[:200])
+                        # id файла на серверах Telegram сохраняется для «Поделиться»: контакт получает сам
+                        # файл в исходном формате (Word приходит Word-ом), повторно загружать его не нужно
+                        tg_fid = getattr(getattr(msg, "document", None), "file_id", None)
+                    sent = True
+                except TelegramAPIError as e:
+                    log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
+            furl = chat_file_put(uid, data, name, mime, tg_fid)   # тот же файл — карточкой в чате с ИИ…
+            if not sent and not furl:                    # ни в чат, ни в Telegram — документ бесполезен
+                _chat_job_add(job, {"t": "fail", "why": "send"})
+                return
+            file = {"name": name, "kind": fmt, "sent": sent, "mime": mime}
+            if furl:
+                file["url"] = furl
             if fmt == "image":
-                await tg_bot.send_photo(uid, f, caption=title[:200])   # …и в диалог Telegram-бота
-            else:
-                msg = await tg_bot.send_document(uid, f, caption=title[:200])
-                # id файла на серверах Telegram сохраняется для «Поделиться»: контакт получает сам
-                # файл в исходном формате (Word приходит Word-ом), повторно загружать его не нужно
-                tg_fid = getattr(getattr(msg, "document", None), "file_id", None)
-            sent = True
-        except TelegramAPIError as e:
-            log.warning("chat file send failed: tg_id=%s err=%s", uid, e)
-    furl = chat_file_put(uid, data, name, mime, tg_fid)   # тот же файл — карточкой в чате с ИИ…
-    if not sent and not furl:                    # ни в чат, ни в Telegram — документ бесполезен
-        await send({"t": "fail", "why": "send"})
-        await resp.write_eof()
-        return resp
-    file = {"name": name, "kind": fmt, "sent": sent, "mime": mime}
-    if furl:
-        file["url"] = furl
-    if fmt == "image":
-        file["img"] = chatfiles.data_url(data)
-    reply = ("Готово: инфографика" if fmt == "image" else "Готово: документ сформирован")
-    reply += " — карточка файла в этом чате, " + ("копия пришла в Telegram." if sent else "в Telegram отправить не получилось.")
-    if fmt in ("pdf", "image"):
-        reply += (" Кими проверила файл: есть огрехи оформления — " + warn) if warn else " Кими проверила файл: оформление чистое."
-    under = [x for x in [anchor] + info if x]    # тема с фото, примечание и объём — в чате, а не в документе
-    if under:
-        reply += "\n\n" + "\n".join(under)
-    await send({"t": "done", "reply": reply, "enabled": True, "file": file})
-    if sent:
-        await send({"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом
+                file["img"] = chatfiles.data_url(data)
+            reply = ("Готово: инфографика" if fmt == "image" else "Готово: документ сформирован")
+            reply += " — карточка файла в этом чате, " + ("копия пришла в Telegram." if sent else "в Telegram отправить не получилось.")
+            if fmt in ("pdf", "image"):
+                reply += (" Кими проверила файл: есть огрехи оформления — " + warn) if warn else " Кими проверила файл: оформление чистое."
+            under = [x for x in [anchor] + info if x]    # тема с фото, примечание и объём — в чате, а не в документе
+            if under:
+                reply += "\n\n" + "\n".join(under)
+            _chat_job_add(job, {"t": "done", "reply": reply, "enabled": True, "file": file})
+            if sent:
+                _chat_job_add(job, {"t": "tg"})                   # файл с ответом уже ушёл в чат с ботом
+        except asyncio.CancelledError:
+            raise
+        except Exception:                      # падение конвейера — сбой СЕРВЕРА, а не «проверьте связь»
+            log.exception("chat: пайплайн упал: tg_id=%s", uid)
+            _chat_job_add(job, {"t": "fail", "why": "srv"})
+        finally:
+            if not any(e.get("t") in ("done", "fail", "off") for e in job["events"]):
+                _chat_job_add(job, {"t": "fail", "why": "srv"})   # конвейер кончился без итога — клиенту нельзя молчать
+            job["final"] = True
+
+    # Журнал запроса — тот же приём, что у EC_JOBS в «ИИ-проверке» (баг-репорт 010): конвейер идёт
+    # в фоне и пишет события в журнал, а соединение ТОЛЬКО ПОДКЛЮЧАЕТСЯ к журналу и пульсирует
+    # {"t":"hb"} в тишине (молчащее соединение убивают reverse-proxy и WebView). Обрыв соединения
+    # не прерывает работу и не съедает ответ: файл уйдёт в Telegram в любом случае, а повторное
+    # подключение («Повторить» — тот же rid) доигрывает журнал с начала и продолжает с места обрыва.
+    now = time.time()
+    _chat_jobs_gc(now)
+    job = CHAT_JOBS.get(rid)
+    if job is not None and job["uid"] != uid:
+        job = None                        # чужой журнал не отдаём — для своего запроса создаём новый
+    if job is None:
+        bot_inst = request.app.get("bot")
+        job = CHAT_JOBS[rid] = {"uid": uid, "events": [], "final": False, "task": None, "ts": now}
+        job["task"] = asyncio.ensure_future(pump(job))
+    else:
+        log.info("chat: подключение к журналу rid=%s (событий %d, итог %s)", rid, len(job["events"]), job["final"])
+
+    try:
+        idx, last = 0, time.monotonic()
+        while True:
+            while idx < len(job["events"]):
+                ev = job["events"][idx]
+                idx += 1
+                await resp.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+            if job["final"]:
+                break
+            if time.monotonic() - last >= EC_BEAT:
+                await resp.write(b'{"t":"hb"}\n')           # пульс: соединение не должно молчать
+                last = time.monotonic()
+            await asyncio.sleep(0.1)
+    except (ConnectionResetError, BrokenPipeError, RuntimeError):
+        log.info("chat: клиент отключился, ответ готовится дальше: tg_id=%s rid=%s", uid, rid)
+        return resp                                # журнал цел — «Повторить» подключится заново
+    if CHAT_JOBS.get(rid) is job:
+        CHAT_JOBS.pop(rid, None)                   # итог отдан клиенту — журнал больше не нужен
     await resp.write_eof()
     return resp
 

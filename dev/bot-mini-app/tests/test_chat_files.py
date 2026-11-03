@@ -65,7 +65,7 @@ imgs, docs, names = cf.read_files([{"name": "a.png", "mime": "image/png", "data"
                                    {"name": "n.txt", "mime": "text/plain", "data": b64("привет".encode())},
                                    {"name": "w.docx", "mime": "", "data": b64(d)}, {"name": "p.pdf", "mime": "", "data": b64(p)},
                                    {"name": "x.zip", "mime": "", "data": b64(b"PK")}])
-assert len(imgs) == 1 and base64.b64decode(imgs[0])[:2] == b"\xff\xd8" and Image.open(io.BytesIO(base64.b64decode(imgs[0]))).size[0] <= 1600; ok("картинки приводятся к JPEG ≤1600 px")
+assert len(imgs) == 1 and base64.b64decode(imgs[0])[:2] == b"\xff\xd8" and Image.open(io.BytesIO(base64.b64decode(imgs[0]))).size[0] <= 2600; ok("картинки приводятся к JPEG ≤2600 px (баг-репорт 018: качество важнее размера)")
 assert "привет" in docs and "Теория" in docs and "не читается" in docs and names[0] == "a.png"; ok("текст из TXT, DOCX, PDF извлекается; неизвестный тип — честная пометка")
 for badv in ("x", [{}], [{"name": "a", "mime": "", "data": "!!"}], [{"name": "a", "mime": "image/png", "data": b64("не картинка".encode())}], [{"name": "a", "mime": "", "data": b64(b"x")}] * 6):
     try: cf.read_files(badv); raise SystemExit("не отклонено")

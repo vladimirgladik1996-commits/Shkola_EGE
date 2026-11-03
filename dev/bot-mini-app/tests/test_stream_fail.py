@@ -65,7 +65,7 @@ async def main():
         r = await c.post("/api/chat", json={"messages": [{"role": "user", "text": "привет"}]}, headers=H)
         assert r.status == 200 and "ndjson" in r.headers["Content-Type"], (r.status, r.headers)
         evs = ndjson(await r.read())
-        assert evs[0] == {"t": "status", "v": "read"} and evs[-1] == {"t": "fail", "why": "net"}, evs
+        assert evs[0] == {"t": "status", "v": "read"} and evs[-1] == {"t": "fail", "why": "srv"}, evs   # падение пайплайна = сбой СЕРВЕРА (баг-репорт 010), а не «проверьте интернет»
         ok("/api/chat: сбой после prepare() → 200 + {\"t\":\"fail\"} + валидный конец стрима")
 
         # --- 3. обычные ошибки ДО стрима — по-прежнему простой HTTP-код, без событий ---
