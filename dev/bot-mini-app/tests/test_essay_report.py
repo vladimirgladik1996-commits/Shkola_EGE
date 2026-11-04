@@ -64,7 +64,7 @@ for n_ in z.namelist():
 x = z.read("word/document.xml").decode()
 for s in ("Прогнозный балл", "влияния", "Критерии ФИПИ", "Рекомендации", "Анна К.", xesc(R["errors"][0]["why"], {'"': "&quot;"}), R["criteria"][0]["name"]):
     assert s in x, s
-assert x.count("<w:tbl>") >= 8 and "<w:tblHeader/>" in x, "настоящие таблицы Word, шапка таблицы ошибок повторяется на страницах"
+assert x.count("<w:tbl>") >= 4 and "<w:tblHeader/>" in x, "настоящие таблицы Word, шапка таблицы ошибок повторяется на страницах"
 assert 'w:val="Heading1"' in x and x.count('w:val="Heading2"') == 5, "заголовки — стилями (навигация Word)"
 assert "<w:drawing>" not in x and not any(n_.startswith("word/media") for n_ in z.namelist()), "в Word нет ни одной картинки — только текст и таблицы"
 for n_ in ("word/styles.xml", "word/settings.xml", "docProps/app.xml", "docProps/core.xml", "word/header1.xml", "word/footer1.xml"):
@@ -76,7 +76,7 @@ assert len(ids) == len(set(ids))
 try:
     import docx as pydocx
     dd = pydocx.Document(io.BytesIO(dx))               # строгий разбор пакета
-    assert len(dd.tables) >= 6 and sum(p_.style.name == "Heading 2" for p_ in dd.paragraphs) == 5 and dd.paragraphs[0].style.name == "Heading 1"
+    assert len(dd.tables) >= 4 and sum(p_.style.name == "Heading 2" for p_ in dd.paragraphs) == 5 and dd.paragraphs[0].style.name == "Heading 1"
 except ImportError:
     pass
 for e_ in R["errors"]:
@@ -297,7 +297,7 @@ assert not any(n_.startswith("word/media") for n_ in wx.namelist()), "в пак�
 nested = re.findall(r"<w:tc>(?:(?!</w:tc>).)*?<w:tbl>", wdoc, re.S)
 assert not nested, "в Word нет вложенных таблиц (мобильные просмотрщики рисуют их плохо)"
 fills = set(re.findall(r'w:fill="([0-9A-Fa-f]{6})"', wdoc))
-assert fills <= {"8794C0", "EEF0F6"}, f"Word лёгкий: заливки только у тонких полос статистики (светлая заливка и дорожка): {fills}"
+assert fills <= {"8794C0", "EEF0F6", "F5F6FA", "EDF0F8", "FFFFFF"}, f"Word лёгкий: заливки только у тонких полос статистики (светлая заливка и дорожка): {fills}"
 ok("Word лёгкий и плоский: без вложенных таблиц, без картинок, заливки только у тонких полос")
 ok(f"Word: текст работы с пометками — настоящий текст ({len(wtext)} знаков), ни одной картинки")
 if chromium:
@@ -339,4 +339,14 @@ for r_, k_, st_ in ((R, "ege", "Анна К."), (big_, "ege", "Имя"), (dict(R
                     assert [c for c in tc.childNodes if c.nodeType == 1][-1].localName == "p", "ячейка заканчивается абзацем"
                 assert n_ == ng, (part, "строка не совпала с сеткой", n_, ng)
 ok("Word: порядок элементов OOXML и сетки таблиц корректны во всех частях и на четырёх наборах данных")
+
+# 15. устойчивость к просмотрщикам: «точная высота» строки/абзаца игнорируется Google Docs, WPS и мобильными — полосы разбухают,
+#     промежутки раздуваются. В Word нет ни одной точной высоты; тонкость обеспечивает шрифт метки абзаца 1 пт.
+for r_, k_, st_ in ((R, "ege", "Анна К."), (big_, "ege", "Имя"), (dict(R, missing=["text", "criteria"], text="", criteria=[]), "ege", "")):
+    zz = zipfile.ZipFile(io.BytesIO(er.docx_native(r_, k_, st_, NOW)))
+    for part in ("word/document.xml", "word/header1.xml", "word/header2.xml"):
+        t_ = zz.read(part).decode()
+        assert 'lineRule="exact"' not in t_ and 'hRule="exact"' not in t_, (part, "точная высота")
+assert '<w:sz w:val="2"/>' in zipfile.ZipFile(io.BytesIO(er.docx_native(R, "ege", "", NOW))).read("word/document.xml").decode()
+ok("Word не зависит от «точной высоты»: тонкие полосы и промежутки держит шрифт 1 пт, строки таблиц — «не меньше»")
 print("OK")

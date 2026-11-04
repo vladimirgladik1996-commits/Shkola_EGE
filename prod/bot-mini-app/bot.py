@@ -309,6 +309,12 @@ def delete_payment(pid):
     db.execute("delete from payments where id=?", (pid,))
     db.commit()
 
+def update_lesson_price(lid, price):
+    """Цена одного занятия («заморозка»): меняет только это занятие — цена ученика и другие занятия не трогаются.
+    Так правится сумма конкретного долга без начисления оплаты."""
+    db.execute("update lessons set price=? where id=?", (price, lid))
+    db.commit()
+
 def delete_student(sid):
     """Полное (физическое) удаление ученика и ВСЕХ его данных: занятия (прошлые и будущие),
     оплаты, регулярные серии, пропуски и сохранённые проверки «ИИ-проверки».
@@ -1973,6 +1979,13 @@ async def api_payment_delete(request):
     delete_payment(int((await request.json())["id"]))
     return web.json_response({"ok": True})
 
+@guarded
+async def api_lesson_price(request):
+    """Цена одного занятия — правка суммы конкретного долга без записи оплаты."""
+    j = await request.json()
+    update_lesson_price(int(j["id"]), money_val(j["price"], 0))
+    return web.json_response({"ok": True})
+
 # ---------- голосовой помощник ----------
 # Мини-апп шлёт запись и КОНТЕКСТ: на какой вкладке и экране пользователь нажал «Голосовая команда»,
 # какой фильтр/период выбран, какая карточка открыта. Контекст приходит от клиента, поэтому проверяется
@@ -3409,6 +3422,7 @@ def make_app():
     app.router.add_post("/api/lesson/add", api_add)
     app.router.add_post("/api/lesson/move", api_move)
     app.router.add_post("/api/lesson/cancel", api_cancel)
+    app.router.add_post("/api/lesson/price", api_lesson_price)
     app.router.add_post("/api/lesson/regular", api_regular)
     app.router.add_post("/api/lesson/stop", api_stop)
     app.router.add_post("/api/student/update", api_student_update)
