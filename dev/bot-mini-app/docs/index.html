@@ -917,6 +917,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 /* ===== Патч: карточки пополнения и долга; строки ленты оплат всегда одной высоты ===== */
 .feed{box-sizing:border-box;height:62px;min-height:62px}
 .feed .info b,.feed .info small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed .nm{display:flex;align-items:center;gap:6px;min-width:0}.feed .nm b{flex:0 1 auto;min-width:0}   /* имя обрезается, значок класса остаётся виден */
 .feed>b{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .pcd-top{display:flex;align-items:center;gap:12px;padding-right:44px;margin-bottom:14px}
 .pcd-top>div{min-width:0}
@@ -1487,6 +1488,10 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 #sheet.on .pk [data-cnt]{animation:cntgo .01s both}
 .pk-top{position:relative;overflow:hidden;margin-top:-4px;min-height:150px;padding:18px 18px 20px;border-radius:26px 26px 0 0;color:#fff;background:radial-gradient(130px 120px at 86% 50%,#ffc93c73,transparent 72%),radial-gradient(90% 70% at 0 100%,#b6f25a40,transparent 65%),linear-gradient(135deg,#24A872,#0B5A43 62%,#073D30)}
 .pk-top.new{padding-right:120px}
+.pk-act{position:absolute;top:12px;right:12px;z-index:3;display:flex;gap:8px}   /* изменить / удалить оплату: всегда на виду */
+.pk-act button{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#ffffff2e;box-shadow:inset 0 0 0 1px #ffffff47;color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:transform .15s,background .2s}
+.pk-act button:active{transform:scale(.92);background:#ffffff47}.pk-act .dl{color:#ffdcdc}
+.pk-act svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .pk-st{display:inline-flex;align-items:center;gap:8px;padding:5px 13px 5px 6px;border-radius:99px;background:#ffffff26;box-shadow:inset 0 0 0 1px #ffffff40;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
 .pk-top:not(.new) .pk-st{padding-left:13px}
 .pk-ck{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:#0B5A43;animation:pkPulse .7s cubic-bezier(.34,1.56,.64,1) .2s both}
@@ -2391,6 +2396,7 @@ let tab="ch",view=(()=>{try{const v=localStorage.schedView;return v=="w"||v=="m"
 
 /* ---------- Расписание ---------- */
 function stGrade(id){const s=S.find(x=>x.id==id),g=((s&&s.grade)||"").trim();return /^\d+$/.test(g)?g+" кл.":g}
+const gtPill=id=>{const g=stGrade(id);return g?`<span class="gt">${esc(g)}</span>`:""};   /* значок класса после имени: ученики, оплаты */
 function stSubj(id){const s=S.find(x=>x.id==id);return ((s&&s.subject)||"").trim()}
 /* Имя для печати: «Имя Фамилия 9 кл.» → если не влезает, «Имя Ф. 9 кл.» (см. fitNames) */
 function nameParts(id){const p=stName(id).trim().split(/\s+/),f=p[0]||"",l=p.slice(1).join(" ");return{full:f+(l?" "+l:""),short:l?f+" "+l[0]+".":f}}
@@ -2786,6 +2792,7 @@ function payCard(id,isNew){
     return `<div class="pk-r" style="--c:${KD[l.k][1]}"><span>${dmy2(x.l.day)}, ${x.l.time}${full?"":`<small>Оплачено ${money(x.covered)} из ${money(x.l.price)}</small>`}</span><b>${money(l.v)}</b></div>`}).join("")}</details>`:"";
   const body=ks.length?`<div class="pk-bar">${bar}</div>${sum}${det}`:'<p class="empty">Занятий с указанной ценой нет — сумма пошла в предоплату.</p>';
   open(`<div class="pk"><div class="pk-top${isNew?" new":""}" style="--i:0">
+    <div class="pk-act"><button type="button" aria-label="Изменить сумму" title="Изменить сумму" onclick="payEdit(${id})"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button><button type="button" class="dl" aria-label="Удалить платёж" title="Удалить платёж" onclick="payDel(${id})"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div>
     <div class="pk-st">${isNew?'<span class="pk-ck"><svg viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M6.5 12.5l3.6 3.6L17.5 8.5"/></svg></span>Оплата принята':'Пополнение'}</div>
     <div class="pk-amt"><span>+</span><b data-cnt="${p.amt}" data-fmt="m" data-cd="260">${money(p.amt)}</b></div>
     <div class="pk-dt">${when(p.at)}</div>
@@ -2828,8 +2835,8 @@ function payFeedList(){
   if(!f.length)return '<p class="empty">Записей по этому фильтру нет.</p>';
   const SPK=[0,60,120,180,240,300].map(a=>`<i class="spk" style="--a:${a}deg"></i>`).join("");
   return f.map((e,i)=>{const s=S.find(x=>x.id==e.sid);
-    return e.k=="pay"?`<div class="feed${e.id==fresh?" fresh":""}" style="--i:${i}" onclick="payCard(${e.id})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b>${e.id==fresh?SPK:""}</div>`
-      :`<div class="feed" style="--i:${i}" onclick="debtCard(${e.lid})">${av(s)}<span class="info"><b>${esc(s.name)}</b><small>Долг · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
+    return e.k=="pay"?`<div class="feed${e.id==fresh?" fresh":""}" style="--i:${i}" onclick="payCard(${e.id})">${av(s)}<span class="info"><span class="nm"><b>${esc(s.name)}</b>${gtPill(s.id)}</span><small>Оплата · ${when(e.at)}</small></span><b class="pos">+${money(e.amt)}</b>${e.id==fresh?SPK:""}</div>`
+      :`<div class="feed" style="--i:${i}" onclick="debtCard(${e.lid})">${av(s)}<span class="info"><span class="nm"><b>${esc(s.name)}</b>${gtPill(s.id)}</span><small>Долг · ${when(e.at)}</small></span><b class="neg">${money(e.amt)}</b></div>`}).join("")}
 function payUpd(){$("#flist").innerHTML=payFeedList();const c=$("#pcal");if(c)c.classList.toggle("on",!!pd1);
   const b=$("#pstb");if(b){b.className="stb"+(pst!="all"?" on":"");b.innerHTML=stbHtml()}const so=$("#psrt");if(so)so.classList.toggle("on",psort!="new");const tf=$("#ptf");if(tf)tf.classList.toggle("on",pty!="all")}
 const dmy2=k=>k.slice(8)+"."+k.slice(5,7)+"."+k.slice(0,4);
