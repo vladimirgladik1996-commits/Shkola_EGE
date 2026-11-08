@@ -3448,7 +3448,7 @@ async function voiceToggle(){
      она стучится в тот же системный AudioRecord, что и приложения-рекордеры, и работает там, где getUserMedia — нет */
   if(!hub&&A.nativeRec){
     try{nj=JSON.parse(A.nativeRec("start"))}catch(e){nj=null}
-    if(nj&&nj.ok){me.native=nj;me.t0=Date.now()   // длительность записи не ограничена: остановка — только по кнопке
+    if(nj&&nj.ok){me.native=nj;me.t0=Date.now()}   // длительность записи не ограничена: остановка — только по кнопке
     else if(nj&&nj.err==="noperm"){vc=null;micUi(false);chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}}
   if(!me.native){
   if(!hub){vc=null;micUi(false);
