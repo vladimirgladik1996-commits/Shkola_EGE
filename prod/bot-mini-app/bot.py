@@ -1995,8 +1995,7 @@ VOICE_SCREENS = {"lesson_form", "day_card", "student_card", "student_new", "paym
                  "payment_new", "balance", "debts", "print_preview", "grade_filter", "period_calendar",
                  "payment_student_pick", "payment_sort"}
 VOICE_VIEWS = {"w", "m"}
-VOICE_MAX_B64 = 1_500_000            # ~1,1 МБ звука; запись на фронте ограничена 45 секундами и сжата (~150 КБ)
-VOICE_MAX_SEC = 60
+VOICE_MAX_B64 = 24_000_000           # ~18 МБ звука (~100 минут на 24 кбит/с): длительность записи не ограничена — потолок только у Whisper (25 МБ файла)
 
 def _int_id(x):
     if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x <= 2**53 - 1:
@@ -2070,12 +2069,13 @@ def voice_audio(j):
         raise ValueError
 
 def voice_dur(j):
-    """Длительность записи в секундах, присланная мини-аппом (необязательна и не доверяется слепо)."""
+    """Длительность записи в секундах, присланная мини-аппом (необязательна и не доверяется слепо).
+    Длительность голосовой команды не ограничивается — значение нужно лишь для отсечения «невозможной» речи."""
     try:
         d = float(j.get("dur"))
     except (TypeError, ValueError):
         return None
-    return d if 0 < d <= 600 else None
+    return d if d > 0 and d < float("inf") else None
 
 def stt_prompt():
     """Подсказка Whisper перед распознаванием: имена учеников — чтобы речь с именами не искажалась.
@@ -2149,7 +2149,7 @@ async def api_voice(request):
     if text is not None and (not isinstance(text, str) or len(text) > 1000):
         raise ValueError
     dur = j.get("dur")
-    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not 0 <= dur <= VOICE_MAX_SEC):
+    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not dur >= 0):
         raise ValueError
     if audio is None and not text:
         raise ValueError
@@ -2194,7 +2194,7 @@ async def api_stt(request):
     log.info("stt: audio=%sB mime=%s chars=%s", len(audio), mime, len(heard))
     if raw == "":                                   # речи в записи нет
         return web.json_response({"ok": True, "text": "", "reply": whisper.NO_SPEECH_MSG})
-    return web.json_response({"ok": True, "text": heard[:4000]})
+    return web.json_response({"ok": True, "text": heard[:assist.CHAT_MAX_CHARS]})
 
 # ---------- «Спросить у Вишенки» по выделенному фрагменту материала ----------
 # Мини-апп присылает фрагмент + голосовую (или готовую текстовую) задачу. Голос расшифровывается сразу
@@ -2296,10 +2296,10 @@ async def api_fragment(request):
     fragment, meta = fragment_meta(j)
     audio, mime = voice_audio(j)
     text = j.get("text")
-    if text is not None and (not isinstance(text, str) or len(text) > 500):
+    if text is not None and (not isinstance(text, str) or len(text) > 4000):
         raise ValueError
     dur = j.get("dur")
-    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not 0 <= dur <= VOICE_MAX_SEC):
+    if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not dur >= 0):
         raise ValueError
     text = " ".join((text or "").split())
     if audio is None and not text:
@@ -2319,7 +2319,7 @@ async def api_fragment(request):
             return web.json_response({"ok": True, "stage": "stub", "reply": whisper.NO_SPEECH_MSG})
         if not heard:
             return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись — нажмите кнопку и скажите ещё раз."})
-        text = heard[:500]
+        text = heard[:4000]
     if FRAG_BUSY.get(uid, 0) >= 2:
         return web.json_response({"ok": True, "stage": "busy", "reply": "Предыдущие ответы ещё готовятся — подождите минуту и повторите.",
                                   **({"heard": heard} if heard else {})})
@@ -3407,7 +3407,7 @@ async def api_essay_check_last(request):
 
 def make_app():
     """Собирает веб-приложение (страница, /login и API). Вынесено из main() ради тестов."""
-    app = web.Application(client_max_size=12 * 1024 * 1024, middlewares=[cors_mw])   # 12 МБ: вложения чата с ИИ (до 8 МБ в base64)
+    app = web.Application(client_max_size=32 * 1024 * 1024, middlewares=[cors_mw])   # 32 МБ: голос без ограничения длительности (base64 до ~24 МБ) + вложения чата (до 8 МБ в base64)
     app.router.add_get("/", lambda _: web.FileResponse(os.path.join(HERE, "docs", "index.html")))
     app.router.add_get("/apk", api_apk)
     app.router.add_get("/apk/kabinet-repetitora.apk", api_apk)

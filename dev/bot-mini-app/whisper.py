@@ -6,7 +6,7 @@
                        для Groq: https://api.groq.com/openai/v1 (модель whisper-large-v3-turbo)
   WHISPER_MODEL      — по умолчанию whisper-1
   WHISPER_LANG       — язык записи («ru»), по умолчанию ru
-  WHISPER_TIMEOUT    — таймаут запроса в секундах, по умолчанию 60
+  WHISPER_TIMEOUT    — таймаут запроса в секундах, по умолчанию 300 (длинные записи распознаются дольше)
 
 Тишина и «выдумки»: на пустой записи Whisper склонен галлюцинировать (дописывает «Продолжение следует…»,
 «Спасибо за просмотр» и т.п.). Поэтому запрос идёт с temperature=0 и verbose_json, а ответ проверяется:
@@ -27,8 +27,8 @@ BASE = (os.getenv("WHISPER_BASE_URL", "").strip() or "https://api.openai.com/v1"
 API_KEY = os.getenv("WHISPER_API_KEY", "").strip()
 MODEL = (os.getenv("WHISPER_MODEL", "") or "whisper-1").strip()
 LANG = (os.getenv("WHISPER_LANG", "") or "ru").strip()
-try: TIMEOUT = max(5, min(300, float(os.getenv("WHISPER_TIMEOUT", "60"))))
-except ValueError: TIMEOUT = 60.0
+try: TIMEOUT = max(5, min(900, float(os.getenv("WHISPER_TIMEOUT", "300"))))
+except ValueError: TIMEOUT = 300.0
 
 NO_SPEECH_MSG = "Не услышал речи в записи — похоже, вы молчали."
 NO_SPEECH_P = 0.6        # no_speech_prob выше — сегмент считается тишиной (вместе с низким avg_logprob)

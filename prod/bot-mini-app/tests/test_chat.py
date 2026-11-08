@@ -86,7 +86,7 @@ assert all(x in html for x in ("function chStep(", "Чат с Вишенкой",
 assert all(x in html for x in ('class="aim a st', "function chStepNew(", "function chThink(", "CH_STEP_MAX")); ok("шаги и мысли идут отдельными сообщениями в диалоге (новое под старым)")
 assert all(x in html for x in ("конвертирует HTML в PDF", "читает материалы", "думает", "пишет ответ", "chReadLabel(")); ok("любая операция видна как сообщение Вишенки (думает / читает / конвертирует …)")
 assert 'ev.t=="tg"' in html and "Ответ также отправлен в Telegram" in html; ok("фронт помечает ответ, доставленный и в Telegram")
-assert 'Application(client_max_size=12 * 1024 * 1024' in open(os.path.join(ROOT, "bot.py"), encoding="utf-8").read(); ok("лимит тела запроса вмещает вложения")
+assert 'Application(client_max_size=32 * 1024 * 1024' in open(os.path.join(ROOT, "bot.py"), encoding="utf-8").read(); ok("лимит тела запроса вмещает вложения и длинные голосовые")
 
 # --- готовый ответ уходит и в чат приложения, и в Telegram (+ шаги работы видны в стриме) ---
 import time, hashlib, hmac, json as _json

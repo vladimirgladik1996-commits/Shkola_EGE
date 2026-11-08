@@ -59,7 +59,7 @@ async def main():
             {"ctx": CTX},                                                                      # ни звука, ни текста
             {"ctx": CTX, "audio": "!!!не base64!!!", "mime": "audio/webm"},
             {"ctx": CTX, "audio": AUD, "mime": "text/html"},                                   # не аудио
-            {"ctx": CTX, "audio": AUD, "mime": "audio/webm", "dur": 999},
+            {"ctx": CTX, "audio": AUD, "mime": "audio/webm", "dur": -5},                    # отрицательная длительность
             {"ctx": CTX, "audio": "A" * (bot.VOICE_MAX_B64 + 4), "mime": "audio/webm"},        # слишком большой
             {"ctx": CTX, "text": "x" * 1001},
             [1, 2, 3],
@@ -67,6 +67,9 @@ async def main():
         for i, b in enumerate(bad):
             r = await post(b); assert r.status == 400, (i, r.status)
         ok(f"{len(bad)} некорректных запросов → 400 (контекст проверяется по белому списку)")
+
+        r = await post({"ctx": CTX, "audio": AUD, "mime": "audio/webm", "dur": 600}); assert r.status == 200
+        ok("длинная запись (dur=600 с) принимается — длительность голосовой команды не ограничена")
 
         rows = [tuple(r) for r in mem.execute("select tg_id, action, target from audit_log where action='/api/voice'")]
         assert rows and all(r[0] == 42 and AUD not in r[2] for r in rows)

@@ -3448,7 +3448,7 @@ async function voiceToggle(){
      она стучится в тот же системный AudioRecord, что и приложения-рекордеры, и работает там, где getUserMedia — нет */
   if(!hub&&A.nativeRec){
     try{nj=JSON.parse(A.nativeRec("start"))}catch(e){nj=null}
-    if(nj&&nj.ok){me.native=nj;me.t0=Date.now();me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}
+    if(nj&&nj.ok){me.native=nj;me.t0=Date.now()   // длительность записи не ограничена: остановка — только по кнопке
     else if(nj&&nj.err==="noperm"){vc=null;micUi(false);chrSay("Разрешите доступ к микрофону — и нажмите кнопку ещё раз");return}}
   if(!me.native){
   if(!hub){vc=null;micUi(false);
@@ -3469,8 +3469,7 @@ async function voiceToggle(){
   me.an=hub.an;   // анализатор общий; нет его — волна рисуется синтетической, на запись не влияет
   try{if(window.MediaRecorder){const mt=["audio/webm;codecs=opus","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t))||"";
     const rec=new MediaRecorder(hub.stream,mt?{mimeType:mt,audioBitsPerSecond:24000}:{audioBitsPerSecond:24000}),ch=[];
-    rec.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};rec.start(250);me.rec=rec;me.ch=ch;me.t0=Date.now();
-    me.lim=setTimeout(()=>{if(vc===me)voiceStop(true)},45000)}}catch(e){}   // сбой рекордера — не то же самое, что сбой микрофона
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};rec.start(250);me.rec=rec;me.ch=ch;me.t0=Date.now()}}catch(e){}   // сбой рекордера — не то же самое, что сбой микрофона
   if(!me.rec)chrSay("Микрофон включён, но запись звука не поддерживается — команда не сохранится");
   }
   const cv=$("#eq"),g=cv.getContext("2d"),cs=getComputedStyle(document.documentElement),c1=cs.getPropertyValue("--yel").trim()||"#FFC93C",c2=cs.getPropertyValue("--acc").trim()||"#0F2E6E",data=me.an?new Uint8Array(me.an.fftSize):null;
@@ -3493,7 +3492,7 @@ function voiceStop(done){const v=vc;if(!v)return;vc=null;cancelAnimationFrame(v.
   if(v.native){   // нативная запись: обёртка отдаёт готовый файл — веб-стек записи не участвует
     let j=null;try{j=JSON.parse(A.nativeRec(done?"stop":"cancel"))}catch(e){}
     if(done&&j&&j.ok&&j.audio){const b=atob(j.audio),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
-      voiceSend(new Blob([a],{type:j.mime||"audio/mp4"}),ctx0,Math.min(60,Math.round((Date.now()-v.t0)/10)/10))}
+      voiceSend(new Blob([a],{type:j.mime||"audio/mp4"}),ctx0,Math.round((Date.now()-v.t0)/10)/10)}
     else if(done)toast("Не получилось записать голос — попробуйте ещё раз")}
   else{
   if(v.rec&&v.rec.state!=="inactive"){const rec=v.rec,ch=v.ch,dur=(Date.now()-v.t0)/1000;
@@ -3515,7 +3514,7 @@ async function voiceSend(blob,ctx,dur){const say=chrSay;
   say("Отправляю…");chrBtns(false);chrProg(1);   // полоса идёт, пока сервер распознаёт и разбирает команду
   const audio=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]||"");f.onerror=()=>r("");f.readAsDataURL(blob)});
   if(!audio){say("Не удалось прочитать запись");chrProg(0);return}
-  const fr=vfrag,body={audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.min(60,Math.round(dur*10)/10)};
+  const fr=vfrag,body={audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.round(dur*10)/10};
   let r=null;try{r=await api(fr?"/api/fragment":"/api/voice",fr?{...fr,...body}:{ctx,...body})}catch(e){}
   chrProg(r?2:0);   // ответ получен — полоса доходит до конца; сбой — гаснет сразу
   fr?fragReply(r):voiceReply(r)}
@@ -4461,7 +4460,7 @@ function chatBar(){
     <button type="button" id="aic-md" class="aic-ib${chDeep?" deep":""}" aria-haspopup="menu" aria-expanded="false" aria-label="${chDeep?"Режим: долгий ответ":"Режим: быстрый ответ"}" onclick="chMenu('aic-m')">${chDeep?CH_IC.spark:CH_IC.bolt}</button>
     <button type="button" id="aic-fb" class="aic-ib${chFmt?" fmt":""}" aria-haspopup="menu" aria-expanded="false" aria-label="Формат ответа: ${CH_FM[chFmt].n}" onclick="chMenu('aic-f')">${CH_FM[chFmt].i}</button>
     <button type="button" id="aic-ab" class="aic-ib${chAtt.length?" has":""}" aria-haspopup="menu" aria-expanded="false" aria-label="Прикрепить" onclick="chMenu('aic-a')">${CH_IC.clip}</button>
-    <textarea id="aic-in" rows="1" maxlength="4000" placeholder="Спросите что угодно…" enterkeyhint="send" oninput="chGrow(this)" onkeydown="chKey(event)"></textarea>
+    <textarea id="aic-in" rows="1" maxlength="40000" placeholder="Спросите что угодно…" enterkeyhint="send" oninput="chGrow(this)" onkeydown="chKey(event)"></textarea>
     <button type="button" id="aic-mic" class="aic-ib" aria-label="Записать голосом" onclick="chMic()">${CH_IC.mic}</button>
     <button type="button" id="aic-s" class="${chBusy?"busy":""}" aria-label="Отправить" onclick="chSend()">${CH_IC.send}</button>
     <div class="aic-rec"><button type="button" class="aic-rx" aria-label="Отменить запись" onclick="chStop()">${CH_IC.x}</button><div class="aic-mid"><div class="aic-live"><span class="aic-tm" id="aic-tm">0:00</span><canvas id="aic-eq" aria-hidden="true"></canvas></div><div class="aic-pg" role="progressbar" aria-label="Распознаю голосовую команду" aria-valuemin="0" aria-valuemax="100"><div class="aic-pgt"><b id="aic-pgl">Отправляю запись</b><span id="aic-pgp">0%</span></div><div class="aic-bar" id="aic-bar"><i></i></div></div></div><button type="button" class="aic-rd" aria-label="Готово — распознать речь" onclick="chMic()">${CH_IC.check}</button></div></div></div>
@@ -4864,7 +4863,7 @@ async function chMic(){
     if(CH_SR){   // запасной путь: браузерное распознавание речи
       const base=el.value&&!/\s$/.test(el.value)?el.value+" ":el.value,r=new CH_SR();let heard=false;
       r.lang="ru-RU";r.interimResults=true;r.continuous=true;
-      r.onresult=e=>{let s="";for(let i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;const t=$("#aic-in");if(t&&s){heard=true;t.value=(base+s).slice(0,4000);chGrow(t)}};
+      r.onresult=e=>{let s="";for(let i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;const t=$("#aic-in");if(t&&s){heard=true;t.value=(base+s).slice(0,40000);chGrow(t)}};
       r.onerror=e=>{if(e.error=="not-allowed"||e.error=="service-not-allowed")toast("Нет доступа к микрофону — разрешите его в настройках");else if(e.error!="no-speech"&&e.error!="aborted")toast("Не расслышал — попробуйте ещё раз")};
       r.onend=()=>{if(chRec&&chRec.sr===r){chRec=null;chMicUi();if(heard)chSend()}};   // запасной путь тоже отправляет расшифровку сразу
       try{r.start();chRec={sr:r};chMicUi()}catch(e){toast("Не получилось записать голос — попробуйте ещё раз")}}
@@ -4875,8 +4874,7 @@ async function chMic(){
         :n==="NotReadableError"?"Микрофон недоступен — закройте звонки и приложения с микрофоном"
         :"Запись голоса не поддерживается на этом устройстве")+(n?" (код: "+n+")":""))}
     return}
-  chRec=me;chMicUi();
-  me.lim=setTimeout(()=>{if(chRec===me)chSendRec()},45000)}
+  chRec=me;chMicUi()}   // длительность записи не ограничена: остановка и отправка — только по кнопке «Готово»
 function chProcStart(dur){   // прогресс распознавания: плавно ползёт к ~92%, на ответе сервера доезжает до 100%
   const P={t0:performance.now(),est:Math.min(12,1.6+dur*.4),p:0,dead:0};chProc=P;
   const bx=$(".aic-box");if(bx){bx.classList.remove("perr");bx.classList.add("proc")}
@@ -4895,7 +4893,7 @@ function chProcEnd(P,ok){return new Promise(res=>{if(!P||P.dead||chProc!==P){res
   else{if(l)l.textContent="Не распознано";if(bx)bx.classList.add("perr")}
   setTimeout(()=>{if(chProc!==P||P.dead){res();return}chProc=null;chMicUi();res()},ok?760:1300)})}
 async function chSendRec(){   // остановить запись, распознать (Whisper) и СРАЗУ отправить текст в чат — без второго нажатия «Отправить»
-  const r=chRec;if(!r||r.sr)return;chRec=null;clearTimeout(r.lim);const P=chProcStart(Math.min(60,Math.round((Date.now()-r.t0)/10)/10));chMicUi();
+  const r=chRec;if(!r||r.sr)return;chRec=null;clearTimeout(r.lim);const P=chProcStart(Math.round((Date.now()-r.t0)/10)/10);chMicUi();
   const A=window.Android||{};let blob=null;
   if(r.native){let j=null;try{j=JSON.parse(A.nativeRec("stop"))}catch(e){}
     if(j&&j.ok&&j.audio){const b=atob(j.audio),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);blob=new Blob([a],{type:j.mime||"audio/mp4"})}}
@@ -4905,14 +4903,14 @@ async function chSendRec(){   // остановить запись, распоз
   if(!blob||!blob.size){chProcEnd(P,false);toast("Не получилось записать голос — попробуйте ещё раз");return}
   const audio=await new Promise(res=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(",")[1]||"");f.onerror=()=>res("");f.readAsDataURL(blob)});
   if(!audio){chProcEnd(P,false);toast("Не получилось записать голос — попробуйте ещё раз");return}
-  let out=null;try{out=await api("/api/stt",{audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.min(60,Math.round((Date.now()-r.t0)/10)/10)})}catch(e){}
+  let out=null;try{out=await api("/api/stt",{audio,mime:(blob.type||"audio/webm").split(";")[0],dur:Math.round((Date.now()-r.t0)/10)/10})}catch(e){}
   const t=out&&typeof out.text=="string"?out.text.trim():"";
   if(P.dead)return;
   if(!t){chProcEnd(P,false);toast(out&&out.reply?out.reply:"Не получилось распознать запись — попробуйте ещё раз");return}
   await chProcEnd(P,true);if(P.dead)return;
   const el=$("#aic-in");if(!el)return;
   const base=el.value&&!/\s$/.test(el.value)?el.value+" ":el.value;
-  el.value=(base+t).slice(0,4000);chGrow(el);el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash");try{el.focus({preventScroll:true})}catch(e){}
+  el.value=(base+t).slice(0,40000);chGrow(el);el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash");try{el.focus({preventScroll:true})}catch(e){}
   if(chBusy){toast("Вишенка отвечает — расшифровка осталась в поле ввода");return}
   await chSend()}   /* распознанный голос уходит в чат сам: запускает задачу и мышление без лишнего нажатия */
 function chGrow(t){t.style.height="auto";t.style.height=Math.min(t.scrollHeight,132)+"px"}

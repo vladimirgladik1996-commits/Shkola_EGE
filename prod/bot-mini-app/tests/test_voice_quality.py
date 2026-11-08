@@ -122,7 +122,8 @@ async def main():
             whisper.transcribe, assist.handle_page = real_tr, real_page
         ok("виджет: тишина → «Не услышал речи в записи — похоже, вы молчали», сбой → прежняя заглушка, речь → в разбор")
         assert bot.voice_dur({"dur": 3.2}) == 3.2 and bot.voice_dur({"dur": "x"}) is None and bot.voice_dur({"dur": -1}) is None and bot.voice_dur({}) is None
-        ok("длительность записи от мини-аппа читается и проверяется")
+        assert bot.voice_dur({"dur": 600}) == 600 and bot.voice_dur({"dur": 5000}) == 5000
+        ok("длительность записи от мини-аппа читается и проверяется; длинные записи не отбрасываются")
         await flows(c)
 # ================= 5. Сквозной сценарий виджета: без дублирующих запросов =================
 PAY = lambda: [tuple(r) for r in mem.execute("select student_id,amount from payments")]
