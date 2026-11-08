@@ -4917,7 +4917,7 @@ function chGrow(t){t.style.height="auto";t.style.height=Math.min(t.scrollHeight,
 function chKey(e){if(e.key=="Enter"&&!e.shiftKey&&!e.isComposing&&matchMedia("(pointer:fine)").matches){e.preventDefault();chSend()}}
 function chNew(){   /* «Создать новый чат» (шапка страницы): свежая беседа — без прокрутки и поиска кнопки в начале чата */
   if(chBusy){toast("Вишенка отвечает — подождите");return}
-  chStop();chMenu();CH=[];chSave();chAtt=[];chAttUi();
+  chStop();chMenu();CH=[];chSave();chAtt=[];chAttUi();try{delete localStorage.chRid}catch(e){}   /* новый чат — единственная чистка: и история, и подключение к прошлому запросу */
   const el=$("#aic-in");if(el){el.value="";chGrow(el)}
   chUpd();scrollTo(0,0)}
 function chCopied(b){const h=b.innerHTML;b.classList.add("done");b.innerHTML=CH_IC.check+"Скопировано";setTimeout(()=>{if(b.isConnected){b.classList.remove("done");b.innerHTML=h}},1800)}
@@ -5014,7 +5014,7 @@ async function chSend(){
   CH.forEach(m=>(m.a||[]).forEach(x=>{delete x.d}));            // сырые данные нужны только последней реплике
   const G=CH.length?null:chHeroGhost(),um={r:"u",t,a:chAtt.length?chAtt:undefined};CH.push(um);if(G){chHeroMsg=um;chHeroLag=1150}   // первое сообщение: картинка летит в пузырь
   chAtt=[];chAttUi();el.value="";chGrow(el);chAsk();chHeroFly(G)}
-async function chAsk(resume){
+async function chAsk(resume,attachOnly){   /* attachOnly — «только подключиться» (возврат в мини-апп к идущему ответу): журнал доигрывается, новый запрос НЕ запускается */
   chBusy=true;chSave();clearInterval(chAsk.tick);chAsk.tick=setInterval(chSave,1500);chUpd(true);   // шаги стрима досохраняются на ходу раз в 1,5 с
   const ok=CH.filter(m=>!m.err&&!m.live&&!m.step),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
   const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
@@ -5022,14 +5022,16 @@ async function chAsk(resume){
     return {role:m.r=="u"?"user":"assistant",text:t.slice(0,40000)}});   /* потолок = maxlength поля ввода = CHAT_MAX_CHARS на сервере: длинная голосовая доходит до модели целиком, а НЕ режется до 4000 */
   const files=((last&&last.a)||[]).filter(x=>x.d).map(x=>({name:x.n,mime:x.mime||"",data:x.d}));
   const atts=(last&&last.r=="u"&&last.a)||[];
-  let acc="",file=null,fin=false,got=false,seen=false,why="Не получилось получить ответ. Проверьте связь и повторите.";
-  const base=CH.length;   /* шаги и ответ этой попытки: при переподключении к журналу запроса срезаются и доигрываются заново */
+  let acc="",file=null,fin=false,got=false,seen=false,gone=false,started=!attachOnly,why="Не получилось получить ответ. Проверьте связь и повторите.";
+  let base=CH.length;   /* шаги и ответ этой попытки: при переподключении к журналу запроса срезаются и доигрываются заново */
+  if(attachOnly){let u=-1;CH.forEach((m,i)=>{if(m.r=="u")u=i});base=u+1}   /* возврат в мини-апп: недописанные шаги заменяются доигрыванием журнала (но только когда журнал оказался жив) */
   const rid=(resume&&chAsk.rid)||((Date.now().toString(36))+Math.random().toString(36).slice(2,10));chAsk.rid=rid;   /* id запроса: сервер хранит его журнал — обрыв соединения не съедает ответ (см. CHAT_JOBS) */
+  try{localStorage.chRid=rid}catch(e){}   /* rid переживает и перезагрузку страницы: возврат в мини-апп подключается к журналу заново */
   const retry=(typeof CH_RETRY=="number")?CH_RETRY:4,dwait=(typeof CH_RETRY_MS=="number")?CH_RETRY_MS:2500;   /* тесты ускоряют переподключения */
   const finish=()=>{                       // хвосты шагов закрываем — готовый ответ остаётся последним сообщением
     if(fin)return;fin=true;chBusy=false;chStepEnd();
     CH=CH.filter(m=>!(m.step&&m.st=="think"&&!m.t.trim()));
-    clearInterval(chAsk.tick);chSave();if(tab=="ch")chUpd(true)};
+    clearInterval(chAsk.tick);chSave();try{delete localStorage.chRid}catch(e){}if(tab=="ch")chUpd(true)};
   const answer=text=>{                     // ответ — последним сообщением, под всеми шагами Вишенки
     let m;
     if(fmt=="text"){
@@ -5039,9 +5041,10 @@ async function chAsk(resume){
     }else{m={r:"a",t:text,a:file?[file]:undefined,src:acc||undefined};CH.push(m)}
     m.tg=0;finish();if(fmt!="text"&&file&&typeof chConfetti=="function")setTimeout(chConfetti,160)};
   for(let a=0;a<=retry&&!fin&&!got;a++){   /* обрыв соединения = ПЕРЕПОДКЛЮЧЕНИЕ к журналу того же запроса, а не «нет связи» */
-    if(a){CH.splice(base);acc="";file=null;chStepEnd();if(tab=="ch")chUpd(true);await new Promise(r=>setTimeout(r,dwait))}
-    try{await apiStream("/api/chat",{messages:msgs,deep,format:fmt,files,rid},ev=>{
+    if(a){if(!attachOnly||started)CH.splice(base);acc="";file=null;chStepEnd();if(tab=="ch")chUpd(true);await new Promise(r=>setTimeout(r,dwait))}
+    try{await apiStream("/api/chat",{messages:msgs,deep,format:fmt,files,rid,resume:!!attachOnly},ev=>{
     if(!ev||typeof ev!="object")return;seen=true;
+    if(!started&&ev.t!="hb"&&ev.t!="gone"){started=true;CH.splice(base)}   /* журнал жив — недописанные шаги заменяются его доигрыванием */
     if(ev.t=="status"&&typeof ev.v=="string")chStepNew(ev.v,fmt,ev.v=="read"?chReadLabel(atts):"");
     else if(ev.t=="think"&&typeof ev.v=="string")chThink(ev.v,fmt);
     else if(ev.t=="text"&&typeof ev.v=="string"){acc+=ev.v;
@@ -5053,6 +5056,7 @@ async function chAsk(resume){
       else w.t="собираю документ: "+Math.max(1,Math.round(acc.length/1024))+" КБ текста"}
     else if(ev.t=="tg"){const a=CH[CH.length-1];if(a&&a.r=="a"&&!a.err&&!a.step)a.tg=1}   // ответ ушёл и в Telegram
     else if(ev.t=="off"){got=true;why="ИИ пока не подключён: администратору нужно задать KIMI_API_KEY."}
+    else if(ev.t=="gone"){got=true;gone=true;why="К этому ответу уже не подключиться: он завершён или устарел. Если ответ готов — он уже пришёл в Telegram-бот."}
     else if(ev.t=="fail"){got=true;why=ev.why=="send"?"Не получилось отправить файл. Попробуйте ещё раз."
       :ev.why=="build"?"Не получилось оформить файл. Попробуйте ещё раз."
       :ev.why=="srv"?"Не получилось оформить файл: сбой на сервере — это не проблема вашего интернета. Нажмите «Повторить» — запрос уйдёт заново."
@@ -5068,6 +5072,7 @@ async function chAsk(resume){
   }
   if(!fin){chBusy=false;chStepEnd();
     if(seen&&!got)why="Связь с сервером прервалась, но работа не потеряна: ответ готовится дальше и придёт в Telegram-бот. Нажмите «Повторить» — подключусь к результату с места обрыва.";
+    if(gone)try{delete localStorage.chRid}catch(e){}   /* журнала больше нет — авто-подключение к нему бессмысленно */
     CH.push({r:"a",t:why,err:1});clearInterval(chAsk.tick);chSave();if(tab=="ch")chUpd(true)}
 }   // ушли из раздела — ответ сохранён, интерфейс не трогаем
 
@@ -5141,5 +5146,8 @@ document.addEventListener("contextmenu",e=>{const t=e.target.closest&&e.target.c
 addEventListener("resize",syncNav);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(syncNav);
 /* старт за прелоадером: показываем __done, когда данные пришли, и __fail, если связи нет */
 window.__bootRetry=async()=>{try{await load();window.__done&&window.__done()}catch(e){window.__fail&&window.__fail()}};
+/* возврат в мини-апп/АПК посреди ответа: подключаемся к журналу того же запроса (chRid) и
+   доигрываем его — мышление и ответ снова идут вживую; журнала нет — честное «не подключиться» */
+try{if(localStorage.chRid&&CH.length){chAsk.rid=String(localStorage.chRid);chAsk(true,true)}}catch(e){}
 window.__bootRetry();
 </script></body></html>

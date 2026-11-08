@@ -28,7 +28,7 @@ const CH_RETRY=2,CH_RETRY_MS=0;   /* переподключения к журн�
 const CH_FMT=["text","docx","pdf","image"],tab="ch",esc=s=>String(s),chSave=()=>{},chUpd=()=>{},chUpdSoon=()=>{};
 let EVENTS=[],SNAPS=[],SENT=[];
 const show=()=>JSON.stringify(CH.map(m=>({r:m.r,step:!!m.step,st:m.st||"",lbl:m.lbl||"",t:m.t,tg:m.tg||0,err:m.err||0,live:!!m.live,a:(m.a||[]).map(x=>x.n)})));
-async function apiStream(p,b,onEv){SENT.push(b.messages);for(const e of EVENTS){onEv(e);SNAPS.push(show())}}
+async function apiStream(p,b,onEv){SENT.push(b);for(const e of EVENTS){onEv(e);SNAPS.push(show())}}
 """ + steps + r"""
 """ + chask + r"""
 (async()=>{
@@ -61,12 +61,23 @@ async function apiStream(p,b,onEv){SENT.push(b.messages);for(const e of EVENTS){
   CH=[]; CH.push({r:"u",t:"г".repeat(6000)});
   EVENTS=[{t:"done",reply:"ок"}];
   chFmt=0; SENT=[]; await chAsk();
-  console.log("LEN5:"+SENT[0][SENT[0].length-1].text.length);
+  console.log("LEN5:"+SENT[0].messages[SENT[0].messages.length-1].text.length);
   /* 6) потолок остаётся честным: сообщение длиннее 40000 подрезается до 40000, а не отбрасывается */
   CH=[]; CH.push({r:"u",t:"у".repeat(50000)});
   EVENTS=[{t:"done",reply:"ок"}];
   chFmt=0; SENT=[]; await chAsk();
-  console.log("LEN6:"+SENT[0][SENT[0].length-1].text.length);
+  console.log("LEN6:"+SENT[0].messages[SENT[0].messages.length-1].text.length);
+  /* 7) возврат в мини-апп к идущему ответу (attachOnly): недописанные шаги заменяются
+        доигрыванием журнала (без дублей), ответ приходит целиком — баг-репорт 025 */
+  CH=[{r:"u",t:"вопрос 3"},{r:"a",step:1,st:"think",t:"недописанная мысль",lbl:"думает"}];
+  chAsk.rid="rrrrrrrrrr"; EVENTS=[{t:"think",v:"новая мысль."},{t:"done",reply:"готово"}];
+  chFmt=0; SENT=[]; await chAsk(true,true);
+  console.log("RUN7:"+show()); console.log("RES7:"+JSON.stringify(SENT[0].resume));
+  /* 8) журнал исчез («gone»): недописанные рассуждения остаются видимыми, честная ошибка */
+  CH=[{r:"u",t:"вопрос 4"},{r:"a",step:1,st:"think",t:"сохранённая мысль",lbl:"думает"}];
+  chAsk.rid="rrrrrrrrrr"; EVENTS=[{t:"gone"}];
+  chFmt=0; await chAsk(true,true);
+  console.log("RUN8:"+show());
 })();
 """
 
@@ -76,7 +87,7 @@ if not node:
     sys.exit(0)
 r = subprocess.run([node, "-e", HARNESS], capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
-out = {ln.split(":", 1)[0]: json.loads(ln.split(":", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith(("RUN", "SNAPS", "LEN"))}
+out = {ln.split(":", 1)[0]: json.loads(ln.split(":", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith(("RUN", "SNAPS", "LEN", "RES"))}
 
 # --- 1) мысли и работа — сообщениями: новое под старым, ответ — в самом конце ---
 run1 = out["RUN1"]
@@ -116,4 +127,15 @@ ok("обрыв: честное «работа не потеряна» + пере
 assert out["LEN5"] == 6000, out["LEN5"]   # диктовка 6000 символов доходит до модели целиком
 assert out["LEN6"] == 40000, out["LEN6"]   # потолок = maxlength ввода = CHAT_MAX_CHARS
 ok("длинная голосовая уходит в модель целиком: при отправке нет обрезки до 4000 (потолок 40000)")
+# --- возврат в мини-апп к идущему ответу (баг-репорт 025) ---
+run7 = out["RUN7"]
+assert not any(m["t"] == "недописанная мысль" for m in run7), run7   # шаги не задвоились
+assert any(m["st"] == "think" and m["t"] == "новая мысль." for m in run7), run7
+assert run7[-1]["t"] == "готово" and not run7[-1]["err"], run7      # ответ доигран целиком
+assert out["RES7"] is True, out["RES7"]                              # запрос — attach-only (resume)
+ok("возврат в мини-апп: недописанные шаги заменяются доигрыванием журнала, ответ приходит целиком")
+run8 = out["RUN8"]
+assert any(m["t"] == "сохранённая мысль" for m in run8), run8         # рассуждения не потеряны (баг-репорт 021)
+assert run8[-1]["err"] == 1 and "Telegram" in run8[-1]["t"], run8   # честная ошибка вместо тишины
+ok("журнал исчез («gone»): рассуждения остаются видимыми, честная ошибка вместо зависания")
 print("test_chat_steps: OK")

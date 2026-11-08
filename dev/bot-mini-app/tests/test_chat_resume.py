@@ -49,6 +49,13 @@ assert "CHAT_JOBS" in src and "_chat_jobs_gc" in src and '"why": "srv"' in src, 
     "сервер хранит журнал запроса (CHAT_JOBS) и честно отвечает srv при падении конвейера"
 ok("фронт+бэк: rid, переподключение к журналу, честные тексты обрыва и «srv»")
 
+# --- возврат в мини-апп к идущему ответу: стрим продолжается вживую (баг-репорт 025) ---
+assert "localStorage.chRid" in html and "chAsk(true,true)" in html and "resume:!!attachOnly" in html, \
+    "возврат в мини-апп обязан подключаться к журналу идущего запроса (chRid в памяти + resume)"
+assert 'ev.t=="gone"' in html and 'resume = j.get("resume"' in src and '{"t":"gone"}' in src, \
+    "исчезнувший журнал — честное «gone» (клиент и сервер), а не перезапуск задачи моделью"
+ok("возврат в мини-апп: rid переживает перезагрузку страницы, подключение без перезапуска конвейера")
+
 # ---------- 2. живое поведение: обрыв клиента не убивает конвейер, «Повторить» доигрывает журнал ----------
 async def main():
     gate = asyncio.Event()                            # «долгий» этап конвейера — держим запрос живым
@@ -142,6 +149,45 @@ async def main():
         assert evs[-1] == {"t": "fail", "why": "srv"}, evs
         assert "rid-boom-01" not in bot.CHAT_JOBS, "журнал упавшего запроса не подчищен"
         ok("падение конвейера → честный fail/srv в стриме, без «проверьте связь»")
+
+        # --- 2д. возврат в мини-апп (resume=true): только подключение — конвейер не перезапускается ---
+        calls = []
+
+        async def counting(*a, **kw):
+            calls.append(1)
+            yield "status", "think"
+            yield "think", "мысль"
+            await gate.wait()
+            yield "done", "ответ"
+
+        assist.chat_stream = counting
+        gate.clear()
+        rb = {"messages": [{"role": "user", "text": "привет"}], "rid": "rid-back-01"}
+        async with aiohttp.ClientSession() as s:
+            async with s.post(url, json=rb, headers=H) as r:
+                await r.content.read(32)                       # первые события ушли — клиент «вышел» из мини-аппа
+        await asyncio.sleep(0.3)
+        assert bot.CHAT_JOBS.get("rid-back-01") is not None and not bot.CHAT_JOBS["rid-back-01"]["final"], \
+            "журнал идущего запроса должен ждать возврата клиента"
+        gate.set()                                             # конвейер дошёл до итога, пока клиента нет
+        await asyncio.sleep(0.3)
+        async with aiohttp.ClientSession() as s:               # вернулись: resume=true — только подключиться
+            async with s.post(url, json={**rb, "resume": True}, headers=H) as r:
+                evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+        evs = [e for e in evs if e.get("t") != "hb"]
+        assert [e["t"] for e in evs] == ["status", "think", "done", "tg"], evs   # журнал доигран целиком
+        assert len(calls) == 1, f"resume перезапустил конвейер (вызовов {len(calls)}) — модель переделала задачу"
+        assert "rid-back-01" not in bot.CHAT_JOBS, "итог отдан — журнал подчищен"
+        ok("возврат в мини-апп: журнал доигрывается вживую, конвейер НЕ перезапускается")
+
+        # --- 2е. resume без журнала (итог отдан/устарел): «gone», новый конвейер не запускается ---
+        async with aiohttp.ClientSession() as s:
+            async with s.post(url, json={"messages": [{"role": "user", "text": "привет"}],
+                                         "rid": "rid-gone-01", "resume": True}, headers=H) as r:
+                evs = [json.loads(x) for x in (await r.text()).splitlines() if x.strip()]
+        assert evs == [{"t": "gone"}], evs
+        assert len(calls) == 1 and "rid-gone-01" not in bot.CHAT_JOBS, (calls, list(bot.CHAT_JOBS))
+        ok("resume без журнала → честное «gone» без запуска нового конвейера")
     finally:
         gate.set()
         await server.close()

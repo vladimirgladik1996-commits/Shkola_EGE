@@ -2631,6 +2631,9 @@ async def api_chat(request):
       {"t":"think","v":"…"} — кусочек мышления модели (показывается от имени Вишенки),
       {"t":"text","v":"…"} — кусочек ответа, {"t":"done",…} — готово, {"t":"tg"} — ответ ушёл и в Telegram,
       {"t":"fail",…} — сбой, {"t":"off"} — ИИ не подключён.
+    resume=true в запросе — «только подключиться» (возврат в мини-апп/АПК к идущему запросу):
+    если журнала rid уже нет (итог отдан, протух или сервис перезапустился) — конвейер НЕ
+    перезапускается, клиент получает {"t":"gone"}.
     Фото с заданием (баг-репорт 015): перед ответом отдельный шаг читает формулировку (chatprompt.read_task);
     строка «📌 Задание, прочитанное с фото…» идёт первой в ответе и остаётся в истории — фото на следующих ходах
     не отправляются, а тема сохраняется. Сочинение ЕГЭ/ОГЭ: пакет ФИПИ в промте, абзацы и красная строка — кодом,
@@ -2638,6 +2641,9 @@ async def api_chat(request):
     приходят под работой (для файлов — в сообщении чата, а не в документе)."""
     j = await request.json()
     if not isinstance(j, dict):
+        raise ValueError
+    resume = j.get("resume", False)              # только подключиться к журналу (возврат в мини-апп) — конвейер НЕ перезапускать
+    if not isinstance(resume, bool):
         raise ValueError
     hist = assist.chat_history(j.get("messages"))
     deep = j.get("deep", False)
@@ -2654,6 +2660,8 @@ async def api_chat(request):
     uid = user_id(request)
     rid = j.get("rid")                           # id запроса: его журнал переживает обрыв соединения
     if not isinstance(rid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,40}", rid):
+        if resume:
+            raise ValueError                     # подключаться не к чему — клиент обязан прислать rid
         rid = secrets.token_urlsafe(12)          # прежние сборки клиента без rid — журнал служит одному подключению
     resp = web.StreamResponse(status=200, headers={"Content-Type": "application/x-ndjson; charset=utf-8",
                                                    "Cache-Control": "no-store"})
@@ -2809,6 +2817,13 @@ async def api_chat(request):
     job = CHAT_JOBS.get(rid)
     if job is not None and job["uid"] != uid:
         job = None                        # чужой журнал не отдаём — для своего запроса создаём новый
+    if job is None and resume:
+        # Возврат в мини-апп подключается к журналу того же запроса (resume): журнала уже нет
+        # (итог отдан, протух или сервис перезапустился) — НОВЫЙ конвейер не запускаем (модель
+        # не должна перерабатывать задачу заново), клиенту — честное «gone».
+        await resp.write(b'{"t":"gone"}\n')
+        await resp.write_eof()
+        return resp
     if job is None:
         bot_inst = request.app.get("bot")
         job = CHAT_JOBS[rid] = {"uid": uid, "events": [], "final": False, "task": None, "ts": now}
