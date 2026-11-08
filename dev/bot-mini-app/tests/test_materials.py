@@ -70,7 +70,9 @@ ok("оглавление: крупная приклеенная кнопка «�
 front_nb = re.sub(r"data:[a-z/+-]+;base64,[A-Za-z0-9+/=]+", "", front)   # для проверок «такого в коде нет»: символы base64 внутри встроенных картинок не в счёт
 assert 'const MAT_ART="data:image/webp;base64,' in front and front.count("${matArt()}") == 2 and ".mt-art{" in front, "иллюстрация внизу каталогов и оглавления"
 assert "matOpen(ci,n,sec)" in front and "matShow" in front and "c.cat=MATS[matCat].id" in front, "голос: страница открывается на нужной вкладке"
-assert 'if raw.get("cat") is not None:' in bot and "_material_nav" in read("assist.py") and "import kimi, matlib, matnav, whisper" in read("assist.py")
+assert 'if raw.get("cat") is not None:' in bot and "_material_nav" in read("assist.py") \
+    and re.search(r"^import kimi, matlib, matnav(, webtools)?, whisper$", read("assist.py"), re.M), \
+    "assist.py должен импортировать kimi/matlib/matnav/whisper (webtools — инструменты поиска модели)"
 assert all("matShow" in read("materials", c, f) for c in CATS for f in ["about.html"] + ["v%02d.html" % n for n in range(1, 37)]), "страницы принимают matShow"
 ok("голос: «Открой эссе 13.2 варианта 7 ОГЭ» → сервер отдаёт stage open, мини-апп открывает страницу; иллюстрация внизу «Материалов»")
 assert "function viewTurn(" in front and "function ptCurl(" in front and "function ptGeom(" in front and "ptScreenTurn(false)" in front and "ptScreenTurn(true,fin)" in front and "viewTurn(true," in front and "viewTurn(false," in front, "листание с изгибом в оболочке"
