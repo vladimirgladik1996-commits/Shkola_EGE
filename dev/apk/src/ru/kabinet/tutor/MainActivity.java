@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCb;            // выбор фото из галереи / файла (см. onShowFileChooser)
     private File captureFile;                       // сюда системная камера кладёт снимок («Снять камерой»)
     private float lpX, lpY;                         // точка последнего касания — для elementFromPoint при долгом тапе
+    private volatile boolean lpField;               // палец на поле ввода — долгий тап уходит WebView (меню «Вставить/Копировать»)
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final int MIC_PERM_REQ = 1002;
     private static final int CAMERA_REQ = 1003;          // «Снять камерой»: снимок возвращается отдельно от выбора файла
@@ -367,10 +368,26 @@ public class MainActivity extends Activity {
         // Страховка не только на флаг страницы (он есть не во всех версиях фронта): открыта ли
         // шторка (#sheet.on) и что лежит под пальцем (elementFromPoint по точке касания).
         web.setOnTouchListener((v, ev) -> {
-            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) { lpX = ev.getX(); lpY = ev.getY(); }
+            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                lpX = ev.getX(); lpY = ev.getY();
+                // палец на поле ввода (textarea/input/contenteditable)? Проверяем СРАЗУ на касании:
+                // JS асинхронный, а к моменту долгого тапа ответ уже готов — такой тап отдаём WebView,
+                // чтобы штатно появилось системное меню «Вставить/Копировать» (иначе его нет вообще).
+                lpField = false;
+                float scale = web.getScale() > 0 ? web.getScale() : 1f;
+                web.evaluateJavascript("(function(){try{"
+                        + "var e=document.elementFromPoint(" + ((lpX + web.getScrollX()) / scale) + "," + ((lpY + web.getScrollY()) / scale) + ");"
+                        + "if(!e||!e.closest)return false;"
+                        + "if(e.isContentEditable||e.closest('[contenteditable]'))return true;"
+                        + "var f=e.closest('textarea,input');if(!f)return false;"
+                        + "if((f.tagName||'').toLowerCase()=='textarea')return true;"
+                        + "return /^(text|search|email|url|tel|number|password)$/.test((f.type||'text').toLowerCase());"
+                        + "}catch(x){return false}})()", value -> lpField = "true".equals(value));
+            }
             return false;   // не перехватываем — касания обрабатывает сам WebView
         });
         web.setOnLongClickListener(v -> {
+            if (lpField) return false;   // поле ввода: долгий тап отдаём WebView — системное «Вставить/Копировать»
             float scale = web.getScale() > 0 ? web.getScale() : 1f;
             final String js = "(function(){try{"
                     + "if(window.__lpOnBtn===true)return true;"
