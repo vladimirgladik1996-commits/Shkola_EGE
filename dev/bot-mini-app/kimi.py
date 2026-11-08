@@ -14,7 +14,7 @@
   KIMI_TIMEOUT_DEEP — потолок «глубокого» запроса, по умолчанию 3600 с
   KIMI_SOCK_READ  — сколько секунд ТИШИНЫ в потоке считать обрывом, по умолчанию 300
   KIMI_CONNECT    — таймаут установки соединения, по умолчанию 30
-  KIMI_TOOL_ROUNDS — сколько заходов tool_calls (web_search/fetch, см. webtools.py) на один ответ, по умолчанию 4
+  KIMI_TOOL_ROUNDS — сколько заходов tool_calls (web_search/fetch, см. webtools.py) на один ответ, по умолчанию 6
 
 ВАЖНО ПРО ЛИМИТ ТОКЕНОВ (это и была причина «ИИ сейчас не отвечает»):
   `max_tokens` у Kimi ограничивает СУММУ `reasoning_content` + `content`
@@ -88,7 +88,11 @@ CONNECT = _flt("KIMI_CONNECT", 30, 3, 300)
 # Продолжение обрезанного ответа: сколько заходов допускается и как просим продолжать.
 MAX_CONT = _int("KIMI_MAX_CONT", 3, 1, 10)
 # Сколько заходов tool_calls (web_search/fetch) допускается на один ответ чата (см. webtools.py).
-MAX_TOOL_ROUNDS = _int("KIMI_TOOL_ROUNDS", 4, 1, 10)
+MAX_TOOL_ROUNDS = _int("KIMI_TOOL_ROUNDS", 6, 1, 10)
+# Когда заходы исчерпаны: инструменты убираются, модель досказывает финал по полученным данным.
+TOOL_FINAL_PROMPT = ("Инструменты поиска больше недоступны. Дай пользователю финальный ответ по уже "
+                     "полученным данным; не выдумывай фактов и ссылок. Чего не хватило — одной "
+                     "строкой в конце ответа.")
 CONT_PROMPT = ("Продолжай ответ ровно с места, где он оборвался: без повторов уже "
                "написанного, без вступлений и пояснений — сразу продолжение текста.")
 
@@ -408,6 +412,8 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
     """Стриминг ответа модели: async-генератор пар (тип, дельта).
 
     Типы: «think» — кусочек размышления (reasoning_content), «text» — кусочек ответа,
+    «tool» — маркер tool-захода (имена инструментов): его служебные «Поищу…» шли дельтами text,
+    но в финальный ответ не входят (потребитель сбрасывает накопленное по маркеру),
     «err» — сбой («off» — нет ключа, «http» — API отказал, «net» — сеть/таймаут,
     «empty» — модель не вернула ни одного кусочка ответа); после err генератор завершается.
     Мысль идёт отдельными дельтами — её показывают «от имени Вишенки» («Вишенка думает…»).
@@ -446,9 +452,10 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
         budget = _clamp_to_known(m, budget)
     run, acc, cont, cretry = list(messages), [], 0, 0    # run — диалог с закреплёнными продолжениями
     attempt, drops, tool_rounds = 0, 0, 0
+    tools_now, tool_acc = tools, []          # tools_now — снимается после лимита; tool_acc — «Поищу…» (не финал)
     while True:
         body = build_payload(run, model=m, deep=deep, json_mode=json_mode, images=images,
-                             thinking=thinking, max_tokens=budget, tools=tools)
+                             thinking=thinking, max_tokens=budget, tools=tools_now)
         body["stream"] = True
         body["stream_options"] = {"include_usage": True}    # usage в конце стрима — видно, сгорел ли бюджет
         if _stat is not None:
@@ -511,15 +518,26 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
         calls = _tc_list(tc_acc)            # модель запросила инструменты (web_search/fetch)
         if calls and not broke and tool_exec is not None and tool_rounds < MAX_TOOL_ROUNDS:
             if got_text:
-                acc += buf                  # текст этого захода — часть ответа
+                tool_acc.append("".join(buf))    # «Поищу…» — остаётся в истории, но НЕ в финальном ответе
             run += [{"role": "assistant", "content": "".join(buf), "tool_calls": calls}]
             run += await _tool_results(calls, tool_exec)
             tool_rounds += 1
-            log.info("kimi: tool_calls %s — исполняю (заход %d/%d)",
-                     [c["function"]["name"] for c in calls], tool_rounds, MAX_TOOL_ROUNDS)
+            if tool_rounds >= MAX_TOOL_ROUNDS:
+                # лимит исчерпан: инструменты убираются — модель обязана досказать финал по полученным данным
+                tools_now = None
+                run += [{"role": "user", "content": TOOL_FINAL_PROMPT}]
+                log.info("kimi: лимит tool-заходов (%d) — прошу финальный ответ по полученным данным",
+                         MAX_TOOL_ROUNDS)
+            else:
+                log.info("kimi: tool_calls %s — исполняю (заход %d/%d)",
+                         [c["function"]["name"] for c in calls], tool_rounds, MAX_TOOL_ROUNDS)
+            yield "tool", ", ".join(c["function"]["name"] for c in calls)   # маркер: «Поищу…» — служебный текст
             continue                        # новый заход с результатами инструментов в истории
         if calls:
-            log.warning("kimi: tool_calls без исполнителя/лимит — отдаю текст как есть")
+            log.warning("kimi: tool_calls без исполнителя (broke=%s exec_ok=%s rounds=%s/%s calls=%s) — "
+                        "отдаю текст как есть",
+                        broke, tool_exec is not None, tool_rounds, MAX_TOOL_ROUNDS,
+                        [c["function"]["name"] for c in calls])
         cut = broke or finish == "length" or (got_text and not done and finish is None)
         if got_text:
             acc += buf
@@ -549,6 +567,10 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
         if attempt == 0:
             attempt += 1
             continue                            # повтор строго той же моделью и режимом
+        if tool_acc:
+            # инструменты отработали, а финального текста так и не дали — отдаём собранный ход работы
+            yield "text", "".join(tool_acc).strip()
+            return
         yield "err", ("net" if broke else "empty")
         return
 

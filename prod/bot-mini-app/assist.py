@@ -936,6 +936,10 @@ async def chat_stream(history, deep=False, images=None, docs=None, fmt="text", i
                 yield "status", "write"
             reply += v
             yield "text", v
+        elif kind_ == "tool":
+            # маркер tool-захода (web_search/fetch): служебные «Поищу…» уже ушли дельтами text,
+            # но в ответ и историю не входят — финальный done будет только по тексту после инструментов
+            reply = ""
         else:                                   # err: вверх не падаем — просто конец стрима
             yield "err", v
             return
