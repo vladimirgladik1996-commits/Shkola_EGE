@@ -236,10 +236,10 @@ def parse_doc(text, attach=None):
         s = l.strip()
         m = re.match(r"^(#{1,4})\s+(.*)$", s)
         if not have_title:
-            if re.match(r"^([-*•—–]|\d+[.)])\s", s):          # ответ сразу со списка — заголовка нет
+            if re.match(r"^([-*•]|\d+[.)])\s", s):          # ответ сразу со списка — заголовка нет (тире «—» — НЕ маркер: реплики и цитаты не буллиты)
                 have_title = True
                 title = "Ответ"
-                mm = re.match(r"^(?:[-*•—–]|(\d+)[.)])\s+(.*)$", s)
+                mm = re.match(r"^(?:[-*•]|(\d+)[.)])\s+(.*)$", s)
                 blocks.append(("li", (mm.group(1) + ".") if mm.group(1) else "•", _runs(mm.group(2))))
                 return
             title = _plain(_runs((m.group(2) if m else s).strip())) or "Ответ"
@@ -248,7 +248,7 @@ def parse_doc(text, attach=None):
         if m:
             blocks.append(("h", _runs(m.group(2))))
             return
-        m = re.match(r"^(?:[-*•—–]|(\d+)[.)])\s+(.*)$", s)
+        m = re.match(r"^(?:[-*•]|(\d+)[.)])\s+(.*)$", s)   # тире «—/–» маркером списка не является (буллит — только для настоящих пунктов)
         if m:
             blocks.append(("li", (m.group(1) + ".") if m.group(1) else "•", _runs(m.group(2))))
             return
