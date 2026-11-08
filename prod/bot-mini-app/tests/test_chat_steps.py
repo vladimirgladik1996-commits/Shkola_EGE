@@ -26,9 +26,9 @@ let CH=[],chBusy=false,chFmt=0,chDeep=false,chAtt=[],chRec=null;
 const CH_IDLE=60000;   /* потолок тишины стрима — как в docs/index.html (см. apiStream) */
 const CH_RETRY=2,CH_RETRY_MS=0;   /* переподключения к журналу запроса — без пауз (как в test_chat_resume) */
 const CH_FMT=["text","docx","pdf","image"],tab="ch",esc=s=>String(s),chSave=()=>{},chUpd=()=>{},chUpdSoon=()=>{};
-let EVENTS=[],SNAPS=[];
+let EVENTS=[],SNAPS=[],SENT=[];
 const show=()=>JSON.stringify(CH.map(m=>({r:m.r,step:!!m.step,st:m.st||"",lbl:m.lbl||"",t:m.t,tg:m.tg||0,err:m.err||0,live:!!m.live,a:(m.a||[]).map(x=>x.n)})));
-async function apiStream(p,b,onEv){for(const e of EVENTS){onEv(e);SNAPS.push(show())}}
+async function apiStream(p,b,onEv){SENT.push(b.messages);for(const e of EVENTS){onEv(e);SNAPS.push(show())}}
 """ + steps + r"""
 """ + chask + r"""
 (async()=>{
@@ -56,6 +56,17 @@ async function apiStream(p,b,onEv){for(const e of EVENTS){onEv(e);SNAPS.push(sho
   EVENTS=[{t:"status",v:"write"},{t:"text",v:"текст"}];
   chFmt=0; await chAsk();
   console.log("RUN4:"+show());
+  /* 5) длинная голосовая диктовка уходит в модель ЦЕЛИКОМ: история при отправке НЕ режется до 4000
+        (потолок 40000 = maxlength поля ввода = CHAT_MAX_CHARS на сервере — баг-репорт 023) */
+  CH=[]; CH.push({r:"u",t:"г".repeat(6000)});
+  EVENTS=[{t:"done",reply:"ок"}];
+  chFmt=0; SENT=[]; await chAsk();
+  console.log("LEN5:"+SENT[0][SENT[0].length-1].text.length);
+  /* 6) потолок остаётся честным: сообщение длиннее 40000 подрезается до 40000, а не отбрасывается */
+  CH=[]; CH.push({r:"u",t:"у".repeat(50000)});
+  EVENTS=[{t:"done",reply:"ок"}];
+  chFmt=0; SENT=[]; await chAsk();
+  console.log("LEN6:"+SENT[0][SENT[0].length-1].text.length);
 })();
 """
 
@@ -65,7 +76,7 @@ if not node:
     sys.exit(0)
 r = subprocess.run([node, "-e", HARNESS], capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
-out = {ln.split(":", 1)[0]: json.loads(ln.split(":", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith(("RUN", "SNAPS"))}
+out = {ln.split(":", 1)[0]: json.loads(ln.split(":", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith(("RUN", "SNAPS", "LEN"))}
 
 # --- 1) мысли и работа — сообщениями: новое под старым, ответ — в самом конце ---
 run1 = out["RUN1"]
@@ -101,4 +112,8 @@ run4 = out["RUN4"]
 assert run4[0]["r"] == "u" and run4[-1]["err"] == 1 and "работа не потеряна" in run4[-1]["t"], run4
 assert [m["t"] for m in run4 if m["st"] == "write"] == ["текст"], run4   # шаги доиграны, а не продублированы
 ok("обрыв: честное «работа не потеряна» + переподключение к журналу запроса (CH_RETRY)")
+# --- история при отправке не режет длинную голосовую до 4000 (баг-репорт 023) ---
+assert out["LEN5"] == 6000, out["LEN5"]   # диктовка 6000 символов доходит до модели целиком
+assert out["LEN6"] == 40000, out["LEN6"]   # потолок = maxlength ввода = CHAT_MAX_CHARS
+ok("длинная голосовая уходит в модель целиком: при отправке нет обрезки до 4000 (потолок 40000)")
 print("test_chat_steps: OK")

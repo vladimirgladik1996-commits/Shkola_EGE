@@ -2296,8 +2296,8 @@ async def api_fragment(request):
     fragment, meta = fragment_meta(j)
     audio, mime = voice_audio(j)
     text = j.get("text")
-    if text is not None and (not isinstance(text, str) or len(text) > 4000):
-        raise ValueError
+    if text is not None and (not isinstance(text, str) or len(text) > assist.CHAT_MAX_CHARS):
+        raise ValueError   # тот же потолок, что у истории чата: длинная голосовая команда не отбрасывается
     dur = j.get("dur")
     if dur is not None and (isinstance(dur, bool) or not isinstance(dur, (int, float)) or not dur >= 0):
         raise ValueError
@@ -2319,7 +2319,7 @@ async def api_fragment(request):
             return web.json_response({"ok": True, "stage": "stub", "reply": whisper.NO_SPEECH_MSG})
         if not heard:
             return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись — нажмите кнопку и скажите ещё раз."})
-        text = heard[:4000]
+        text = heard[:assist.CHAT_MAX_CHARS]   # без потолка 4000 (баг-репорт 019): длинная диктовка доходит до модели целиком
     if FRAG_BUSY.get(uid, 0) >= 2:
         return web.json_response({"ok": True, "stage": "busy", "reply": "Предыдущие ответы ещё готовятся — подождите минуту и повторите.",
                                   **({"heard": heard} if heard else {})})

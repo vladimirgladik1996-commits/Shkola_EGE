@@ -5019,7 +5019,7 @@ async function chAsk(resume){
   const ok=CH.filter(m=>!m.err&&!m.live&&!m.step),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
   const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
     if(a.length&&m.r=="u"){if(m===last)t=t||"Разбери вложенные материалы.";else t+=" [вложения: "+a.map(x=>x.n).join(", ")+"]"}
-    return {role:m.r=="u"?"user":"assistant",text:t.slice(0,4000)}});
+    return {role:m.r=="u"?"user":"assistant",text:t.slice(0,40000)}});   /* потолок = maxlength поля ввода = CHAT_MAX_CHARS на сервере: длинная голосовая доходит до модели целиком, а НЕ режется до 4000 */
   const files=((last&&last.a)||[]).filter(x=>x.d).map(x=>({name:x.n,mime:x.mime||"",data:x.d}));
   const atts=(last&&last.r=="u"&&last.a)||[];
   let acc="",file=null,fin=false,got=false,seen=false,why="Не получилось получить ответ. Проверьте связь и повторите.";
