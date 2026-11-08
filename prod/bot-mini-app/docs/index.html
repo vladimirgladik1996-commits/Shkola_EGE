@@ -4418,8 +4418,19 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&matIsOpen)matClose(
 /* ---------- Чат с ИИ (раздел «ch») ---------- */
 let CH=[],chDeep=false,chFmt=0,chAtt=[],chBusy=false,chRec=null,chProc=null;
 const CH_MAX=5,CH_BYTES=8*1024*1024,CH_EXT=["pdf","docx","txt","md","csv"],CH_FMT=["text","docx","pdf","image"];
-try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string").slice(-40).map(m=>({r:m.r,t:m.t,src:typeof m.src=="string"?m.src:undefined,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k,u:typeof x.u=="string"?x.u:undefined,m:typeof x.m=="string"?x.m:undefined})):undefined}))}catch(e){}
-const chSave=()=>{try{localStorage.chHist=JSON.stringify(CH.filter(m=>!m.err&&!m.live&&!m.step).slice(-40).map(m=>{const c={r:m.r,t:m.t};if(m.src)c.src=String(m.src).slice(0,60000);if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k,u:x.u,m:x.m}));return c}))}catch(e){}};   // в память телефона — текст, источник файла и ссылки на скачивание (шаги работы — нет)
+try{const h=JSON.parse(localStorage.chHist||"[]");if(Array.isArray(h))CH=h.filter(m=>m&&(m.r=="u"||m.r=="a")&&typeof m.t=="string"&&(!m.s||m.s=="think")).slice(-72).map(m=>m.s=="think"
+  ?{r:"a",step:1,st:"think",lbl:"думает",t:m.t}   // рассуждения переживают выход: восстанавливаются блоками «💜 Вишенка думает…»
+  :{r:m.r,t:m.t,src:typeof m.src=="string"?m.src:undefined,a:Array.isArray(m.a)?m.a.filter(x=>x&&typeof x.n=="string").map(x=>({n:x.n,k:x.k,u:typeof x.u=="string"?x.u:undefined,m:typeof x.m=="string"?x.m:undefined})):undefined})}catch(e){}
+const chSave=()=>{try{
+  /* в память телефона — текст, источник файла и ссылки на скачивание; ПЛЮС рассуждения шагами «думает»
+     (до 32 последних, даже недописанные — шаги стрима досохраняются на ходу): уход из мини-аппа/АПК
+     посреди стрима больше не съедает мысли Вишенки. Шаги работы и ошибки, как и раньше, не сохраняются;
+     в историю для модели шаги не попадают (фильтр !m.step в chAsk). Сброс — только «Создать новый чат». */
+  const th=CH.filter(m=>m.step&&m.st=="think"&&String(m.t||"").trim()).slice(-32),keep=new Set(th);
+  CH.filter(m=>!m.err&&!m.live&&!m.step).slice(-40).forEach(m=>keep.add(m));
+  localStorage.chHist=JSON.stringify(CH.filter(m=>keep.has(m)).map(m=>{if(m.step)return{r:"a",s:"think",t:String(m.t).slice(0,2000)};
+    const c={r:m.r,t:m.t};if(m.src)c.src=String(m.src).slice(0,60000);if(m.a&&m.a.length)c.a=m.a.map(x=>({n:x.n,k:x.k,u:x.u,m:x.m}));return c}))}catch(e){}};
+addEventListener("pagehide",chSave);   // уход из мини-аппа/АПК посреди стрима — досохраняем, что уже накопилось
 const CH_SVG=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const CH_DOC=l=>CH_SVG('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'+(l?`<text x="12" y="17" font-size="6" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700" font-family="sans-serif">${l}</text>`:""));
 const CH_IC={bolt:CH_SVG('<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>'),spark:CH_SVG('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),mic:CH_SVG('<rect class="mf" x="8.4" y="2.4" width="7.2" height="12.4" rx="3.6"/><path class="mg" d="M10.7 6.6h2.6M10.7 9.4h2.6"/><path d="M5 11.2a7 7 0 0014 0M12 18.3v3M8.6 21.3h6.8"/>'),x:CH_SVG('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'),stop:CH_SVG('<rect x="7" y="7" width="10" height="10" rx="2"/>'),
@@ -5006,7 +5017,7 @@ async function chSend(){
   const G=CH.length?null:chHeroGhost(),um={r:"u",t,a:chAtt.length?chAtt:undefined};CH.push(um);if(G){chHeroMsg=um;chHeroLag=1150}   // первое сообщение: картинка летит в пузырь
   chAtt=[];chAttUi();el.value="";chGrow(el);chAsk();chHeroFly(G)}
 async function chAsk(resume){
-  chBusy=true;chSave();chUpd(true);
+  chBusy=true;chSave();clearInterval(chAsk.tick);chAsk.tick=setInterval(chSave,1500);chUpd(true);   // шаги стрима досохраняются на ходу раз в 1,5 с
   const ok=CH.filter(m=>!m.err&&!m.live&&!m.step),last=ok[ok.length-1],fmt=CH_FMT[chFmt],deep=chDeep;
   const msgs=ok.slice(-20).map(m=>{let t=m.t||"";const a=m.a||[];
     if(a.length&&m.r=="u"){if(m===last)t=t||"Разбери вложенные материалы.";else t+=" [вложения: "+a.map(x=>x.n).join(", ")+"]"}
@@ -5020,7 +5031,7 @@ async function chAsk(resume){
   const finish=()=>{                       // хвосты шагов закрываем — готовый ответ остаётся последним сообщением
     if(fin)return;fin=true;chBusy=false;chStepEnd();
     CH=CH.filter(m=>!(m.step&&m.st=="think"&&!m.t.trim()));
-    chSave();if(tab=="ch")chUpd(true)};
+    clearInterval(chAsk.tick);chSave();if(tab=="ch")chUpd(true)};
   const answer=text=>{                     // ответ — последним сообщением, под всеми шагами Вишенки
     let m;
     if(fmt=="text"){
@@ -5059,7 +5070,7 @@ async function chAsk(resume){
   }
   if(!fin){chBusy=false;chStepEnd();
     if(seen&&!got)why="Связь с сервером прервалась, но работа не потеряна: ответ готовится дальше и придёт в Telegram-бот. Нажмите «Повторить» — подключусь к результату с места обрыва.";
-    CH.push({r:"a",t:why,err:1});chSave();if(tab=="ch")chUpd(true)}
+    CH.push({r:"a",t:why,err:1});clearInterval(chAsk.tick);chSave();if(tab=="ch")chUpd(true)}
 }   // ушли из раздела — ответ сохранён, интерфейс не трогаем
 
 /* ---------- меню-гамбургер ---------- */
