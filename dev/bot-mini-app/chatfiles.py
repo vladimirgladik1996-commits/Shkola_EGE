@@ -236,10 +236,10 @@ def parse_doc(text, attach=None):
         s = l.strip()
         m = re.match(r"^(#{1,4})\s+(.*)$", s)
         if not have_title:
-            if re.match(r"^([-*•]|\d+[.)])\s", s):          # ответ сразу со списка — заголовка нет
+            if re.match(r"^([-*•—–]|\d+[.)])\s", s):          # ответ сразу со списка — заголовка нет
                 have_title = True
                 title = "Ответ"
-                mm = re.match(r"^(?:[-*•]|(\d+)[.)])\s+(.*)$", s)
+                mm = re.match(r"^(?:[-*•—–]|(\d+)[.)])\s+(.*)$", s)
                 blocks.append(("li", (mm.group(1) + ".") if mm.group(1) else "•", _runs(mm.group(2))))
                 return
             title = _plain(_runs((m.group(2) if m else s).strip())) or "Ответ"
@@ -248,7 +248,7 @@ def parse_doc(text, attach=None):
         if m:
             blocks.append(("h", _runs(m.group(2))))
             return
-        m = re.match(r"^(?:[-*•]|(\d+)[.)])\s+(.*)$", s)
+        m = re.match(r"^(?:[-*•—–]|(\d+)[.)])\s+(.*)$", s)
         if m:
             blocks.append(("li", (m.group(1) + ".") if m.group(1) else "•", _runs(m.group(2))))
             return
@@ -314,14 +314,18 @@ def _run_xml(text, st, size, color=None):
     return f'<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{escape(_BAD_XML.sub("", text))}</w:t></w:r>'
 
 
-def _para(runs, size=22, ind=None, after=120, color=None, first=None, brk=False):
+def _para(runs, size=22, ind=None, after=120, before=0, color=None, first=None, brk=False, keep=False):
     """first — абзацный отступ первой строки в twips (1.25 см ≈ 709): сплошный текст без
     отступов сливается в одно полотно — у сочинений и эссе абзацы должны члениться видимо.
     brk — абзац начинается с НОВОЙ страницы (w:pageBreakBefore): раздел «Ответы для
-    самопроверки» всегда уезжает на отдельный лист."""
-    ppr = ('<w:pageBreakBefore/>' if brk else "") + f'<w:spacing w:after="{after}"/>' + (
+    самопроверки» всегда уезжает на отдельный лист.
+    before — отступ СВЕРХУ (twips): заголовок отделён от чужого текста и прижат к своему.
+    keep — абзац не отрывается от следующего (w:keepNext): заголовок не виснет внизу страницы.
+    Порядок дочерних w:pPr — СТРОГО по схеме OOXML (keepNext → pageBreakBefore → spacing → ind)."""
+    ppr = (('<w:keepNext/>' if keep else "") + ('<w:pageBreakBefore/>' if brk else "")
+           + f'<w:spacing w:before="{before}" w:after="{after}"/>' + (
         f'<w:ind w:left="{ind[0]}" w:hanging="{ind[1]}"/>' if ind else
-        (f'<w:ind w:firstLine="{first}"/>' if first else ""))
+        (f'<w:ind w:firstLine="{first}"/>' if first else "")))
     return f'<w:p><w:pPr>{ppr}</w:pPr>' + "".join(_run_xml(t, st, size, color) for t, st in runs) + "</w:p>"
 
 
@@ -406,8 +410,10 @@ def docx_bytes(title, blocks, footer_all=False):
     for b in blocks:
         k = b[0]
         if k == "h":
-            body.append(_para(_force(b[1], b=1), size=28, after=100, color=_NC,
-                             brk=_is_selfcheck(_plain(b[1]))))
+            # отступ СВЕРХУ 12 пт и keepNext: заголовок отделён от чужого раздела,
+            # прижат к своему тексту и не остаётся один внизу страницы
+            body.append(_para(_force(b[1], b=1), size=28, before=240, after=120, color=_NC,
+                             keep=True, brk=_is_selfcheck(_plain(b[1]))))
         elif k == "li":
             # маркер и текст — через неразрывный пробел: раньше «•» и текст склеивались («•Текст»)
             body.append(_para(_runs(b[1]) + [("\u00a0", {})] + b[2], size=22, ind=(500, 340), after=60))
@@ -431,7 +437,7 @@ def docx_bytes(title, blocks, footer_all=False):
             media.append((f"word/media/image{img_id}.png", png))
             body.append(f'<w:p>{_docx_img(rid, img_id, cx, cy)}</w:p>')
         else:
-            body.append(_para(b[1], size=22, after=60, first=709,
+            body.append(_para(b[1], size=22, after=120, first=709,
                               brk=_is_selfcheck(_plain(b[1]))))   # абзацный отступ 1.25 см; «Ответы…» — с новой страницы
     # фирменные шапка (первая страница) и подвал (последняя страница); нет картинок — обычный документ
     hdr_png, ftr_png = _asset("header.png"), _asset("footer.png")
