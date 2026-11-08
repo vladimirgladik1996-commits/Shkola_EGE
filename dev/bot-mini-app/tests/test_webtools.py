@@ -1,0 +1,161 @@
+"""Инструменты поиска в чате (webtools.py + tool_calls в kimi.py): накопитель tool_calls из стрима,
+исполнение и возврат role=tool, цикл «модель просит инструмент → получает результат → отвечает».
+Сеть подменена. Запуск: python3 tests/test_webtools.py
+"""
+import asyncio, json, os, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ.update(KIMI_API_KEY="123456:TESTKEY", KIMI_WEBTOOLS="1", LOG_LEVEL="CRITICAL")
+for k in ("KIMI_BASE_URL",):
+    os.environ.pop(k, None)
+sys.path.insert(0, ROOT)
+import kimi, webtools
+
+
+def ok(m):
+    print("  ✓", m)
+
+
+# --- накопитель tool_calls: id/имя/аргументы приходят кусками по index ---
+acc = {}
+kimi._tc_add(acc, [{"index": 0, "id": "call_1", "type": "function",
+                    "function": {"name": "web_search", "arguments": ""}}])
+kimi._tc_add(acc, [{"index": 0, "function": {"arguments": "{\"query\": \"ФИПИ\"}"}}])
+kimi._tc_add(acc, [{"index": 1, "id": "call_2", "function": {"name": "fetch", "arguments": "{\"url\": \"https://fipi.ru\"}"}}])
+calls = kimi._tc_list(acc)
+assert len(calls) == 2 and calls[0]["id"] == "call_1"
+assert calls[0]["function"] == {"name": "web_search", "arguments": "{\"query\": \"ФИПИ\"}"}
+assert calls[1]["function"]["name"] == "fetch"; ok("tool_calls собираются из дельт по index (2 вызова, аргументы склеены)")
+assert kimi._tc_list({}) == [] and kimi._tc_list({0: {"id": "", "name": "", "args": []}}) == []; ok("пустой накопитель → []")
+
+# --- исполнение tool_calls: сбой не роняет цикл, а превращается в строку ---
+async def good_exec(name, args):
+    return "РЕЗУЛЬТАТ: " + name
+
+async def bad_exec(name, args):
+    raise RuntimeError("net down")
+
+async def tool_results():
+    okr = await kimi._tool_results(calls, good_exec)
+    bad = await kimi._tool_results(calls, bad_exec)
+    return okr, bad
+
+okr, bad = asyncio.run(tool_results())
+assert [m["role"] for m in okr] == ["tool", "tool"]
+assert okr[0] == {"role": "tool", "tool_call_id": "call_1", "content": "РЕЗУЛЬТАТ: web_search"}
+assert bad[0]["content"] == "Инструмент недоступен — ответь без него."; ok("результаты → role=tool; сбой инструмента — строкой, не исключением")
+
+# --- build_payload: tools уходят в запрос, картинки к role=tool не подмешиваются ---
+tools_decl = [{"type": "function", "function": {"name": "web_search"}}]
+p = kimi.build_payload([{"role": "user", "content": "привет"}], tools=tools_decl)
+assert p["tools"] == tools_decl and "tools" not in kimi.build_payload([{"role": "user", "content": "x"}]); ok("build_payload: tools передаётся только когда задан")
+p = kimi.build_payload([{"role": "assistant", "content": "", "tool_calls": calls},
+                        {"role": "tool", "tool_call_id": "call_1", "content": "Р"}], images=["QQ=="])
+assert p["messages"][-1]["content"] == "Р"; ok("картинки не подмешиваются к сообщениям role=tool")
+
+# --- webtools: имена, результат fibers, угадывание формулы ---
+assert webtools._tool_name({"type": "function", "function": {"name": "web_search"}}) == "web_search"
+assert webtools._tool_name({"name": "fetch"}) == "fetch"; ok("_tool_name читает оба формата деклараций")
+assert webtools._result_text({"context": {"output": "текст"}}) == "текст"
+assert "ENCRYPTED" in webtools._result_text({"context": {"encrypted_output": "----MOONSHOT ENCRYPTED BEGIN----x"}})
+assert webtools._result_text({}) == ""; ok("_result_text: output / encrypted_output / пусто")
+assert webtools._guess_uri("web_search") == webtools.FORMULAS[0] and webtools._guess_uri("fetch") == webtools.FORMULAS[1]
+assert webtools._guess_uri("nope") is None; ok("_guess_uri: web_search/fetch → формулы, иное → None")
+
+# --- declarations: кэш и устойчивость к сбоям (сеть подменена) ---
+async def fake_fetch(s):
+    return ([{"type": "function", "function": {"name": "web_search"}},
+             {"type": "function", "function": {"name": "fetch"}}],
+            {"web_search": webtools.FORMULAS[0], "fetch": webtools.FORMULAS[1]})
+
+async def fail_fetch(s):
+    raise RuntimeError("no net")
+
+real_fetch = webtools._fetch_all
+webtools._fetch_all = fake_fetch
+d1 = asyncio.run(webtools.declarations())
+d2 = asyncio.run(webtools.declarations())
+assert d1 == d2 and len(d1) == 2; ok("declarations: декларации загружаются и кэшируются")
+assert webtools._cache["by_name"]["web_search"] == webtools.FORMULAS[0]; ok("имена инструментов привязаны к своим формулам")
+webtools._fetch_all = fail_fetch
+webtools._cache["tools"] = None                     # «перезапуск»: сбой загрузки → None без исключения
+assert asyncio.run(webtools.declarations()) is None
+assert asyncio.run(webtools.declarations()) is None; ok("после сбоя повтор не раньше RETRY_ON_FAIL, ничего не падает")
+webtools._fetch_all = real_fetch
+
+# --- сквозной цикл ask_stream: модель просит web_search → получает результат → отвечает текстом ---
+ROUNDS = [["data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"web_search\",\"arguments\":\"\"}}]}}]}",
+           "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"query\\\": \\\"ФИПИ\\\"}\"}}]}}]}",
+           "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+           "data: [DONE]"],
+          ["data: {\"choices\":[{\"delta\":{\"content\":\"ответ по свежим данным\"}}]}",
+           "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}",
+           "data: [DONE]"]]
+SENT = []
+
+
+class FakeResp:
+    status = 200
+
+    def __init__(self, lines):
+        self._lines, self.content = lines, self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def __aiter__(self):
+        return self._gen()
+
+    async def _gen(self):
+        for line in self._lines:
+            yield line.encode("utf-8") if isinstance(line, str) else line
+
+    async def text(self):
+        return ""
+
+
+class FakeSession:
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def post(self, url, json=None, headers=None):
+        SENT.append(json)
+        return FakeResp(ROUNDS.pop(0))
+
+
+real_session = kimi.aiohttp.ClientSession
+kimi.aiohttp.ClientSession = FakeSession
+EXEC_LOG = []
+
+
+async def exec_log(name, args):
+    EXEC_LOG.append((name, args))
+    return "выдача по запросу ФИПИ"
+
+async def run_stream():
+    ev = []
+    async for pair in kimi.ask_stream([{"role": "user", "content": "какие требования ФИПИ?"}],
+                                      tools=tools_decl, tool_exec=exec_log):
+        ev.append(pair)
+    return ev
+
+ev = asyncio.run(run_stream())
+kimi.aiohttp.ClientSession = real_session
+assert EXEC_LOG == [("web_search", "{\"query\": \"ФИПИ\"}")]; ok("модель сама запросила web_search — инструмент исполнен с её аргументами")
+assert ev == [("text", "ответ по свежим данным")]; ok("после результата инструмента модель отвечает текстом (дельты как обычно; done добавляет chat_stream)")
+assert len(SENT) == 2 and SENT[0]["tools"] == tools_decl
+hist = SENT[1]["messages"]
+assert hist[-2]["role"] == "assistant" and hist[-2]["tool_calls"][0]["id"] == "call_1"
+assert hist[-1] == {"role": "tool", "tool_call_id": "call_1", "content": "выдача по запросу ФИПИ"}
+assert hist[0] == {"role": "user", "content": "какие требования ФИПИ?"}; ok("история: assistant с tool_calls + role=tool уходят в следующий запрос целиком")
+
+print("test_webtools: all good")

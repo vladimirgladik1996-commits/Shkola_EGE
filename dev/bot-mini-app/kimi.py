@@ -14,6 +14,7 @@
   KIMI_TIMEOUT_DEEP — потолок «глубокого» запроса, по умолчанию 3600 с
   KIMI_SOCK_READ  — сколько секунд ТИШИНЫ в потоке считать обрывом, по умолчанию 300
   KIMI_CONNECT    — таймаут установки соединения, по умолчанию 30
+  KIMI_TOOL_ROUNDS — сколько заходов tool_calls (web_search/fetch, см. webtools.py) на один ответ, по умолчанию 4
 
 ВАЖНО ПРО ЛИМИТ ТОКЕНОВ (это и была причина «ИИ сейчас не отвечает»):
   `max_tokens` у Kimi ограничивает СУММУ `reasoning_content` + `content`
@@ -86,6 +87,8 @@ CONNECT = _flt("KIMI_CONNECT", 30, 3, 300)
 
 # Продолжение обрезанного ответа: сколько заходов допускается и как просим продолжать.
 MAX_CONT = _int("KIMI_MAX_CONT", 3, 1, 10)
+# Сколько заходов tool_calls (web_search/fetch) допускается на один ответ чата (см. webtools.py).
+MAX_TOOL_ROUNDS = _int("KIMI_TOOL_ROUNDS", 4, 1, 10)
 CONT_PROMPT = ("Продолжай ответ ровно с места, где он оборвался: без повторов уже "
                "написанного, без вступлений и пояснений — сразу продолжение текста.")
 
@@ -175,7 +178,8 @@ def _smaller_budget(model, budget, err_text=""):
     return None
 
 
-def build_payload(messages, model=None, deep=False, json_mode=False, images=None, thinking=False, max_tokens=None):
+def build_payload(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
+                  max_tokens=None, tools=None):
     """Тело запроса /chat/completions.
 
     • temperature/top_p не передаём: у K2.x и K3 они фиксированы, API отвечает ошибкой
@@ -185,10 +189,13 @@ def build_payload(messages, model=None, deep=False, json_mode=False, images=None
       быстрый ответ — размышления выключены, глубокий — включены. У K3 размышление
       всегда включено и управляется reasoning_effort (режим K3), поле thinking K3 не принимает.
     • json_mode — ответ строго в JSON (response_format json_object): используется для разбора задач.
-    • images — список base64/jpeg|png|webp: подмешиваются в последнее сообщение (vision)."""
+    • images — список base64/jpeg|png|webp: подмешиваются в последнее сообщение (vision);
+      к сообщениям role=tool/assistant не подмешиваются — только к реплике пользователя.
+    • tools — декларации официальных инструментов (webtools.declarations): модель сама решает,
+      когда искать в интернете; исполнение tool_calls — в _ask_stream через tool_exec."""
     m = resolve_model(model, deep)
     content = messages[-1]["content"]
-    if images:
+    if images and messages[-1].get("role") == "user":
         parts = [{"type": "text", "text": content if isinstance(content, str) else ""}]
         for i in images:
             parts.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + i}})
@@ -208,7 +215,50 @@ def build_payload(messages, model=None, deep=False, json_mode=False, images=None
         p["reasoning_effort"] = EFFORT
     if json_mode:
         p["response_format"] = {"type": "json_object"}
+    if tools:
+        p["tools"] = tools
     return p
+
+
+def _tc_add(tc_acc, tcs):
+    """Дельта tool_calls из стрима → накопитель по index (id/имя/аргументы приходят кусками)."""
+    for tc in tcs:
+        if not isinstance(tc, dict):
+            continue
+        slot = tc_acc.setdefault(tc.get("index") or 0, {"id": "", "name": "", "args": []})
+        if tc.get("id"):
+            slot["id"] = tc["id"]
+        fn = tc.get("function") or {}
+        if fn.get("name"):
+            slot["name"] = fn["name"]
+        if fn.get("arguments"):
+            slot["args"].append(fn["arguments"])
+
+
+def _tc_list(tc_acc):
+    """Накопитель → готовые tool_calls для истории (формат OpenAI) или пустой список."""
+    out = []
+    for i in sorted(tc_acc):
+        s = tc_acc[i]
+        if not s["name"]:
+            continue
+        out.append({"id": s["id"] or "call_%s" % i, "type": "function",
+                    "function": {"name": s["name"], "arguments": "".join(s["args"])}})
+    return out
+
+
+async def _tool_results(calls, tool_exec):
+    """Исполнить tool_calls модели → сообщения role=tool для истории. Сбой — строкой, не исключением."""
+    out = []
+    for c in calls:
+        name, args = c["function"]["name"], c["function"]["arguments"]
+        try:
+            res = await tool_exec(name, args)
+        except Exception as e:
+            log.warning("kimi: инструмент %s не выполнился: %r", name, e)
+            res = "Инструмент недоступен — ответь без него."
+        out.append({"role": "tool", "tool_call_id": c["id"], "content": str(res)[:20000]})
+    return out
 
 
 def _continue_run(run, acc):
@@ -325,7 +375,7 @@ def _stream_line(st, err=None, tag=""):
 
 
 async def ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
-                     max_tokens=None, _attempt=0, tag=""):
+                     max_tokens=None, tools=None, tool_exec=None, _attempt=0, tag=""):
     """Стриминг ответа модели (подробности — в _ask_stream). Каждый стрим пишет в лог ОДНУ строку:
     время до первого токена мышления и ответа, длительность, токены (вход/выход/мышление/из кэша —
     суммой по всем заходам), число заходов и продолжений. Текст запросов и ответов в лог не попадает.
@@ -333,7 +383,8 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
     st = {"t0": time.monotonic(), "calls": 0, "cont": 0}
     err = None
     gen = _ask_stream(messages, model=model, deep=deep, json_mode=json_mode, images=images,
-                      thinking=thinking, max_tokens=max_tokens, _attempt=_attempt, _stat=st)
+                      thinking=thinking, max_tokens=max_tokens, tools=tools, tool_exec=tool_exec,
+                      _attempt=_attempt, _stat=st)
     try:
         async for ev, v in gen:
             now = time.monotonic() - st["t0"]
@@ -353,13 +404,17 @@ async def ask_stream(messages, model=None, deep=False, json_mode=False, images=N
 
 
 async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=None, thinking=False,
-                      max_tokens=None, _attempt=0, _stat=None):
+                      max_tokens=None, tools=None, tool_exec=None, _attempt=0, _stat=None):
     """Стриминг ответа модели: async-генератор пар (тип, дельта).
 
     Типы: «think» — кусочек размышления (reasoning_content), «text» — кусочек ответа,
     «err» — сбой («off» — нет ключа, «http» — API отказал, «net» — сеть/таймаут,
     «empty» — модель не вернула ни одного кусочка ответа); после err генератор завершается.
     Мысль идёт отдельными дельтами — её показывают «от имени Вишенки» («Вишенка думает…»).
+
+    tools/tool_exec — официальные инструменты Kimi (web_search/fetch, см. webtools.py): модель САМА
+    решает, когда искать в интернете; её tool_calls исполняются tool_exec и возвращаются в историю
+    сообщениями role=tool (до MAX_TOOL_ROUNDS заходов), дельты каждого захода идут теми же событиями.
 
     Модель и режим НЕ МЕНЯЮТСЯ ни на одном шаге: повтор идёт строго с той же моделью
     и тем же режимом, что и первый заход (требование: «выбрана K3 — работает K3»).
@@ -390,10 +445,10 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
     if max_tokens is None:
         budget = _clamp_to_known(m, budget)
     run, acc, cont, cretry = list(messages), [], 0, 0    # run — диалог с закреплёнными продолжениями
-    attempt, drops = 0, 0
+    attempt, drops, tool_rounds = 0, 0, 0
     while True:
         body = build_payload(run, model=m, deep=deep, json_mode=json_mode, images=images,
-                             thinking=thinking, max_tokens=budget)
+                             thinking=thinking, max_tokens=budget, tools=tools)
         body["stream"] = True
         body["stream_options"] = {"include_usage": True}    # usage в конце стрима — видно, сгорел ли бюджет
         if _stat is not None:
@@ -401,6 +456,7 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
             _stat["max_tokens"] = body.get("max_tokens")
         finish, usage, got_text, broke, done = None, None, False, False, False
         buf = []                            # текст этого захода — для закрепления в продолжении
+        tc_acc = {}                         # накопитель tool_calls этого захода (см. _tc_add)
         try:
             async with aiohttp.ClientSession(timeout=stream_timeout()) as s:
                 async with s.post(BASE + "/chat/completions", json=body,
@@ -443,12 +499,27 @@ async def _ask_stream(messages, model=None, deep=False, json_mode=False, images=
                             got_text = True
                             buf.append(tx)
                             yield "text", tx
+                        tcs = d.get("tool_calls")
+                        if isinstance(tcs, list):
+                            _tc_add(tc_acc, tcs)
         except Exception as e:                    # сеть, таймаут, кривой SSE — всё мимо бота
             log.warning("kimi: стрим не прошёл: %r", e)
             broke = True
         if _stat is not None:
             _stat["finish"], _stat["cont"] = finish, cont
             _usage_add(_stat, usage)
+        calls = _tc_list(tc_acc)            # модель запросила инструменты (web_search/fetch)
+        if calls and not broke and tool_exec is not None and tool_rounds < MAX_TOOL_ROUNDS:
+            if got_text:
+                acc += buf                  # текст этого захода — часть ответа
+            run += [{"role": "assistant", "content": "".join(buf), "tool_calls": calls}]
+            run += await _tool_results(calls, tool_exec)
+            tool_rounds += 1
+            log.info("kimi: tool_calls %s — исполняю (заход %d/%d)",
+                     [c["function"]["name"] for c in calls], tool_rounds, MAX_TOOL_ROUNDS)
+            continue                        # новый заход с результатами инструментов в истории
+        if calls:
+            log.warning("kimi: tool_calls без исполнителя/лимит — отдаю текст как есть")
         cut = broke or finish == "length" or (got_text and not done and finish is None)
         if got_text:
             acc += buf

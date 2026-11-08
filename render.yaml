@@ -77,6 +77,11 @@ services:
         sync: false # ключ STT: OpenAI (/audio/transcriptions) или Groq
       - key: KIMI_BASE_URL
         value: "https://api.moonshot.ai/v1" # или https://api.moonshot.cn/v1 (Китай)
+      # Интернет для «Чата с ИИ»: модель сама ищет официальными инструментами Kimi
+      # (web_search + fetch; старый встроенный $web_search отключён 20.10.2026).
+      # Веб-поиск тарифицируется за вызов. 0 — чат без инструментов (см. webtools.py).
+      - key: KIMI_WEBTOOLS
+        value: "1"
       - key: WHISPER_BASE_URL
         value: "https://api.openai.com/v1" # для Groq: https://api.groq.com/openai/v1
 
@@ -160,6 +165,9 @@ services:
         sync: false # ключ STT (можно тот же, что и в прод)
       - key: KIMI_BASE_URL
         value: "https://api.moonshot.ai/v1"
+      # Интернет для «Чата с ИИ» (см. webtools.py и комментарий в сервисе tutor-bot выше)
+      - key: KIMI_WEBTOOLS
+        value: "1"
       - key: WHISPER_BASE_URL
         value: "https://api.openai.com/v1"
       # «ИИ-проверка»: YANDEX_API_KEY — в панели (секрет, как KIMI_API_KEY); EC_LIVE=1 — фото уходят в API
