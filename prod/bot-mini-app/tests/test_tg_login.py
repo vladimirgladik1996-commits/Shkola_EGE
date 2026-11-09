@@ -150,4 +150,12 @@ for side, scheme in (("dev", "kabinet-dev"), ("prod", "kabinet")):
     ok(f"{side}: панель АПК — имя/аватар из Telegram при входе, «Скачать мобильное приложение» в приложении скрыт")
     assert "tgl:y:" not in bot and "auth.logout(c.from_user.id)" in bot, side   # вход без вопросов + кнопка отзыва
     ok(f"{side}: манифест ({scheme}://login, singleTask), MainActivity, страница и бот связаны")
+# --- скорость входа: подтверждение без ожидания профиля и без перезагрузки страницы ---
+for side in ("dev", "prod"):
+    b2 = rd(side, "bot-mini-app", "bot.py"); a2 = rd(side, "bot-mini-app", "auth.py"); h2 = rd(side, "bot-mini-app", "docs", "index.html")
+    assert "def tg_profile_fill(" in b2 and "asyncio.create_task(tg_profile_fill(" in b2, side
+    assert b2.index("auth.tg_confirm(code") < b2.index("tg_profile_fill(m.bot"), "подтверждение входа — ДО загрузки профиля"
+    assert "def tg_profile_update(" in a2 and "auth.tg_profile_update" in b2, side
+    assert "unlockApp()" in h2 and "location.reload();return}" not in h2, "после успешного входа — без перезагрузки страницы"
+ok("вход не ждёт аватар и не перезагружает страницу")
 print("OK")

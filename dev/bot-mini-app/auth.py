@@ -375,6 +375,14 @@ def tg_confirm(code, tg_id, username="", name="", photo=""):
     log.info("tg login confirmed: tg_id=%s name=%r photo=%d", tg_id, name, len(photo))
     return True
 
+def tg_profile_update(code, name, photo):
+    """Имя и аватар догружаются ПОСЛЕ tg_confirm фоном (см. tg_profile_fill в bot.py) — приложение
+    не ждёт профиль. Заявка могла уже закрыться — тогда обновление просто мимо, входу не мешает."""
+    name, photo = _tg_profile(name, photo)
+    if isinstance(code, str) and TG_CODE_RE.fullmatch(code):
+        _db.execute("update auth_tg set name=?, photo=? where code_h=?", (name, photo, _h(code)))
+        _db.commit()
+
 def tg_cancel(code):
     if isinstance(code, str) and TG_CODE_RE.fullmatch(code):
         _db.execute("delete from auth_tg where code_h=? and tg_id is null", (_h(code),)); _db.commit()

@@ -889,16 +889,30 @@ async def tg_profile(bot_, u):
         log.warning("tg profile: аватар не скачался tg_id=%s: %r", u.id, e)
     return name, photo
 
+async def tg_profile_fill(bot_, u, code):
+    """Имя и аватар — фоном ПОСЛЕ подтверждения входа (см. start): приложение не ждёт профиль.
+    Пока пользователь переключается обратно в приложение, профиль обычно успевает в заявку;
+    не успел/упал — панель покажет инициалы, входу это не мешает."""
+    try:
+        name, photo = await asyncio.wait_for(tg_profile(bot_, u), 6.0)
+        auth.tg_profile_update(code, name, photo)
+    except Exception as e:
+        log.warning("tg profile fill: профиль не обновился tg_id=%s: %r", u.id, e)
+
 
 @pub.message(CommandStart())
 async def start(m: Message, state: FSMContext, command: CommandObject):
     await state.clear()
     arg = command.args or ""
     if arg.startswith("login_"):                                   # быстрый вход в приложение (APK): /start login_<код> — без вопросов
-        name, photo = await tg_profile(m.bot, m.from_user)         # имя и аватар из Telegram — в панель приложения
-        if not auth.tg_confirm(arg[6:], m.from_user.id, m.from_user.username or "", name, photo):
+        code = arg[6:]
+        # Вход подтверждается СРАЗУ, имя и аватар догружаются фоном (tg_profile_fill): раньше профиль
+        # качался ДО tg_confirm (3 запроса к Bot API + скачивание файла) и приложение висело на
+        # «Ждём подтверждения…» секунды после нажатия «Запустить» — аватар лишь косметика панели.
+        if not auth.tg_confirm(code, m.from_user.id, m.from_user.username or ""):
             await m.answer("Ссылка устарела. Нажмите «Войти через Telegram» в приложении ещё раз.")
             return
+        asyncio.create_task(tg_profile_fill(m.bot, m.from_user, code))
         rows = [[InlineKeyboardButton(text="🚫 Это не я — отозвать вход", callback_data="tgl:r")]]
         if auth.BASE.startswith("https://"):                       # Telegram не принимает кнопку-ссылку без https-адреса
             rows.insert(0, [InlineKeyboardButton(text="↩️ Вернуться в приложение", url=f"{auth.BASE}/app-return")])
