@@ -19,7 +19,7 @@ yavision (модель handwritten; текст сохраняется ВМЕСТ
 """
 import asyncio, json, logging, math, os, re, time
 
-import fipicache, kimi, yavision
+import fipicache, kimi, ocrverify, yavision
 
 
 log = logging.getLogger("tutor.essaycheck")
@@ -388,6 +388,38 @@ def _result(a, essay, task, why="", kind=""):
             "score": {"got": got, "max": mx, "percent": pct, "level": level}}
 
 
+# Дефис в конце строки — это ЛИБО перенос («пере-»/«несённых» → «перенесённых»), ЛИБО часть
+# слова («что-»/«то», «по-»/«моему»). Раньше дефис терялся всегда: «кто-нибудь» превращалось
+# в «ктонибудь», «по-моему» в «помоему» — в «печатной версии» появлялось слово, которого
+# ученик не писал, и проверка находила несуществующую орфографическую ошибку.
+_HY_PRON = frozenset("что кто где куда когда как какой какая какое какие какого каким каком какому "
+                     "чей чья чьё чьи чего кого чему кому чем кем чём ком почему зачем откуда сколько "
+                     "который которая которое которые".split())
+_HY_ANY_RIGHT = frozenset({"либо", "нибудь", "таки"})              # кто-либо, где-нибудь, всё-таки
+_HY_KOE = frozenset({"кое", "кой"})                                 # кое-как, кое-что
+_HY_PO = frozenset({"по", "во", "в"})                               # по-русски, по-моему, во-первых
+_HY_PO_RIGHT = re.compile(
+    r"^(?:[а-яё]*(?:ски|ьи)|моему|твоему|нашему|вашему|своему|новому|старому|прежнему|другому|иному|"
+    r"разному|первых|вторых|третьих|четвёртых|четвертых|пятых)(?![а-яё])", re.I)
+_HY_LEFT_RE = re.compile(r"([а-яёa-z]+)-$", re.I)
+_HY_RIGHT_RE = re.compile(r"[а-яёa-z]+", re.I)
+
+
+def _keep_hyphen(cur, nxt):
+    """True — дефис в конце cur принадлежит слову (оставляем), False — это перенос (склеиваем)."""
+    ml, mr = _HY_LEFT_RE.search(cur), _HY_RIGHT_RE.match(nxt)
+    if not ml or not mr:
+        return False
+    left, right = ml.group(1).lower(), mr.group(0).lower()
+    if right in _HY_ANY_RIGHT or left in _HY_KOE:
+        return True
+    if right == "то" and left in _HY_PRON:
+        return True
+    if left == "из" and right in ("за", "под"):
+        return True
+    return left in _HY_PO and bool(_HY_PO_RIGHT.match(right))
+
+
 def _reflow(text):
     """Реконструкция абзацев OCR-текста (ДЕТЕРМИНИРОВАННО, без LLM).
     OCR отдаёт строки по визуальным переносам рукописи — на экране это «рандомный набор
@@ -412,7 +444,7 @@ def _reflow(text):
             continue
         # перенос по дефису: «сло-» + «во» -> «слово»
         if cur.endswith("-") and not cur.endswith("--"):
-            cur = cur[:-1] + s
+            cur = (cur if _keep_hyphen(cur, s) else cur[:-1]) + s
             continue
         if not cur:
             cur = s
@@ -610,8 +642,49 @@ async def run(w, t, kind="ege"):
             log.warning("essaycheck: кэш ФИПИ не дал критерии: %r", e)
             return ""
 
-    (pages, werr), (tpages, terr), extra = await asyncio.gather(_ocr(w), _ocr(t), _criteria())
-    t_ocr = time.monotonic() - t0              # OCR работы, OCR задания и критерии идут параллельно
+    async def _ocr2(images):
+        """Второй прогон работы другой моделью Яндекса (page) — только чтобы найти спорные слова
+        (Яндекс не отдаёт ни вариантов, ни уверенности). Строго best-effort: любой сбой → None."""
+        if not images or not ocrverify.enabled():
+            return None
+        try:
+            return await asyncio.wait_for(
+                yavision.recognize_many(images, model="page", parallel=ocrverify.PAR2, retries=0), ocrverify.ocr2_timeout())
+        except Exception as e:                 # в т.ч. TimeoutError: дольше ocr2_timeout() основную проверку не держим
+            log.warning("essaycheck: второй прогон OCR не удался (%r) — перепроверка слов пропущена", e)
+            return None
+
+    main = asyncio.gather(_ocr(w), _ocr(t), _criteria())    # основной OCR стартует первым
+    # второй прогон идёт ПАРАЛЛЕЛЬНО основному (скорость: время OCR не растёт), но с ограниченной параллельностью и
+    # без повторов (качество/надёжность: основной OCR не теряет квоту Яндекса), а его сбой/таймаут ничего не ломает
+    t2 = asyncio.ensure_future(_ocr2(w)) if w else None
+    try:
+        (pages, werr), (tpages, terr), extra = await main
+        t_ocr = time.monotonic() - t0          # OCR работы, OCR задания и критерии идут параллельно
+        pages2 = None
+        if t2 is not None:
+            if pages and not werr:
+                try:                           # обычно второй прогон готов одновременно с основным; если он заметно
+                    pages2 = await asyncio.wait_for(asyncio.shield(t2), ocrverify.grace())   # медленнее — не ждём
+                except asyncio.TimeoutError:
+                    log.warning("essaycheck: второй прогон OCR не успел за %.0f с после основного — перепроверка пропущена",
+                                ocrverify.grace())
+                    t2.cancel()
+            else:
+                t2.cancel()
+    finally:
+        if t2 is not None and not t2.done():
+            t2.cancel()
+    # перепроверка спорных слов: расхождение двух моделей Яндекса → вырезка слова → Кими читает буква в букву.
+    # Текст меняется только при уверенном ответе; любой сбой оставляет распознанное Яндексом как есть.
+    if pages and not werr and pages2 and len(pages2) == len(pages):
+        try:
+            doubts = ocrverify.compare(pages, pages2)
+            if doubts:
+                yield "status", "Перепроверяю неразборчивые слова"      # только когда спорные слова реально нашлись
+                await asyncio.wait_for(ocrverify.resolve(w, pages, doubts), ocrverify.timeout())
+        except Exception as e:                 # CancelledError/GeneratorExit сюда не попадают (BaseException)
+            log.warning("essaycheck: перепроверка слов не удалась (%r) — остаётся распознанное Яндексом", e)
     task = _reflow("\n\n".join(_s(p.get("text")) for p in (tpages or [])).strip())
     # часть фото не распозналась — итог честно помечаем (фронт: «часть данных получить не удалось»)
     part = any(isinstance(p, dict) and p.get("failed") for p in list(pages or []) + list(tpages or []))

@@ -126,13 +126,46 @@ def parse(j):
     return {"text": text.strip(), "words": words}
 
 
-async def _recognize_one(session, sem, img_b64):
-    """Одно фото → {"text","words"}. Один повтор при сбое сети."""
-    body = {"mimeType": "JPEG", "languageCodes": ["ru"], "model": "handwritten",
+def parse_lw(j):
+    """Только слова внутри строк (blocks → lines → words): [{t,x1,y1,x2,y2,li,s,n}].
+    li — номер строки, s/n — позиция слова в fullText (textSegments), если API её отдал.
+    Нужна перепроверке спорных слов (ocrverify): parse() держит строки и слова вперемешку.
+    Терпима к любому мусору — при сбое разбора просто пустой список."""
+    try:
+        res = (j or {}).get("result")
+        res = res if isinstance(res, dict) else (j or {})
+        ta = res.get("textAnnotation") if isinstance(res.get("textAnnotation"), dict) else {}
+        w, h = _dim(ta.get("width")), _dim(ta.get("height"))
+        out, li = [], 0
+        for b in ta.get("blocks") or []:
+            for ln in (b.get("lines") if isinstance(b, dict) else None) or []:
+                for wd in (ln.get("words") if isinstance(ln, dict) else None) or []:
+                    t = wd.get("text") if isinstance(wd, dict) else None
+                    box = _box(wd.get("boundingBox"), w, h) if isinstance(t, str) and t.strip() else None
+                    if not box:
+                        continue
+                    e = {"t": t.strip(), **box, "li": li}
+                    segs = wd.get("textSegments")
+                    if isinstance(segs, list) and segs and isinstance(segs[0], dict):
+                        try:
+                            e["s"], e["n"] = int(segs[0].get("startIndex")), int(segs[0].get("length"))
+                        except (TypeError, ValueError):
+                            pass
+                    out.append(e)
+                li += 1
+        return out
+    except Exception:
+        return []
+
+
+async def _recognize_one(session, sem, img_b64, model="handwritten", retries=None):
+    """Одно фото → {"text","words"[,"lw"]}. Повторы при сбое сети. model: handwritten | page."""
+    body = {"mimeType": "JPEG", "languageCodes": ["ru"], "model": model,
             "content": img_b64}
     last = "net"
     t0 = time.monotonic()
-    for attempt in range(RETRIES + 1):
+    retries = RETRIES if retries is None else retries
+    for attempt in range(retries + 1):
         try:
             async with sem:
                 async with session.post(API, json=body,
@@ -142,12 +175,15 @@ async def _recognize_one(session, sem, img_b64):
                         raw = await r.text()
                         log.warning("yavision: HTTP %s: %s", r.status, raw[:200])
                         last = "http"
-                        if r.status in (408, 429, 500, 502, 503, 504) and attempt < RETRIES:
+                        if r.status in (408, 429, 500, 502, 503, 504) and attempt < retries:
                             await asyncio.sleep(min(8.0, 1.5 * 2 ** attempt) + random.uniform(0, 0.5))
                             continue
                         raise VisionError("http")
                     j = await r.json(content_type=None)
                     res = parse(j)
+                    lw = parse_lw(j)
+                    if lw:
+                        res["lw"] = lw
                     if not res["text"] and not res["words"]:
                         log.warning("yavision: распознано пусто (фото без текста?)")
                     log.info("yavision: фото распознано dt=%.1fs попыток=%d слов=%d", time.monotonic() - t0,
@@ -158,16 +194,18 @@ async def _recognize_one(session, sem, img_b64):
         except Exception as e:                      # сеть, таймаут, кривой JSON
             log.warning("yavision: попытка %s не удалась: %r", attempt + 1, e)
             last = "net"
-            if attempt < RETRIES:
+            if attempt < retries:
                 await asyncio.sleep(min(8.0, 1.5 * 2 ** attempt) + random.uniform(0, 0.5))
     log.warning("yavision: фото не распознано dt=%.1fs попыток=%d причина=%s", time.monotonic() - t0,
-                RETRIES + 1, last)
+                retries + 1, last)
     raise VisionError(last)
 
 
-async def recognize_many(images):
+async def recognize_many(images, model="handwritten", parallel=None, retries=None):
     """Список фото (base64 jpeg) → список {"text","words"} по порядку страниц.
-    Параллельность ограничена MAX_PARALLEL (env YANDEX_MAX_PARALLEL).
+    Параллельность ограничена MAX_PARALLEL (env YANDEX_MAX_PARALLEL); parallel/retries — свои пределы на вызов
+    (второй, необязательный прогон перепроверки берёт мало параллельных и без повторов, чтобы не отнимать
+    квоту у основного).
 
     Надёжность: сбой ЧАСТИ фото не роняет проверку — вместо страницы подставляется
     заглушка {"text":"","words":[],"failed":True} (позиция в списке сохраняется —
@@ -177,12 +215,15 @@ async def recognize_many(images):
         return []
     if not enabled():
         raise VisionError("net")
-    sem = asyncio.Semaphore(MAX_PARALLEL)
+    par = min(MAX_PARALLEL, parallel) if parallel else MAX_PARALLEL
+    sem = asyncio.Semaphore(par)
     t0 = time.monotonic()
 
     async def safe(session, img):
         try:
-            return await _recognize_one(session, sem, img), ""
+            if retries is None:
+                return await _recognize_one(session, sem, img, model), ""
+            return await _recognize_one(session, sem, img, model, retries), ""
         except VisionError as e:
             return None, e.code
         except Exception as e:                      # страховка: один сбой не должен ронять остальных
@@ -193,7 +234,7 @@ async def recognize_many(images):
         out = await asyncio.gather(*[safe(session, img) for img in images])
     bad = sum(1 for res, _ in out if res is None)
     log.info("yavision: фото=%d распознано=%d сбой=%d dt=%.1fs параллельно<=%d", len(images), len(out) - bad, bad,
-             time.monotonic() - t0, MAX_PARALLEL)
+             time.monotonic() - t0, par)
     if all(res is None for res, _ in out):
         raise VisionError(next((code for _, code in out if code), "net"))
     return [res if res is not None else {"text": "", "words": [], "failed": True}

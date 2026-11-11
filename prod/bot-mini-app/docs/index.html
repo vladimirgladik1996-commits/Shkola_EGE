@@ -3684,7 +3684,7 @@ function ecCnt(){return ecShots.w.length+ecShots.t.length}
 function ecInp(){let i=$("#ec-inp");if(!i){i=document.createElement("input");i.type="file";i.id="ec-inp";i.accept="image/*";i.setAttribute("capture","environment");i.multiple=true;i.hidden=true;i.className="aic-hid";i.onchange=()=>ecPicked(i);document.body.appendChild(i)}return i}   /* запасной путь камеры — системная съёмка (см. dev/mockups/camera-integration.md) */
 async function ecPicked(inp){const fs=[...inp.files];inp.value="";
   for(const f of fs){if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");break}
-    try{ecShots[ecSet].push({src:await chJpeg(f),set:ecSet,id:null,st:"wait"})}catch(e){toast("Не получилось прочитать фото")}}
+    try{ecShots[ecSet].push({src:await chJpeg(f,6000,.95),set:ecSet,id:null,st:"wait"})}catch(e){toast("Не получилось прочитать фото")}}
   ecThUpd();ecUpKick()}
 function ecDel(i){if(ecShots[ecSet][i]===undefined)return;tg.showConfirm("Убрать фото?",ok=>{if(ok){ecShots[ecSet].splice(i,1);ecThUpd()}})}
 /* --- «Готово»: сначала валидация фото (попапы в стиле приложения), потом фото уходят на бэкенд
@@ -4270,13 +4270,27 @@ async function ecCamOpen(){
   const h=await camTake(),v=$("#ec-cv");
   if(!h||!v){toast("Не получилось открыть камеру — открываю системную");try{ecInp().click()}catch(_){};return}
   v.srcObject=h.stream;try{await v.play()}catch(_){}}
+var ecShotBusy=false;
+async function ecCamPhoto(){   /* полноразмерный снимок датчика (автофокус, без видеокодека): ImageCapture.takePhoto().
+     Нет API (iOS/часть WebView), сбой или таймаут → null, и съёмка идёт кадром из превью (4K-запрос в camTake) */
+  try{const h=camHub,t=h&&h.stream.getVideoTracks()[0];
+    if(!t||t.readyState!=="live"||typeof ImageCapture==="undefined")return null;
+    const b=await Promise.race([new ImageCapture(t).takePhoto(),new Promise((_,no)=>setTimeout(()=>no(new Error("timeout")),5000))]);
+    return b&&b.size>30000?b:null}
+  catch(e){return null}}
+async function ecCamGrab(v){   /* → dataURL JPEG ≤6000 px / 19 Мп, q=.95 */
+  const b=await ecCamPhoto();
+  if(b){try{return await chJpeg(b,6000,.95)}catch(e){}}
+  if(!v.videoWidth)throw new Error("no-frame");
+  const k=Math.min(1,6000/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
+  c.getContext("2d").drawImage(v,0,0,c.width,c.height);return c.toDataURL("image/jpeg",.95)}
 function ecCamShot(){const v=$("#ec-cv");
   if(!v||!v.videoWidth){toast("Камера ещё не готова — подождите секунду");return}
   if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");return}
-  const k=Math.min(1,2600/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement("canvas");
-  c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
-  c.getContext("2d").drawImage(v,0,0,c.width,c.height);
-  ecShots[ecSet].push({src:c.toDataURL("image/jpeg",.9),set:ecSet,id:null,st:"wait"});ecThUpd(true);ecUpKick()}
+  if(ecShotBusy)return;ecShotBusy=true;const set=ecSet;
+  ecCamGrab(v).then(src=>{if(ecCnt()>=EC_MAX){toast("Не больше "+EC_MAX+" фото на проверку");return}
+    ecShots[set].push({src:src,set:set,id:null,st:"wait"});ecThUpd(true);ecUpKick()}).catch(()=>toast("Не получилось снять кадр — попробуйте ещё раз")).finally(()=>{ecShotBusy=false})}
 
 
 /* ---------- раздел «Материалы» ---------- */
@@ -4717,9 +4731,9 @@ function chAttUi(){const a=$("#aic-att");if(a)a.innerHTML=chAttHtml();const b=$(
 function chPick(id){chMenu();const i=$("#"+id);if(i)i.click()}
 function chDel(i){chAtt.splice(i,1);chAttUi()}
 const chBytes=a=>a.reduce((s,x)=>s+Math.floor((x.d||"").length*.75),0);
-function chJpeg(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();
-  im.onload=()=>{try{const k=Math.min(1,2600/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
-    const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);const d=c.toDataURL("image/jpeg",.9);URL.revokeObjectURL(u);ok(d)}catch(e){URL.revokeObjectURL(u);no(e)}};
+function chJpeg(file,mx,q){mx=mx||2600;q=q||.9;return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{try{const k=Math.min(1,mx/Math.max(im.width,im.height),Math.sqrt(19e6/(im.width*im.height))),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+    const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);let qq=q,d=c.toDataURL("image/jpeg",qq);while(d.length>9.8e6&&qq>.7){qq-=.05;d=c.toDataURL("image/jpeg",qq)}URL.revokeObjectURL(u);ok(d)}catch(e){URL.revokeObjectURL(u);no(e)}};
   im.onerror=()=>{URL.revokeObjectURL(u);no(new Error("img"))};im.src=u})}
 const chB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]||"");r.onerror=()=>no(r.error);r.readAsDataURL(f)});
 async function chPicked(inp){
@@ -4755,8 +4769,11 @@ async function camTake(){   // живой общий поток или null (к�
   if(live(camHub))return camHub;   // уже взяли: съёмки делят один поток, система не спрашивает повторно
   camDrop();
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){camHubErr="unsupported";return null}
-  try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false});
-    camHub={stream};return camHub}
+  try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:3840},height:{ideal:2160}},audio:false});
+    camHub={stream};
+    try{const t=stream.getVideoTracks()[0],c=t&&t.getCapabilities?t.getCapabilities():null;   // резкость рукописи важнее всего: непрерывный автофокус, где камера умеет
+      if(c&&c.focusMode&&c.focusMode.indexOf("continuous")>=0)await t.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch(e){}
+    return camHub}
   catch(e){camHubErr=(e&&e.name)||"unknown";return null}}
 window.addEventListener("pagehide",camDrop);
 let chCamS=[];

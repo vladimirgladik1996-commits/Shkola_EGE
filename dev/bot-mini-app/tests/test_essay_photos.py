@@ -63,7 +63,8 @@ assert "idle=setTimeout(()=>{try{x.abort()}catch(e){}fin(null)},EC_UP_IDLE)" in 
     "мёртвая сеть должна обрываться по тишине (abort), а не висеть вечно"
 assert "ecThUpd(true);ecUpKick()}" in html, "после съёмки фото должно уходить на сервер сразу (ecCamShot → ecUpKick)"
 assert "ecThUpd();ecUpKick()}" in html, "после выбора из галереи фото должно уходить сразу (ecPicked → ecUpKick)"
-assert "{src:await chJpeg(f),set:ecSet,id:null,st:\"wait\"}" in html, \
+# chJpeg(f,6000,.95): для «ИИ-проверки» рукопись кодируется почти без потерь: до 6000 px / 19 Мп, q=.95 (в чате — 2600/.9 по умолчанию)
+assert "{src:await chJpeg(f,6000,.95),set:ecSet,id:null,st:\"wait\"}" in html, \
     "фото должно помнить состояние загрузки (src/set/id/st), а не быть строкой"
 assert "sid:ecUpId,w:ecShots.w.map(p=>p.id),t:ecShots.t.map(p=>p.id)" in html, \
     "«Готово» обязан собирать сеанс из уже загруженных id, а не слать base64 заново"

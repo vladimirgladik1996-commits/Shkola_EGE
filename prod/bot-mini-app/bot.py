@@ -2913,6 +2913,9 @@ EC_CHECKS = {}                                   # id → [uid, {"w": [jpeg_b64]
 EC_PHOTO_TTL = 60 * 60                           # незабранные «копилки» фото живут час
 EC_PHOTOS = {}                                   # sid → {pid: {"uid", "set", "jpeg", "ts", "sha"}}
 EC_TTL = 30 * 60                                 # полчаса — как подписные ссылки файлов чата
+EC_MAX_SIDE = 6000                                   # фото работы отдаём в OCR почти как есть: пределы Яндекса — ≤20 Мп и ≤10 МБ
+EC_MAX_PIXELS = 19_000_000                            # с запасом от 20 Мп
+EC_MAX_BYTES = 7_500_000                              # < MAX_FILE_BYTES (8 МБ) и < 10 МБ Яндекса
 EC_MAX_PHOTOS = 12                               # страниц работы + задание вместе
 
 
@@ -3005,7 +3008,7 @@ async def api_essay_check_photo(request):
         store.pop(k, None)                            # протухшие фото чистим по пути
     try:
         raw = chatfiles._b64(j.get("d") if isinstance(j.get("d"), str) else None)
-        jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw)
+        jpeg = await asyncio.to_thread(chatfiles.to_jpeg_b64, raw, EC_MAX_SIDE, EC_MAX_PIXELS, EC_MAX_BYTES)
     except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
         return web.json_response({"error": "bad"}, status=400)
     # F-3 (баг-репорт 014): повтор того же фото ИДЕМПОТЕНТЕН — тот же владелец+набор+содержимое
@@ -3071,7 +3074,7 @@ async def api_essay_check_upload(request):
             # (тот же класс, что «заморозка event loop» в bug-reports/004)
             async def conv(lst):
                 raws = [chatfiles._b64(f.get("d") if isinstance(f, dict) else None) for f in lst]
-                return await asyncio.gather(*[asyncio.to_thread(chatfiles.to_jpeg_b64, r) for r in raws])
+                return await asyncio.gather(*[asyncio.to_thread(chatfiles.to_jpeg_b64, r, EC_MAX_SIDE, EC_MAX_PIXELS, EC_MAX_BYTES) for r in raws])
             out["w"], out["t"] = await asyncio.gather(conv(w), conv(t))
         except Exception:                              # не-картинка или мусор — ValueError/ошибка PIL
             return web.json_response({"error": "bad"}, status=400)

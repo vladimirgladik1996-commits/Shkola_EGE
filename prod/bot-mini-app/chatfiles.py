@@ -34,8 +34,8 @@ def _b64(s):
     return raw
 
 
-def to_jpeg_b64(raw):
-    """Любая картинка → JPEG ≤2600 px в base64 (kimi.build_payload помечает все изображения как jpeg).
+def to_jpeg_b64(raw, max_side=2600, max_pixels=None, max_bytes=None):
+    """Любая картинка → JPEG ≤max_side px (по умолчанию 2600; max_pixels/max_bytes — доп. пределы) в base64 (kimi.build_payload помечает все изображения как jpeg).
     JPEG в пределах лимита и без поворота по EXIF проходит БЕЗ повторного пережатия: второе кодирование
     quality=85 размывало тонкие штрихи рукописи, и OCR «ИИ-проверки» возвращал обрывки текста
     (баг-репорт 018). EXIF-поворот запекается в пиксели — иначе фото могло уйти к OCR повёрнутым."""
@@ -47,7 +47,8 @@ def to_jpeg_b64(raw):
             orient = (im.getexif() or {}).get(0x0112, 1) or 1
         except Exception:
             orient = 1
-        if (im.format or "").upper() == "JPEG" and max(im.size) <= 2600 and im.mode in ("RGB", "L") and orient == 1:
+        if (im.format or "").upper() == "JPEG" and max(im.size) <= max_side and im.mode in ("RGB", "L") and orient == 1 \
+                and (not max_pixels or im.size[0] * im.size[1] <= max_pixels) and (not max_bytes or len(raw) <= max_bytes):
             return base64.b64encode(raw).decode()
         if im.mode in ("RGBA", "LA", "P"):
             im = im.convert("RGBA")
@@ -66,9 +67,21 @@ def to_jpeg_b64(raw):
             im = ImageEnhance.Contrast(im).enhance(1.15)
         except Exception:
             pass
-        im.thumbnail((2600, 2600))
+        w, h = im.size
+        sc = min(1.0, max_side / max(w, h))
+        if max_pixels and w * h * sc * sc > max_pixels:
+            sc = (max_pixels / (w * h)) ** 0.5
+        if sc < 1:
+            im = im.resize((max(1, int(w * sc)), max(1, int(h * sc))), Image.LANCZOS)
         out = io.BytesIO()
-        im.save(out, "JPEG", quality=92)
+        if max_bytes:   # максимум качества, но укладываемся в лимит загрузки/OCR
+            for q in (95, 90, 85, 80, 75, 70):
+                out = io.BytesIO()
+                im.save(out, "JPEG", quality=q)
+                if out.tell() <= max_bytes:
+                    break
+        else:
+            im.save(out, "JPEG", quality=92)
     except Exception:
         raise ValueError
     return base64.b64encode(out.getvalue()).decode()
