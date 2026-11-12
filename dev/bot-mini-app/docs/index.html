@@ -94,7 +94,7 @@ select,input{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;f
 .hero::after{content:"";position:absolute;right:-34px;top:-34px;width:190px;height:190px;border-radius:50%;border:1.5px solid #ffffff26;box-shadow:0 0 0 18px #ffffff0d;pointer-events:none}
 .hero>*{position:relative;z-index:1}
 .hl{padding-right:112px;min-height:104px}
-.hero small{opacity:.88;font-size:13px;display:block}
+.hero small{opacity:.88;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* период выручки — всегда одна строка (см. heroFit) */
 .hero .big{font-size:38px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:6px 0 4px;font-variant-numeric:tabular-nums;background:linear-gradient(180deg,#fff 30%,#ffe7a0);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 2px 8px #0003)}
 .hm{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .hm>div{position:relative;background:#ffffff1f;border:1px solid #ffffff2b;border-radius:15px;padding:10px 10px 9px;backdrop-filter:blur(2px)}
@@ -947,8 +947,8 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-chip .x{position:absolute;top:0;right:0;width:28px;height:28px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px;color:#fff}
 .aic-chip .x i{width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);font-style:normal;font-size:14px;line-height:20px;text-align:center}
 /* «Снять камерой»: превью камеры + несколько снимков подряд (см. chCam*).
-   Кнопка затвора — круглая иконка без белого фона, всегда по центру снизу (не сдвигается),
-   с пульсацией как у кнопки виджета голосового помощника (micPulse). */
+   Кнопка затвора — в точности как в «Съёмке» «ИИ-проверки» (графика EC_SHUT, 64px),
+   всегда по центру снизу (не сдвигается), с пульсацией camPulse — как у затвора разбора. */
 .aic-cam{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column;justify-content:space-between}
 .aic-cam[hidden]{display:none}
 .aic-cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
@@ -958,8 +958,7 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .aic-cam-x{flex:none;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;display:grid;place-items:center}
 .aic-cam-x svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 .aic-cam-bar{position:relative;z-index:2;height:148px;padding-bottom:env(safe-area-inset-bottom,0px);background:linear-gradient(transparent,rgba(0,0,0,.68))}
-.aic-cam-sh{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:76px;height:76px;padding:0;border-radius:50%;background:none;animation:camPulse 1.6s ease-out infinite}
-.aic-cam-sh img{display:block;width:100%;height:100%;border-radius:50%}
+.aic-cam-sh{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:64px;height:64px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent;animation:camPulse 1.6s ease-out infinite}   /* затвор — в точности как в «Съёмке» «ИИ-проверки» (.ec-shut: 64px, графика EC_SHUT) */
 .aic-cam-sh:active{transform:translateX(-50%) scale(.94)}
 .aic-cam-sh:disabled{opacity:.45;animation:none}
 @keyframes camPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%,100%{box-shadow:0 0 0 14px rgba(255,255,255,0)}}
@@ -1256,6 +1255,9 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-back{display:inline-flex;align-items:center;gap:2px;border:0;border-radius:99px;padding:8px 14px 8px 8px;background:rgba(15,46,110,.1);color:var(--tx);font:800 13.5px "Nunito",system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ec-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .ec-back:active{transform:scale(.95)}
+/* чипсина «Назад» в шторках — в точности как на страницах камеры и превью «ИИ-проверки» (84×36) */
+#sheet .ec-top .ec-back{box-sizing:border-box;height:36px;flex:0 1 84px;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:2px;padding:0;font-size:13px;line-height:1;border:1.5px solid transparent}
+#sheet .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .ec-chip{border:1.5px solid var(--ln);background:var(--card);color:var(--tx);border-radius:99px;padding:8px 14px;font:800 13px "Nunito",system-ui,sans-serif;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .ec-chip.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
 .ec-go{justify-self:end;border:1px solid #e3c36a;border-radius:16px;padding:12px 16px;font:900 14px "Nunito",system-ui,sans-serif;letter-spacing:.3px;color:#fff;cursor:pointer;background:linear-gradient(180deg,#2fbf79 0%,#12864f 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 2px rgba(31,154,91,.25),0 6px 16px rgba(18,134,79,.5);text-shadow:0 1px 2px rgba(0,0,0,.25);position:relative;overflow:hidden}
@@ -1358,9 +1360,11 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-blk h3{font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
 .ec-blk p{font-size:12.5px;line-height:1.45;margin:6px 0 0}
 .ec-pot{font-size:11px;font-weight:800;background:rgba(31,154,91,.15);color:var(--grn);border-radius:99px;padding:3px 10px}
-.ec-st{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;margin:7px 0}
-.ec-st span{flex:none;width:92px}
-.ec-st i{flex:none;height:10px;border-radius:9px;background:var(--red);transform-origin:left;animation:ecGrow 1s cubic-bezier(.2,.8,.2,1) both}
+/* сетка, а не flex: полоса (i) с шириной в % меряется от своей колонки, а не от всей строки — иначе строка
+   раздвигалась за край экрана (подпись 92px + полоса 100% + счётчик) */
+.ec-st{display:grid;grid-template-columns:92px minmax(0,1fr) auto;align-items:center;gap:8px;font-size:12px;font-weight:800;margin:7px 0}
+.ec-st span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ec-st i{max-width:100%;height:10px;border-radius:9px;background:var(--red);transform-origin:left;animation:ecGrow 1s cubic-bezier(.2,.8,.2,1) both}
 @keyframes ecGrow{from{transform:scaleX(0)}}
 .ec-st em{flex:none;font-style:normal;color:var(--hint);min-width:16px;text-align:right}
 /* карточки критериев ФИПИ — как .kc в макете: цветной левый бордюр, пилюля баллов, полоса, «Почему» / «Совет» */
@@ -1836,6 +1840,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .tl i.nt{right:2px;font-size:9px;background:var(--red);color:#fff;border-radius:99px;padding:1px 3px;font-weight:800;z-index:4;transform:translateY(-50%)}
 .sx-gh{position:absolute;left:2px;right:2px;z-index:2;display:grid;place-items:center;border-radius:8px;border:1.5px dashed var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--acc);font-size:10.5px;font-weight:800;pointer-events:none;animation:sxg .22s cubic-bezier(.34,1.56,.64,1)}
 .sx-hint{margin:8px 4px 0;text-align:center;font-size:12px;color:var(--hint)}
+body:has(.sc.wk){padding-bottom:100px}   /* неделя: под сеткой больше не будет подсказки — ужимаем пустоту внизу */
 @keyframes sxg{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
 /* день */
 .sx-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:6px;margin-bottom:12px;background:var(--card);border-radius:20px;box-shadow:0 0 0 1px var(--ln)}
@@ -1853,6 +1858,7 @@ body:has(.ec-view) .ec-top .ec-back svg{width:16px;height:16px;margin-left:-3px}
 .sx-l,.sx-g{display:grid;grid-template-columns:46px 1fr;gap:10px;width:100%;margin-bottom:8px;text-align:left}
 .sx-t{display:flex;flex-direction:column;align-items:flex-end;padding-top:11px;font-variant-numeric:tabular-nums}
 .sx-t b{font-size:15px;font-weight:800;line-height:1.1}.sx-t small{font-size:11.5px;color:var(--hint);margin-top:2px}
+.sx-l .sx-t small{font-size:15px;font-weight:800;line-height:1.1}   /* время окончания урока — тот же кегль и вес, что у времени начала */
 .sx-g .sx-t{padding-top:12px}
 .sx-c{position:relative;display:flex;align-items:center;gap:11px;min-width:0;padding:11px 12px 11px 18px;border-radius:var(--rc);background:var(--card);box-shadow:var(--shc);overflow:hidden;transition:transform .15s}
 .sx-c::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--c)}
@@ -2547,7 +2553,7 @@ function weekView(){
   const r=k==iso(w0)?"Эта неделя":k==iso(addD(w0,7))?"Следующая":k==iso(addD(w0,-7))?"Прошлая":String(ws.getFullYear());
   const m=d=>d.toLocaleDateString("ru-RU",{month:"short"}).replace(".","");
   return [schedHead(`${ws.getDate()} ${m(ws)} – ${e.getDate()} ${m(e)}`,`${r} · ${zanW(ls.length)}`,k==iso(w0)),
-    `<div class="sc wk">${grid(ws,0)}</div><p class="sx-hint">Тап по пустой клетке — новое занятие · тап по дню — открыть день</p>`]}
+    `<div class="sc wk">${grid(ws,0)}</div>`]}
 function monthView(){
   const y=mo.getFullYear(),m=mo.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),mk=`${y}-${pad(m+1)}-`,
     nl=L.filter(l=>l.day>=mk+"01"&&l.day<=mk+"31").length,curM=y==T.getFullYear()&&m==T.getMonth();
@@ -2947,7 +2953,10 @@ const nice=v=>{const p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return(f<=1?
 const plu=(n,a,b,c)=>{const m=n%100,k=n%10;return m>10&&m<20?c:k==1?a:k>1&&k<5?b:c};
 const fsh=d=>d.toLocaleDateString("ru-RU",{day:"numeric",month:"short"}).replace(".","");
 function setDp(k){dp=k;dsel=-1;dpi=-1;render()}
-function dashUpd(){const e=$("#dash");e.className="";e.innerHTML=payDash();const pb=$("#pdbar");if(pb)pb.innerHTML=payDashBar()}
+function dashUpd(){const e=$("#dash");e.className="";e.innerHTML=payDash();const pb=$("#pdbar");if(pb)pb.innerHTML=payDashBar();heroFit()}
+function heroFit(){   /* строка периода в блоке «Выручка» никогда не переносится: жмём кегль, пока текст не влезет в одну строку */
+  const s=document.querySelector(".hero .hl small");if(!s)return;s.style.fontSize="";let f=parseFloat(getComputedStyle(s).fontSize)||13;
+  while(s.scrollWidth>s.clientWidth+.5&&f>9.5){f-=.25;s.style.fontSize=f+"px"}}
 /* плавный счёт чисел при открытии дашборда (запускается стартом CSS-анимации cntgo; при «уменьшить анимацию» не срабатывает — числа сразу итоговые) */
 document.addEventListener("animationstart",e=>{const t=e.target;if(e.animationName!=="cntgo"||!t.dataset||t.dataset.cnt==null)return;
   const v=+t.dataset.cnt,fm=t.dataset.fmt==="m"?money:x=>String(x),D=1150;t.textContent=fm(0);
@@ -3020,7 +3029,8 @@ function payDash(){
   const ring=defs+`<g class="rg">`+deco+`<g filter="url(#dsh)">${seg}</g>${shn}</g><g class="dc">`+disc;
 
   /* --- сборка --- */
-  const HL=dp=="w"?"текущая неделя, "+fsh(a)+" – "+fsh(be):dp=="m"?T.toLocaleDateString("ru-RU",{month:"long"}):dp=="q"?"последние 3 месяца":dp=="y"?"последние 12 месяцев":(dc1==dc2?dmy2(dc1):dmy2(dc1)+" – "+dmy2(dc2));
+  const HL=dp=="w"?fsh(a)+" – "+fsh(be):   /* даты недели и так её называют: с «текущая неделя» строка не влезала в одну и переносилась */
+    dp=="m"?T.toLocaleDateString("ru-RU",{month:"long"}):dp=="q"?"последние 3 месяца":dp=="y"?"последние 12 месяцев":(dc1==dc2?dmy2(dc1):dmy2(dc1)+" – "+dmy2(dc2));
   let h=`<div class="hero"><span class="hsh"></span><img class="hmv" src="${VSH}" alt=""><div class="hl"><small>Выручка · ${HL}</small><div class="big" data-cnt="${tot}" data-fmt="m" data-cd="250" style="${money(tot).length>9?"font-size:30px":""}">${money(tot)}</div></div>
     <div class="hm"><div><b data-cnt="${held}" data-cd="500">${held}</b><span>${plu(held,"занятие","занятия","занятий")}</span></div><div><b data-cnt="${inp.length}" data-cd="580">${inp.length}</b><span>${plu(inp.length,"оплата","оплаты","оплат")}</span></div><div><b ${inp.length?`data-cnt="${Math.round(tot/inp.length)}" data-fmt="m" data-cd="660"`:""}>${inp.length?money(Math.round(tot/inp.length)):"—"}</b><span>средний чек</span></div></div></div>
   <div class="pc pcd"><div class="pch"><h3>Кто платит</h3><span>${tot?"нажмите на сектор":""}</span></div>${tot?`<svg class="dn" viewBox="0 0 200 200" style="width:252px;display:block;margin:0 auto 10px" role="img" aria-label="Оплаты по ученикам">${ring}${center}</g></svg>${leg}`:'<p class="empty">Оплат за период нет.</p>'}</div>
@@ -3256,7 +3266,7 @@ function studDel(id){const s=S.find(x=>x.id==id);
   tg.showConfirm(`Удалить ученика «${s.name}»? Будут удалены все его занятия, оплаты и регулярные серии — без возможности восстановления.`,async ok=>{if(ok&&await api("/api/student/delete",{id})){close_();await load();toast("Ученик удалён")}})}
 function balPop(id){
   const s=S.find(x=>x.id==id),pays=P.filter(p=>p.sid==id).sort((a,b)=>b.at-a.at).slice(0,8),ds=debtEntries().filter(e=>e.sid==id).sort((a,b)=>b.at-a.at);
-  open(`<button class="pen" aria-label="Назад" onclick="card(${id})">‹</button><h3>Оплаты и долги</h3><p class="sub">${esc(s.name)}</p>
+  open(`<div class="ec-top"><button class="ec-back" type="button" aria-label="Назад" onclick="card(${id})"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Назад</button></div><h3>Оплаты и долги</h3><p class="sub">${esc(s.name)}</p>
   <h2 style="margin-top:6px">Последние оплаты</h2>${pays.map(p=>`<div class="row" style="cursor:default"><span class="info">${when(p.at)}</span><b class="pos">+${money(p.amt)}</b></div>`).join("")||'<p class="empty">Оплат ещё не было.</p>'}
   <h2>Долги</h2>${ds.map(e=>`<div class="row" style="cursor:default"><span class="info">Занятие · ${when(e.at)}</span><b class="neg">${money(e.amt)}</b></div>`).join("")||'<p class="empty">Долгов нет.</p>'}`)}
 async function saveS(id){const n=$("#en").value.trim();if(!n)return toast("Введите имя");
@@ -3544,7 +3554,7 @@ function open(h){const s=$("#sheet"),cur=s.classList.contains("on")?s.querySelec
 function close_(){if(vc)voiceStop();scr=null;vfrag=null;$("#sheet").classList.remove("on")}
 function safeHtml(fn){   /* экран никогда не должен стать пустым из-за исключения в шаблоне */
   try{return fn()}catch(e){return `<div class="empty0"><div class="e0i">😵</div><b>Не получилось показать экран</b><p>Попробуйте ещё раз — или перейдите в другой раздел и вернитесь.</p></div>`}}
-function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=safeHtml(()=>tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon());ecDogPlace();if(tab=="c")schedAfter();
+function render(){try{if(tab!="ch")chStop()}catch(e){}try{if(tab!="ai"){ecErrClose()}}catch(e){}if(tab!="mt")matCat=null;$("#app").innerHTML=safeHtml(()=>tab=="c"?sched():tab=="p"?pay():tab=="s"?stu():tab=="mt"?mat():tab=="ch"?chat():tab=="ai"?aiCheck():soon());ecDogPlace();if(tab=="c")schedAfter();if(tab=="p"&&pv=="dash")heroFit();
   const bar=$("#aic-c");if(bar){if(tab=="ch"){if(!bar.firstChild)bar.innerHTML=chatBar();bar.hidden=false}else bar.hidden=true}   /* поле ввода монтируется один раз и живёт вне #app */
   const sp=$("#sch-print");if(sp)sp.hidden=tab!="c";const nb=$("#aic-new");if(nb){nb.hidden=tab!="ch";nb.disabled=tab=="ch"&&chBusy}
   const fb=$("#fab");const FABT={c:"+ Занятие",p:"+ Оплата",s:"+ Ученик"};fb.style.display=FABT[tab]?"block":"none";document.body.classList.toggle("ec-nb",tab=="ai");const cw=$("#chw");if(cw)cw.style.display=(tab=="ch"||tab=="ai")?"none":"";   /* «ИИ-проверка»: Вишенка вызывается из карточки ошибки и по выделению текста — плавающая кнопка на странице не нужна */if(tab=="ch")requestAnimationFrame(()=>{if(tab=="ch")scrollTo(0,document.documentElement.scrollHeight)});fb.textContent=FABT[tab]||"+ Занятие";syncNav()}
@@ -4785,7 +4795,7 @@ function chCamUi(){   // разметка создаётся один раз и 
     <div class="aic-cam-top"><button type="button" class="aic-cam-x" aria-label="Закрыть камеру" onclick="chCamClose(1)">${CH_IC.x}</button><b id="aic-cam-n">Снимков: 0</b></div>
     <div class="aic-cam-bar">
       <div class="aic-cam-th" id="aic-cam-th"></div>
-      <button type="button" class="aic-cam-sh" id="aic-cam-sh" aria-label="Сделать фото" onclick="chCamShot()"><img src="${CH_CAM_ICON}" alt=""></button>
+      <button type="button" class="aic-cam-sh" id="aic-cam-sh" style="background:url(${EC_SHUT}) center/contain no-repeat" aria-label="Сделать фото" onclick="chCamShot()"></button>
       <button type="button" class="aic-cam-ok" id="aic-cam-ok" onclick="chCamDone()">Готово</button>
     </div>`;
   document.body.appendChild(o);

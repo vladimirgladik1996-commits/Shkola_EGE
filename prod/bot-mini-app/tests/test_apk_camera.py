@@ -62,8 +62,8 @@ for side in ("dev", "prod"):
     assert "camTake" in html and "camDrop" in html \
         and re.search(r"pagehide.{0,40}camDrop|camDrop.{0,40}pagehide", html), \
         f"{side}: поток камеры не переиспользуется — Telegram спрашивает доступ при каждом нажатии «Снять камерой»"
-    assert "CH_CAM_ICON" in html and "camPulse" in html, \
-        f"{side}: кнопка затвора без иконки/пульсации"
+    assert re.search(r'class="aic-cam-sh"[^>]*EC_SHUT', html) and "camPulse" in html, \
+        f"{side}: затвор «Чат с ИИ» должен быть как в «Съёмке» ИИ-проверки (графика EC_SHUT + пульсация)"
     assert "RESOURCE_VIDEO_CAPTURE" in java and "askCameraPermission" in java \
         and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?camStatus\s*\(", java) \
         and re.search(r"@JavascriptInterface\s+(public\s+\S+\s+)?askCamera\s*\(", java), \
