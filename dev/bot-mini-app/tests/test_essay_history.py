@@ -75,8 +75,9 @@ for res in bot.make_app().router.resources():
             routes.setdefault(res.canonical, set()).add(r.method)
 assert routes == {"/api/essay_check/photo": {"POST"}, "/api/essay_check/upload": {"POST"}, "/api/essay_check/run": {"POST"},
                   "/api/essay_check/save": {"POST"}, "/api/essay_check/history": {"POST"},
-                  "/api/essay_check/load": {"POST"}, "/api/essay_check/last": {"POST"}}, routes
-ok("маршруты: photo / upload / run / save / history / load / last — все POST и зарегистрированы в bot.py")
+                  "/api/essay_check/load": {"POST"}, "/api/essay_check/edit": {"POST"},
+                  "/api/essay_check/last": {"POST"}}, routes
+ok("маршруты: photo / upload / run / save / history / load / last / edit — все POST и зарегистрированы в bot.py")
 
 mem = sqlite3.connect(":memory:", check_same_thread=False); bot.db.backup(mem); mem.row_factory = sqlite3.Row
 bot.db = mem; auth.init(mem); auth.PW_HASH = auth.make_hash("Tst-Only-Pw-7qZ4!")

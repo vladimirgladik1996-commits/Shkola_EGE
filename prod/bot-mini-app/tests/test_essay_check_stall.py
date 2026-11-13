@@ -55,20 +55,20 @@ assert "const EC_IDLE=" in html, "нет потолка тишины стрим�
 assert "const wait=p=>idle?Promise.race([p,deadP.then(()=>null)]):p" in html, \
     "apiStream не прерывается по тишине — зависший fetch/read() висит вечно"
 assert "if(rd)rd.cancel()" in html, "по тишине поток надо закрывать (rd.cancel)"
-assert 'apiStream("/api/essay_check/run",{id:ecSess,kind:ecKind},on,{idle:EC_IDLE})' in html, \
+assert 'apiStream("/api/essay_check/run",body,on,{idle:EC_IDLE})' in html and 'const body={id:ecSess,kind:ecKind,stage:stg}' in html, \
     "ecRun должен передавать потолок тишины в apiStream"
 run_body = html[html.index("async function ecRun(){"):html.index("function ecRetry(")]
 assert 'if(id===ecRunId&&ecState=="run"&&!locked)ecFail("link")' in run_body, \
     "конец стрима без done/fail/off обязан быть сбоем (link — обрыв связи) — раньше экран висел вечно"
 assert "!got" not in run_body, "охранник снова требует «пустой ответ»: события без итога вешали экран"
-assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link")?why:"net"' in html, \
+assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link"||why==="gone")?why:"net"' in html, \
     "ecFail должен различать причины: slow / srv (сбой сервера) / link (обрыв связи)"
 assert 'ecWhy==="slow"' in html and 'ecWhy==="srv"' in html and 'ecWhy==="link"' in html, \
     "для slow/srv/link нужны свои тексты ошибок в ecWhyMsg()"
 ok("фронт: потолок тишины EC_IDLE, конец стрима без итога = сбой (без условия «пустой ответ»)")
 
 # ---------- 1б. ГЛАВНОЕ ПРАВИЛО: превью ВСЕГДА, блоки без данных — пустые, ничего не выдумываем ----------
-assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link")?why:"net";ecDone(null)}' in html, \
+assert 'ecWhy=(why==="empty"||why==="http"||why==="slow"||why==="srv"||why==="link"||why==="gone")?why:"net";ecDone(null)}' in html, \
     "сбой тоже открывает финальное превью (ecFail → ecDone), а не вешает экран обработки"
 assert 'function ecOff(){ecState="off";ecWhy="off";ecDone(null)}' in html, "off — тоже на финальное превью"
 assert "function ecResNote(" in html and 'onclick="ecRetry()">Повторить' in html, \

@@ -39,7 +39,7 @@ src = html[html.index("function ecLogHtml(){"):html.index("async function ecRun(
 harness = r"""
 const esc=s=>String(s);
 const EC_MAS="m.png";
-let ecState="run",ecThink="Сначала разберу условие…",ecStep=2;
+let ecState="run",ecThink="Сначала разберу условие…",ecStep=2,ecStg="ocr";
 const ecShots={w:["a","b"],t:[]},ecLive=["Распознан рукописный текст"],ecWait=["Сверяю с критериями ФИПИ…"];
 """ + src + r"""
 const withThink=ecProc();

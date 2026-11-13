@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import parse_qsl, quote
 
 from aiohttp import web
-import assist, auth, billing, chatfiles, chatprompt, essaycheck, essaylast, essayreport, kimi, matlib, whisper, yavision
+import assist, auth, billing, chatfiles, chatprompt, essaycheck, essaylast, essayreport, essayedit, kimi, matlib, whisper, yavision
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -3101,7 +3101,11 @@ def ec_last_save(uid, kind, result, photos):
 async def api_essay_check_run(request):
     """Запуск проверки по фото сеанса (пуш 5): NDJSON-стрим — события стадий
     ({"t":"status"}), финальный разбор ({"t":"done","result":…}) или сбой
-    ({"t":"fail","why":…}). Формат стрима — как у /api/chat: фронт читает его тем же apiStream."""
+    ({"t":"fail","why":…}). Формат стрима — как у /api/chat: фронт читает его тем же apiStream.
+
+    Два этапа (необязательный stage): "ocr" — только распознавание, итог {"t":"ocr","v":{"text":…}} (текст — на проверку
+    учеником, данные OCR остаются в сеансе); "analyze" — ошибки и критерии ФИПИ по ПОПРАВЛЕННОМУ тексту j["text"]
+    (essaycheck.apply_text подгоняет правки под слова на фото). Без stage — один этап, как раньше."""
     try:
         j = await request.json()
     except Exception:
@@ -3128,20 +3132,47 @@ async def api_essay_check_run(request):
         await resp.write_eof()
         return resp
     kind = j.get("kind") if isinstance(j.get("kind"), str) else "ege"
-    log.info("essay check: tg_id=%s photos=%d/%d kind=%s", uid, len(rec[1]["w"]), len(rec[1]["t"]), kind)
+    stage = j.get("stage") if j.get("stage") in ("ocr", "analyze") else None
+    jkey = cid + ":ocr" if stage == "ocr" else cid      # журналы этапов раздельные: итог первого не мешает второму
+    ocr2 = None
+    if stage == "analyze":
+        text = j.get("text")
+        if not isinstance(text, str) or not text.strip():
+            await send({"t": "fail", "why": "empty"})
+            await resp.write_eof()
+            return resp
+        if not rec[1].get("ocr"):                       # распознавания не было (или сеанс перезапущен) — клиент начнёт заново
+            await send({"t": "fail", "why": "gone"})
+            await resp.write_eof()
+            return resp
+        ocr2, _synced = essaycheck.apply_text(rec[1]["ocr"], text)
+        if not _synced:
+            log.warning("essay check: tg_id=%s правки текста не выровнялись по словам OCR — разметка на фото без поправок", uid)
+    log.info("essay check: tg_id=%s photos=%d/%d kind=%s stage=%s", uid, len(rec[1]["w"]), len(rec[1]["t"]), kind, stage or "all")
     # События пайплайна идут через очередь, а пишет в сокет ТОЛЬКО эта корутина:
     # параллельные resp.write недопустимы (ломают chunked-кодирование), поэтому и пульс,
     # и потолок времени живут здесь, а не в essaycheck.
     now = time.time()
     _ec_jobs_gc(now)
-    job = EC_JOBS.get(cid)
+    job = EC_JOBS.get(jkey)
     if job is None:                                # первый запуск сеанса — начинаем проверку
-        job = EC_JOBS[cid] = {"events": [], "final": False, "task": None, "ts": now}
+        job = EC_JOBS[jkey] = {"events": [], "final": False, "task": None, "ts": now}
 
         async def pump():
             p0 = time.monotonic()
             try:
-                async for ev_kind, v in essaycheck.run(rec[1]["w"], rec[1]["t"], kind):
+                if stage == "ocr":
+                    gen = essaycheck.recognize(rec[1]["w"], rec[1]["t"], kind)
+                elif stage == "analyze":
+                    gen = essaycheck.run(rec[1]["w"], rec[1]["t"], kind, ocr=ocr2)
+                else:
+                    gen = essaycheck.run(rec[1]["w"], rec[1]["t"], kind)
+                async for ev_kind, v in gen:
+                    if stage == "ocr" and ev_kind == "done":
+                        # этап 1: работа не распозналась — отдаём причину (клиент покажет её, как раньше), но это ещё не
+                        # проверка: ни «Последней проверки», ни отчёта в чат
+                        _ec_job_end(job, dict(t="done", result=v))
+                        return
                     if ev_kind == "status":
                         _ec_job_add(job, {"t": "status", "v": v})
                     elif ev_kind == "think":      # стрим мышления Кими — от лица Вишенки на прелоадере
@@ -3149,6 +3180,11 @@ async def api_essay_check_run(request):
                     elif ev_kind == "err":
                         log.warning("essay check: tg_id=%s сбой этапа (%s) через %.1f с", uid, v, time.monotonic() - p0)
                         _ec_job_end(job, {"t": "fail", "why": v if v in ("net", "http", "empty") else "net"})
+                        return
+                    elif ev_kind == "ocr":         # этап 1 готов: данные OCR — в сеанс, ученику — текст на проверку
+                        rec[1]["ocr"] = v
+                        log.info("essay check: tg_id=%s распознано за %.1f с (%d слов)", uid, time.monotonic() - p0, len(v["essay"].split()))
+                        _ec_job_end(job, {"t": "ocr", "v": {"text": v["essay"]}})
                         return
                     else:                          # done
                         ec_last_save(uid, kind, v, rec[1]["w"])      # «Последняя проверка»: пишем ДО отдачи — клиент мог уже выйти
@@ -3194,9 +3230,52 @@ async def api_essay_check_run(request):
     except (ConnectionResetError, BrokenPipeError, RuntimeError):
         log.info("essay check: клиент отключился, проверка продолжается: tg_id=%s cid=%s", uid, cid)
         return resp                                # журнал цел — «Повторить» подключится заново
-    EC_JOBS.pop(cid, None)                         # итог отдан клиенту — журнал больше не нужен
+    EC_JOBS.pop(jkey, None)                        # итог отдан клиенту — журнал больше не нужен
     await resp.write_eof()
     return resp
+
+
+@guarded
+async def api_essay_check_edit(request):
+    """Экран «Текст проверен»: ученик выделил слово/фрагмент распознанного текста и ГОЛОСОМ (audio+mime, Whisper) или
+    ТЕКСТОМ (text) говорит Вишенке, что с ним сделать. Ответ — предложение замены фрагмента для подтверждения на клиенте:
+    {"ok":True,"op":"replace"|"unclear","replacement","say"[,"heard"]} либо {"stage":"stub","reply"} (нет ключа/речи).
+    Сервер текст не правит — итоговый текст придёт на stage="analyze" (essaycheck.apply_text)."""
+    j = await request.json()
+    if not isinstance(j, dict):
+        raise ValueError
+    uid, cid = ec_uid(request), j.get("id")
+    rec = EC_CHECKS.get(cid) if isinstance(cid, str) else None
+    if not rec or not rec[1].get("ocr"):             # правят распознанный текст — значит этап 1 в этом сеансе уже был
+        raise ValueError
+    if rec[0] != uid:
+        return web.json_response({"error": "forbidden"}, status=403)
+    fragment = essayedit.clean(j.get("fragment"), essayedit.FRAG_MAX)
+    if not fragment:
+        raise ValueError
+    before, after = essayedit.clean(j.get("before"), essayedit.CTX_MAX)[-essayedit.CTX_MAX:], essayedit.clean(j.get("after"), essayedit.CTX_MAX)
+    text = j.get("text")
+    if text is not None and (not isinstance(text, str) or len(text) > essayedit.INSTR_MAX):
+        raise ValueError
+    audio, mime = voice_audio(j)
+    text = essayedit.clean(text, essayedit.INSTR_MAX)
+    if audio is None and not text:
+        raise ValueError
+    heard = ""
+    if not text:
+        if not whisper.enabled():
+            return web.json_response({"ok": True, "stage": "stub", "reply": "Голос не распознаётся: на сервере не задан WHISPER_API_KEY. Напишите текстом."})
+        heard = await whisper.transcribe(audio, mime, prompt=essayedit.stt_prompt(fragment), dur=voice_dur(j))
+        if heard == "":                               # речи в записи нет — честно говорим об этом, а не выдумываем правку
+            return web.json_response({"ok": True, "stage": "stub", "reply": whisper.NO_SPEECH_MSG})
+        if not heard:
+            return web.json_response({"ok": True, "stage": "stub", "reply": "Не получилось распознать запись. Попробуйте ещё раз или напишите текстом."})
+        text = essayedit.clean(heard, essayedit.INSTR_MAX)
+    if not kimi.enabled():
+        return web.json_response({"ok": True, "stage": "stub", "reply": "Правка недоступна: на сервере не задан KIMI_API_KEY."})
+    res = await essayedit.interpret(fragment, before, after, text)
+    log.info("essay edit: tg_id=%s фрагмент=%d зн. фраза=%d зн. голос=%s итог=%s", uid, len(fragment), len(text), bool(heard), res["op"])
+    return web.json_response({"ok": True, **res, **({"heard": heard} if heard else {})})
 
 
 # ---------- «ИИ-проверка»: PDF и Word с разбором — в Telegram по завершении проверки ----------
@@ -3477,6 +3556,7 @@ def make_app():
     app.router.add_post("/api/essay_check/save", api_essay_check_save)         # «ИИ-проверка»: сохранение проверки за учеником (пуш 7)
     app.router.add_post("/api/essay_check/history", api_essay_check_history)   # «ИИ-проверка»: история сохранённых проверок (пуш 7)
     app.router.add_post("/api/essay_check/load", api_essay_check_load)         # «ИИ-проверка»: повторный просмотр сохранённого разбора (пуш 7)
+    app.router.add_post("/api/essay_check/edit", api_essay_check_edit)   # «Текст проверен»: правка фрагмента словами Вишенке
     app.router.add_post("/api/essay_check/last", api_essay_check_last)         # «ИИ-проверка»: шапка последней проверки для экрана возврата
     app.router.add_post("/api/voice_confirm", api_voice_confirm)
     app.router.add_post("/api/voice_cancel", api_voice_cancel)

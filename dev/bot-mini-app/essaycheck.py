@@ -599,6 +599,78 @@ def _bind_coords(a, pages):
         e["page"], e["x"], e["y"] = pi, round((x1 + x2) / 2, 1), round((y1 + y2) / 2, 1)
 
 
+def _letters(s):
+    """Буквы и цифры без регистра (ё=е) — чем сравниваем текст и слова OCR: пунктуация и пробелы не важны."""
+    return "".join(ch for ch in (s or "").lower().replace("ё", "е") if ch.isalnum())
+
+
+APPLY_MAX = 20000      # символов в поправленном тексте (сочинение + запас)
+
+
+def apply_text(ocr, new_text):
+    """Ученик поправил распознанный текст (слово или целый фрагмент) → (ocr с новым текстом, синхронизировано).
+    Слова OCR (lw и words страниц — по ним ошибки привязываются к фото) подгоняются под правки, поэтому ошибка внутри
+    исправленного места садится на те же боксы слов, что и неверно распознанный фрагмент: «синхронно с разметкой».
+    Соответствие ищется по БУКВАМ: поток букв слов OCR = поток букв распознанного текста (переносы, пунктуация и
+    абзацы на него не влияют); правки — словарная diff (difflib) исправленного текста против распознанного.
+    Единица выравнивания — подслово (слово OCR может нести несколько слов текста после прежних правок): слово заменено →
+    текст ложится на боксы покрытых слов (лишние пустеют, лишний текст дописывается подсловами после последнего
+    покрытого); вставка — подсловами после предыдущего слова; удаление — подслова убираются. Исходный ocr не меняется.
+    Не удалось выровнять (потоки букв разошлись) → текст принимается, слова не трогаются, синхронизировано=False."""
+    import copy
+    import difflib
+    new_text = str(new_text or "").replace("\r\n", "\n").replace("\r", "\n").strip()[:APPLY_MAX]
+    out = dict(ocr)
+    out["essay"] = new_text
+    old = ocr.get("essay") or ""
+    if new_text == old:
+        return out, True
+    pages = copy.deepcopy(ocr.get("pages") or [])
+    out["pages"] = pages
+    toks = [(pi, k) for pi, pg in enumerate(pages) if isinstance(pg, dict)
+            for k, w in enumerate(pg.get("lw") or []) if isinstance(w, dict) and _letters(w.get("t"))]
+    subs = [pages[pi]["lw"][k]["t"].split() for pi, k in toks]              # подслова каждого слова OCR
+    units = [(x, i) for x, ss in enumerate(subs) for i, sub in enumerate(ss) if _letters(sub)]
+    ow, nw = old.split(), new_text.split()
+    onorm, nnorm = [_letters(x) for x in ow], [_letters(x) for x in nw]
+    if "".join(_letters(subs[x][i]) for x, i in units) != "".join(onorm):
+        return out, False
+
+    def spans(lens):
+        pos, r = 0, []
+        for n in lens:
+            r.append((pos, pos + n))
+            pos += n
+        return r
+    usp, osp = spans([len(_letters(subs[x][i])) for x, i in units]), spans([len(x) for x in onorm])
+    ops = [op for op in difflib.SequenceMatcher(None, onorm, nnorm, autojunk=False).get_opcodes() if op[0] != "equal"]
+    before = [" ".join(ss) for ss in subs]
+    for _tag, i1, i2, j1, j2 in reversed(ops):          # с конца: индексы подслов ранних правок не съезжают
+        words = nw[j1:j2]
+        a = osp[i1][0] if i1 < len(osp) else (osp[-1][1] if osp else 0)
+        b = osp[i2 - 1][1] if i2 > i1 else a
+        cov = [u for u, (ts, te) in enumerate(usp) if ts >= a and te <= b and te > ts]
+        if not cov:                                    # вставка: подсловами после предыдущего слова
+            if words and units:
+                x, i = units[max([u for u, (ts, te) in enumerate(usp) if te <= a] or [0])]
+                subs[x][i + 1:i + 1] = words
+            continue
+        for idx, u in enumerate(cov):
+            x, i = units[u]
+            subs[x][i] = words[idx] if idx < len(words) else None
+        if len(words) > len(cov):                      # слов стало больше, чем покрыто: хвост — после последнего покрытого
+            x, i = units[cov[-1]]
+            subs[x][i + 1:i + 1] = words[len(cov):]
+    from ocrverify import _patch_words
+    for x, (pi, k) in enumerate(toks):
+        nt = " ".join(t for t in subs[x] if t)
+        if nt != before[x]:
+            w = pages[pi]["lw"][k]
+            _patch_words(pages[pi].get("words"), {c: w[c] for c in ("x1", "y1", "x2", "y2")}, w["t"], nt)
+            w["t"] = nt
+    return out, True
+
+
 def _parse_json(text):
     """Ответ модели → dict: вырезаем JSON из текста (терпимо к ```json и постороннему тексту)."""
     t = (text or "").strip()
@@ -635,14 +707,10 @@ def _msg_errors(kind, essay):
             + "\n\nТекст работы (транскрипция OCR, ошибки сохранены):\n" + essay)
 
 
-async def run(w, t, kind="ege"):
-    """Пайплайн проверки: w — страницы работы, t — фото задания (base64 jpeg).
-    Асинхронный генератор событий: status | think (стрим мышления Кими) → done(result) | err(why).
-
-    Боевой путь: Yandex Vision OCR (handwritten) транскрибирует фото работы и задания,
-    лёгкая Kimi анализирует текст и разметку слов; мышление Кими стримится событиями
-    ("think", …) — фронт показывает его от лица Вишенки. Стриминг мышления Яндекс невозможен:
-    API Vision его не отдаёт (по ТЗ допустимо стримить только Кими)."""
+async def _ocr_phase(w, t, kind):
+    """Этап 1 проверки — РАСПОЗНАВАНИЕ: фото → текст работы и задания (Yandex OCR, перепроверка спорных слов).
+    События: status…; затем либо done(result) — работа не распозналась (как раньше), либо ocr(данные для этапа 2):
+    {pages, tpages, essay, task, extra, part, t_ocr, kind}. Анализ (ошибки, критерии ФИПИ) — этап 2, run(ocr=…)."""
     kind = kind if kind in WHAT else "ege"
     t0 = time.monotonic()                      # тайминги этапов — одной строкой в конце (essaycheck: проверка …)
     yield "status", "Собрала %d фото в одно сочинение" % (len(w) + len(t))
@@ -731,6 +799,41 @@ async def run(w, t, kind="ege"):
             log.warning("essaycheck: OCR задания не прошёл (%s) — продолжаю без задания", terr)
         else:
             yield "status", "Прочитано задание и опорный текст"
+    yield "ocr", {"pages": pages, "tpages": tpages, "essay": essay, "task": task, "extra": extra or "", "part": part,
+                  "t_ocr": t_ocr, "kind": kind}
+
+
+async def recognize(w, t, kind="ege"):
+    """Этап 1 для «Текст проверен»: только распознавание. События: status | done(result — сбой) | ocr(данные)."""
+    kind = kind if kind in WHAT else "ege"
+    async for ev in _ocr_phase(w, t, kind):
+        yield ev
+
+
+async def run(w, t, kind="ege", ocr=None):
+    """Пайплайн проверки: w — страницы работы, t — фото задания (base64 jpeg).
+    Асинхронный генератор событий: status | think (стрим мышления Кими) → done(result) | err(why).
+    ocr — данные этапа 1 (recognize), если распознавание уже прошло отдельно: тогда сразу анализ текста.
+
+    Боевой путь: Yandex Vision OCR (handwritten) транскрибирует фото работы и задания,
+    лёгкая Kimi анализирует текст и разметку слов; мышление Кими стримится событиями
+    ("think", …) — фронт показывает его от лица Вишенки. Стриминг мышления Яндекс невозможен:
+    API Vision его не отдаёт (по ТЗ допустимо стримить только Кими)."""
+    kind = kind if kind in WHAT else "ege"
+    t0 = time.monotonic()                      # тайминги этапов — одной строкой в конце (essaycheck: проверка …)
+    if ocr is None:                            # одним куском: распознавание → анализ (как всегда)
+        async for ev, v in _ocr_phase(w, t, kind):
+            if ev == "ocr":
+                ocr = v
+                continue
+            yield ev, v
+            if ev == "done":                   # работа не распозналась — итог уже отдан
+                return
+        if ocr is None:
+            return
+    # ocr задан: распознавание уже было (этап 1), текст мог быть поправлен учеником (apply_text) — анализируем его
+    pages, tpages, essay, task = ocr["pages"], ocr["tpages"], ocr["essay"], ocr["task"]
+    extra, part, t_ocr = ocr.get("extra") or "", bool(ocr.get("part")), float(ocr.get("t_ocr") or 0.0)
     yield "status", "Проверяю орфографию, пунктуацию, грамматику и речь"   # четыре типа ошибок (ERRORS_PROMPT)
     criteria_text = CRITERIA[kind] + (("\n\nДополнительно — материалы ФИПИ с fipi.ru:\n" + extra[:1500])
                                       if extra else "")   # эталонная таблица всегда в промте, добавка — ограничена
