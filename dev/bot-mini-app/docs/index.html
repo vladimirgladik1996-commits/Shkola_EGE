@@ -1340,7 +1340,14 @@ body:has(#mv.on) #sheet.on .sh{padding-bottom:calc(18px + env(safe-area-inset-bo
 .ec-er.sel{background:rgba(232,41,79,.14);border-radius:4px}
 .ec-page{position:relative;margin:0 0 10px;border-radius:12px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.22)}
 .ec-page img{display:block;width:100%;height:auto}
-.ec-loose{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 0}
+.ec-loose{display:flex;flex-wrap:wrap;gap:6px;padding:6px 2px 2px}
+/* Чипсы ошибок без привязки к фото: раньше это были инлайн-подсветки текста с бейджем,
+   вылезающим на 16px над чипсой (top:-16px) — под фото торчал «кусок печатного текста».
+   Теперь каждый чипс — компактная карточка с бейджем ВНУТРИ, ничего не выходит за края. */
+.ec-loose .ec-er{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:3px 10px 3px 5px;border:1px solid rgba(214,69,69,.35);border-bottom:2px solid var(--red);border-radius:10px;background:rgba(214,69,69,.10);font-size:13px;line-height:1.35}
+.ec-loose .ec-er b{position:static;flex:none;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font:900 11px/19px "Nunito",system-ui,sans-serif;text-align:center;box-shadow:none;animation:none}
+.ec-loose .ec-er.ec-ok{border-color:var(--grn);background:rgba(31,154,91,.12)}
+.ec-loose .ec-er.ec-ok b{display:inline;background:var(--grn)}
 /* --- «ИИ-проверка»: попапы валидации «Готово» (крупные кнопки в шторке) и карточка мышления Вишенки на прелоадере --- */
 .ec-pop .btn{padding:16px;border-radius:16px;font:800 15.5px "Nunito",system-ui,sans-serif}
 .ec-pop .btn.pri{background:var(--acc);color:var(--on);box-shadow:0 8px 18px -10px var(--sh)}

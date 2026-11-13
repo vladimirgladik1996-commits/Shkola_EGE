@@ -536,42 +536,66 @@ def _bind_coords(a, pages):
     «считаю, что», «во-первых» и «Во первых» находятся даже при разном разбиении на слова;
     нечёткое совпадение — при расхождении ≤1 символа. Координаты проставляются ТОЛЬКО из
     разметки OCR (модель их не даёт); фрагмент не найден — без оверлея.
-    Ошибка с found, которого НЕТ нигде в тексте работы (даже с учётом границ страниц),
-    помечается _miss=True — это ВЫДУМКА модели, _result() её не показывает.
+
+    Корпус склеен по ВСЕМ страницам сразу: фрагмент на стыке страниц («…человека.
+    Я считаю…») не укладывается внутрь одной страницы — раньше он не находился, ошибка
+    уходила в «без привязки» и печаталась под фото, а не отмечалась на нём. Теперь такой
+    фрагмент получает координаты слова на той странице, где у него больше символов.
+    Ищем дважды: сначала по СЛОВАМ (точный бокс слова), затем по всем записям — parse()
+    держит строки и слова вперемешку, и попадание в строку дало бы бокс всей строки
+    (маркер в её центре вместо места ошибки); запасной путь нужен, когда слова без
+    боксов и в разметке остались только строки.
+    Ошибка с found, которого НЕТ нигде в тексте работы, помечается _miss=True — это
+    ВЫДУМКА модели, _result() её не показывает.
     pages — [{"text","words":[{t,x1,y1,x2,y2}]}] по страницам работы (индекс = page)."""
-    prepared = []
-    alltext = ""
-    for pi, pg in enumerate(pages):
-        ws, text, idx = [], "", []
-        for w in _as_list(pg.get("words")):
-            t = _norm(w.get("t"))
-            if not t:
-                continue
-            ws.append(w)
-            text += t
-            idx += [len(ws) - 1] * len(t)
-        alltext += text
-        prepared.append((pi, text, idx, ws))
+    corpora = []
+    for only_words in (True, False):
+        text, idx, spans = "", [], []
+        for pi, pg in enumerate(pages):
+            for w in _as_list(pg.get("words")):
+                raw = _s(w.get("t")) if isinstance(w, dict) else ""
+                t = _norm(raw)
+                if not t or (only_words and re.search(r"\s", raw)):
+                    continue                        # только слова: строки/блоки — запасной корпус
+                text += t
+                idx += [len(spans)] * len(t)
+                spans.append((pi, w))
+        corpora.append((text, idx, spans))
+    alltext = "".join(_norm(pg.get("text")) for pg in pages)   # весь текст работы склейкой (стыки страниц — тоже текст)
     for e in _as_list(a.get("errors")):
         if not isinstance(e, dict):
             continue
         needle = _norm(e.get("found"))
-        best = None                                  # (page, первое слово, последнее слово)
-        for pi, text, idx, ws in prepared:
+        best = None                                  # (page, слова фрагмента на этой странице)
+        for text, idx, spans in corpora:
+            if not needle or not text:
+                continue
             pos, ln = _search(text, needle)
-            if pos >= 0:
-                best = (pi, ws[idx[pos]], ws[idx[pos + ln - 1]])
-                break
+            if pos < 0:
+                continue
+            cnt = {}
+            for j in range(pos, pos + ln):
+                pi = spans[idx[j]][0]
+                cnt[pi] = cnt.get(pi, 0) + 1
+            pi = max(cnt, key=lambda p: (cnt[p], -p))   # страница с большинством символов фрагмента
+            seen, ents = set(), []
+            for j in range(pos, pos + ln):
+                sp = spans[idx[j]]
+                if sp[0] == pi and id(sp[1]) not in seen:
+                    seen.add(id(sp[1])); ents.append(sp[1])
+            best = (pi, ents)
+            break
         if not best:
             e.pop("page", None); e.pop("x", None); e.pop("y", None)   # координат нет — оверлея нет
-            # нашлось хоть где-то (в т.ч. на границе страниц) — просто нет координат;
-            # не нашлось нигде — фрагмент выдуман моделью, помечаем для _result()
-            e["_miss"] = _search(alltext, needle)[0] < 0
+            # нашлось хоть где-то в распознанном тексте (в т.ч. на границе страниц или в слове
+            # без бокса) — просто нет координат; не нашлось нигде — фрагмент выдуман моделью,
+            # помечаем для _result()
+            e["_miss"] = _search(alltext, needle)[0] < 0   # ни в словах, ни в склейке текста — выдумка
             continue
         e.pop("_miss", None)
-        pi, w1, w2 = best
-        x1 = min(float(w1["x1"]), float(w2["x1"])); x2 = max(float(w1["x2"]), float(w2["x2"]))
-        y1 = min(float(w1["y1"]), float(w2["y1"])); y2 = max(float(w1["y2"]), float(w2["y2"]))
+        pi, ents = best
+        x1 = min(float(w["x1"]) for w in ents); x2 = max(float(w["x2"]) for w in ents)
+        y1 = min(float(w["y1"]) for w in ents); y2 = max(float(w["y2"]) for w in ents)
         e["page"], e["x"], e["y"] = pi, round((x1 + x2) / 2, 1), round((y1 + y2) / 2, 1)
 
 
